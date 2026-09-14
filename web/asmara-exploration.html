@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>아스마라 탐사</title>
 <style>
   :root{
@@ -197,9 +199,37 @@
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .swatch{width:9px;height:9px;border-radius:3px;flex:none;}
 
+  /* 터치 기기에서는 키보드 안내가 의미 없다 (조이스틱 + 미니맵 탭으로 안내) */
+  @media (pointer: coarse){
+    .hint{display:none;}
+  }
+
+  .toast{
+    position:absolute;
+    left:50%;
+    top:64px;
+    transform:translate(-50%,-6px);
+    padding:9px 18px;
+    border-radius:999px;
+    background:rgba(255,250,242,.94);
+    border:1px solid var(--accent-line);
+    color:var(--text-primary);
+    font-size:.82rem;
+    letter-spacing:.01em;
+    white-space:nowrap;
+    box-shadow:0 10px 24px -12px rgba(120,90,60,.5);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .28s ease, transform .28s ease;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0);}
+  .toast.final{background:rgba(255,238,243,.96);border-color:var(--accent);}
+
   @media (max-width:600px){
     h1{font-size:1.25rem;}
     .phase-chip{display:none;}
+    .toast{font-size:.74rem;top:52px;padding:7px 14px;}
+    .legend{display:none;}
   }
 </style>
 
@@ -212,31 +242,33 @@
       <div class="planet-glyph" aria-hidden="true"></div>
       <div>
         <h1>아스마라 탐사</h1>
-        <p class="subtitle">에버플래닛 프로토타입 · 1단계 — 작은 행성의 지평선 너머로</p>
+        <p class="subtitle">에버플래닛 프로토타입 · 2단계 — 지도를 그리며 랜드마크를 찾아서</p>
       </div>
     </div>
-    <span class="phase-chip">PHASE 1 · EXPLORE ONLY</span>
+    <span class="phase-chip">PHASE 2 · MAP &amp; LANDMARK</span>
   </header>
 
   <div class="stage" id="stage">
     <canvas id="game"></canvas>
     <div class="vignette"></div>
     <div class="hint">
-      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd>
+      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>M</kbd><kbd>지도</kbd>
     </div>
+    <div class="toast" id="toast"></div>
     <div class="joystick-zone" id="joyZone" hidden>
       <div class="joystick-stick" id="joyStick"></div>
     </div>
   </div>
 
   <footer class="hud">
-    <div class="hud-field">좌표 X <b id="posX">0000</b></div>
-    <div class="hud-field">좌표 Y <b id="posY">0000</b></div>
+    <div class="hud-field">위치 <b id="posDir">출발점</b></div>
+    <div class="hud-field">탐험도 <b id="explorePct">0%</b></div>
+    <div class="hud-field">발견 <b id="foundLabel">0/5</b></div>
     <div class="legend">
       <span><i class="swatch" style="background:#ff8aa0"></i>플레이어</span>
       <span><i class="swatch" style="background:#4fa066"></i>나무</span>
       <span><i class="swatch" style="background:#b9aec2"></i>바위</span>
-      <span><i class="swatch" style="background:#6ec6e8"></i>샘물</span>
+      <span><i class="swatch" style="background:#f0b23c"></i>랜드마크</span>
     </div>
   </footer>
 </div>
@@ -248,8 +280,10 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const stage = document.getElementById('stage');
-  const posXEl = document.getElementById('posX');
-  const posYEl = document.getElementById('posY');
+  const posDirEl = document.getElementById('posDir');
+  const explorePctEl = document.getElementById('explorePct');
+  const foundLabelEl = document.getElementById('foundLabel');
+  const toastEl = document.getElementById('toast');
   const joyZone = document.getElementById('joyZone');
   const joyStick = document.getElementById('joyStick');
 
@@ -287,6 +321,34 @@
     const screenDist = PLANET_R * Math.sin(d / PLANET_R);
     const scale = Math.max(0.001, Math.cos(d / PLANET_R));
     return { sx: Math.cos(angle) * screenDist, sy: Math.sin(angle) * screenDist * TILT, scale, d };
+  }
+
+  // 높은 랜드마크 전용 투영.
+  // 지구에서 수평선 너머의 배가 돛대부터 보이듯, 높은 물체는 지평선 너머에서도 꼭대기가 보인다.
+  // 가시 거리를 높이에 비례해 늘리고, 지평선 너머에 있을 때는 지평선에 붙여 그리면서
+  // 아래쪽을 잘라(sink) 꼭대기만 드러나게 한다. 또 너무 작아져 점이 되지 않도록 최소 배율을 둔다.
+  // 최소 배율이 너무 작으면 먼 랜드마크가 몇 px짜리 점이 되어 "저기 뭔가 보인다"가 성립하지 않는다.
+  // 일반 오브젝트의 축소(cos)를 따르되 0.32 아래로는 줄어들지 않게 하고, 가라앉는 정도도 0.65에서 멈춘다.
+  const LM_MIN_SCALE = 0.32;
+  const LM_MAX_SINK = 0.65;
+  function projectTall(x, y, height) {
+    const relx = x - player.x, rely = y - player.y;
+    const d = Math.hypot(relx, rely);
+    const extra = height * 4;
+    const maxD = HORIZON_D + extra;
+    if (d > maxD) return null;
+    const angle = Math.atan2(rely, relx);
+    const dd = Math.min(d, HORIZON_D);              // 지평선 너머면 지평선 위치에 고정
+    const screenDist = PLANET_R * Math.sin(dd / PLANET_R);
+    const scale = Math.max(LM_MIN_SCALE, Math.cos(dd / PLANET_R));
+    // sink 0 = 전체가 보임, 1 = 완전히 지평선 아래
+    const raw = extra > 0 ? Math.max(0, d - HORIZON_D) / extra : 0;
+    const sink = Math.min(LM_MAX_SINK, Math.pow(raw, 1.3));
+    return {
+      sx: Math.cos(angle) * screenDist,
+      sy: Math.sin(angle) * screenDist * TILT,
+      scale, d, sink
+    };
   }
 
   // 균등 분포로 원형 필드 안에 점 뿌리기
@@ -377,6 +439,87 @@
   }
 
   const spring = { x: 230, y: -110, radius: 50 };
+
+  // ---------- 랜드마크 ----------
+  // 행성 곳곳에 실루엣이 확실히 다른 목표물을 배치한다. height가 클수록 더 멀리서 보인다.
+  // 샘물은 기존 자산을 그대로 쓰므로 draw를 갖지 않는다(별도로 그려짐).
+  const landmarks = [
+    { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
+    { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
+    { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
+    { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
+    { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' }
+  ];
+  const DISCOVER_R = 120;
+  let foundCount = 0;
+
+  // 랜드마크 자리에 겹친 나무/바위는 치운다
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    for (const lm of landmarks) {
+      if (Math.hypot(obstacles[i].x - lm.x, obstacles[i].y - lm.y) < 150) { obstacles.splice(i, 1); break; }
+    }
+  }
+
+  // 받침조사 판별 (발견 알림 문구용)
+  function withObjParticle(name) {
+    const code = name.charCodeAt(name.length - 1);
+    if (code < 0xAC00 || code > 0xD7A3) return name + '를';
+    return name + ((code - 0xAC00) % 28 === 0 ? '를' : '을');
+  }
+
+  // ---------- 탐험 기록 (fog of war) ----------
+  // 시야 반경은 804지만 그 근처는 축소율 2.4%라 사실상 보이지 않는다.
+  // "형태를 알아볼 수 있는 거리"인 500까지만 탐험으로 인정한다.
+  const EXPLORE_R = 500;
+  const CELL = 50;
+  const GRID_N = Math.ceil((WORLD_RADIUS * 2) / CELL);
+  const GRID_ORIGIN = -WORLD_RADIUS;
+  const explored = new Uint8Array(GRID_N * GRID_N);
+  let exploredCount = 0;
+  let totalCells = 0;
+  for (let gy = 0; gy < GRID_N; gy++) {
+    for (let gx = 0; gx < GRID_N; gx++) {
+      const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
+      const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
+      if (Math.hypot(wx, wy) <= WORLD_RADIUS) totalCells++;
+    }
+  }
+
+  // 밝혀진 영역은 별도 캔버스에 원으로 누적한다(격자보다 훨씬 자연스러운 모양이 나온다).
+  // 격자는 탐험도 % 계산에만 쓴다.
+  const FOG_SIZE = 600;
+  const FOG_SCALE = FOG_SIZE / (WORLD_RADIUS * 2);
+  const fogCanvas = document.createElement('canvas');
+  fogCanvas.width = FOG_SIZE; fogCanvas.height = FOG_SIZE;
+  const fogCtx = fogCanvas.getContext('2d');
+  fogCtx.fillStyle = '#6fbf72';
+
+  let lastExploreX = Infinity, lastExploreY = Infinity;
+  function updateExploration() {
+    if (Math.hypot(player.x - lastExploreX, player.y - lastExploreY) < 25) return;
+    lastExploreX = player.x; lastExploreY = player.y;
+
+    fogCtx.beginPath();
+    fogCtx.arc((player.x - GRID_ORIGIN) * FOG_SCALE, (player.y - GRID_ORIGIN) * FOG_SCALE, EXPLORE_R * FOG_SCALE, 0, Math.PI * 2);
+    fogCtx.fill();
+
+    const gx0 = Math.max(0, Math.floor((player.x - EXPLORE_R - GRID_ORIGIN) / CELL));
+    const gx1 = Math.min(GRID_N - 1, Math.floor((player.x + EXPLORE_R - GRID_ORIGIN) / CELL));
+    const gy0 = Math.max(0, Math.floor((player.y - EXPLORE_R - GRID_ORIGIN) / CELL));
+    const gy1 = Math.min(GRID_N - 1, Math.floor((player.y + EXPLORE_R - GRID_ORIGIN) / CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = gy * GRID_N + gx;
+        if (explored[idx]) continue;
+        const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
+        const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
+        if (Math.hypot(wx, wy) > WORLD_RADIUS) continue;
+        if (Math.hypot(wx - player.x, wy - player.y) > EXPLORE_R) continue;
+        explored[idx] = 1;
+        exploredCount++;
+      }
+    }
+  }
   const signpost = { x: pathPts[pathPts.length - 1].x, y: pathPts[pathPts.length - 1].y - 30 };
 
   // 지형 얼룩(넓은 톤 변화) + 잔디 - 필드 전체에 균등 분포
@@ -407,14 +550,34 @@
 
   // ---------- 입력 ----------
   const keys = new Set();
-  window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+  let mapOpen = false;
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (k === 'm') { mapOpen = !mapOpen; keys.clear(); e.preventDefault(); }
+    else if (k === 'escape' && mapOpen) { mapOpen = false; }
+  });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+
+  // 모바일: 미니맵을 탭하면 전체 지도, 지도 밖을 탭하면 닫힘
+  let minimapHit = { cx: 0, cy: 0, r: 0 };
+  let fullmapHit = { cx: 0, cy: 0, r: 0 };
+  canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    if (mapOpen) {
+      if (Math.hypot(px - fullmapHit.cx, py - fullmapHit.cy) > fullmapHit.r) mapOpen = false;
+    } else if (Math.hypot(px - minimapHit.cx, py - minimapHit.cy) <= minimapHit.r) {
+      mapOpen = true;
+    }
+  });
 
   let joyVector = { x: 0, y: 0 };
   let joyActive = false;
   let joyPointerId = null;
 
-  if (matchMedia('(pointer: coarse)').matches) joyZone.hidden = false;
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+  if (isTouch) joyZone.hidden = false;
 
   function setJoyFromEvent(e) {
     const rect = joyZone.getBoundingClientRect();
@@ -459,7 +622,30 @@
       const solidRadius = o.type === 'tree' ? o.radius * 0.5 : o.radius * 0.82;
       if (Math.hypot(x - o.x, y - o.y) < PLAYER_RADIUS + solidRadius) return true;
     }
+    for (const lm of landmarks) {
+      if (lm.solid && Math.hypot(x - lm.x, y - lm.y) < PLAYER_RADIUS + lm.solid) return true;
+    }
     return false;
+  }
+
+  // 나무에 정면으로 부딪히면 완전히 멈춰서 "멀리 보이는 랜드마크로 걸어간다"는 흐름이 끊긴다.
+  // 막혔을 때는 진행 방향을 조금씩 틀어서 장애물을 타고 미끄러지게 한다.
+  function tryMove(dx, dy, dist) {
+    const nx = player.x + dx * dist, ny = player.y + dy * dist;
+    if (!collides(nx, ny)) { player.x = nx; player.y = ny; return; }
+    if (dx && !collides(player.x + dx * dist, player.y)) { player.x += dx * dist; return; }
+    if (dy && !collides(player.x, player.y + dy * dist)) { player.y += dy * dist; return; }
+    const px = -dy, py = dx;                       // 진행 방향의 수직
+    for (const blend of [0.7, 1]) {
+      for (const sign of [1, -1]) {
+        const sx = dx * 0.35 + px * sign * blend;
+        const sy = dy * 0.35 + py * sign * blend;
+        const len = Math.hypot(sx, sy) || 1;
+        const cx = player.x + (sx / len) * dist;
+        const cy = player.y + (sy / len) * dist;
+        if (!collides(cx, cy)) { player.x = cx; player.y = cy; return; }
+      }
+    }
   }
 
   function resize() {
@@ -606,6 +792,98 @@
     ctx.beginPath(); ctx.ellipse(-o.radius * 0.32, -o.radius * 0.3, o.radius * 0.32, o.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
   }
 
+  // ---------- 랜드마크 그리기 ----------
+  function drawGroundShadow(rx) {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 6, rx, rx * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawBigTree(t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 0.8) * 0.03;
+    drawGroundShadow(62);
+    ctx.fillStyle = '#a9743f';
+    ctx.beginPath();
+    ctx.moveTo(-17, 8); ctx.lineTo(-10, -58); ctx.lineTo(10, -58); ctx.lineTo(17, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(4, -58, 8, 66);
+    ctx.save();
+    ctx.translate(0, -62);
+    ctx.rotate(sway);
+    ctx.fillStyle = '#3f9a63';
+    ctx.beginPath(); ctx.ellipse(0, 0, 66, 40, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-34, -22, 38, 27, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(32, -20, 34, 25, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#56b87a';
+    ctx.beginPath(); ctx.ellipse(-6, -34, 40, 26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.26)';
+    ctx.beginPath(); ctx.ellipse(-24, -44, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRockPeak() {
+    drawGroundShadow(64);
+    ctx.fillStyle = '#9c90ad';
+    ctx.beginPath();
+    ctx.moveTo(-58, 8); ctx.lineTo(-22, -68); ctx.lineTo(6, -34); ctx.lineTo(26, -96);
+    ctx.lineTo(60, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#b9aec2';
+    ctx.beginPath();
+    ctx.moveTo(26, -96); ctx.lineTo(60, 8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(26, -96); ctx.lineTo(38, -62); ctx.lineTo(14, -62); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-22, -68); ctx.lineTo(-10, -44); ctx.lineTo(-33, -44); ctx.closePath(); ctx.fill();
+  }
+
+  function drawRuins() {
+    drawGroundShadow(58);
+    ctx.fillStyle = '#c7b795';
+    ctx.beginPath(); ctx.ellipse(0, 4, 54, 15, 0, 0, Math.PI * 2); ctx.fill();
+    const cols = [[-38, 52], [-12, 74], [16, 38], [40, 62]];
+    for (const [x, h] of cols) {
+      ctx.fillStyle = '#e0d2b2';
+      ctx.fillRect(x - 9, -h, 18, h);
+      ctx.fillStyle = 'rgba(0,0,0,0.13)';
+      ctx.fillRect(x + 3, -h, 6, h);
+      ctx.fillStyle = '#d8c9a8';
+      ctx.beginPath(); ctx.ellipse(x, -h, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#d8c9a8';
+    ctx.fillRect(-46, -80, 46, 9);
+  }
+
+  function drawCrystal(t) {
+    const pulse = reduceMotion ? 0.5 : (Math.sin(t * 1.5) + 1) / 2;
+    drawGroundShadow(40);
+    ctx.save();
+    ctx.globalAlpha *= 0.28 + pulse * 0.3;
+    const glow = ctx.createRadialGradient(0, -52, 4, 0, -52, 62);
+    glow.addColorStop(0, '#f0ddff'); glow.addColorStop(1, 'rgba(199,155,240,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, -52, 62, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const shards = [[0, -104, 17], [-24, -62, 12], [22, -70, 13]];
+    for (const [x, top, w] of shards) {
+      ctx.fillStyle = '#b87fe6';
+      ctx.beginPath();
+      ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, 8); ctx.lineTo(x - w, top * 0.36);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.42)';
+      ctx.beginPath();
+      ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, top * 0.36);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  function drawLandmarkBody(lm, t) {
+    if (lm.id === 'tree') drawBigTree(t);
+    else if (lm.id === 'rock') drawRockPeak();
+    else if (lm.id === 'ruins') drawRuins();
+    else if (lm.id === 'crystal') drawCrystal(t);
+  }
+
   function drawPathTile(tone, angle) {
     ctx.save();
     ctx.rotate(angle);
@@ -669,26 +947,163 @@
     return p;
   }
 
+  // ---------- 지도 ----------
+  function mapMarker(mx, my, tint, size) {
+    ctx.fillStyle = tint;
+    ctx.strokeStyle = 'rgba(255,250,242,0.95)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(mx, my - size); ctx.lineTo(mx + size, my);
+    ctx.lineTo(mx, my + size); ctx.lineTo(mx - size, my);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  // 발견하지 않은 지역은 흐리게가 아니라 완전히 가린다 - 발견의 쾌감은 거기서 나온다.
+  function drawMapCircle(cx, cy, R, isFull, t) {
+    const toMapX = (wx) => cx + (wx / WORLD_RADIUS) * R;
+    const toMapY = (wy) => cy + (wy / WORLD_RADIUS) * R;
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(62,54,48,0.9)';
+    ctx.fill();
+
+    ctx.save();
+    ctx.clip();
+    ctx.drawImage(fogCanvas, cx - R, cy - R, R * 2, R * 2);
+    ctx.restore();
+
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,250,242,0.92)';
+    ctx.lineWidth = isFull ? 3 : 2;
+    ctx.stroke();
+
+    for (const lm of landmarks) {
+      if (!lm.found) continue;
+      const mx = toMapX(lm.x), my = toMapY(lm.y);
+      mapMarker(mx, my, lm.tint, isFull ? 7 : 4.5);
+      if (isFull) {
+        ctx.font = '600 13px "Gowun Dodum", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(40,34,30,0.85)';
+        ctx.strokeText(lm.name, mx, my - 14);
+        ctx.fillStyle = '#fffaf2';
+        ctx.fillText(lm.name, mx, my - 14);
+      }
+    }
+
+    // 플레이어 - 점 + 바라보는 방향
+    const px = toMapX(player.x), py = toMapY(player.y);
+    const fa = Math.atan2(player.facing.y, player.facing.x);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(fa);
+    ctx.fillStyle = '#ff8aa0';
+    ctx.beginPath();
+    const s = isFull ? 11 : 7;
+    ctx.moveTo(s, 0); ctx.lineTo(-s * 0.7, s * 0.62); ctx.lineTo(-s * 0.7, -s * 0.62);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,250,242,0.95)'; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawMinimap(viewW, viewH, t) {
+    const size = viewW < 620 ? 96 : 138;
+    const margin = viewW < 620 ? 12 : 16;
+    const R = size / 2;
+    const cx = viewW - margin - R;
+    const cy = margin + R;
+    minimapHit = { cx, cy, r: R + 8 };
+    drawMapCircle(cx, cy, R, false, t);
+    ctx.fillStyle = 'rgba(255,250,242,0.92)';
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(isTouch ? '탭 · 지도' : 'M  지도', cx, cy + R + 5);
+  }
+
+  function drawFullMap(viewW, viewH, t) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(38,32,28,0.55)';
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    const small = viewW < 620;
+    const R = small ? Math.min(viewW * 0.32, viewH * 0.30) : Math.min(viewW, viewH) * 0.35;
+    const cx = viewW / 2, cy = viewH / 2 + (small ? 2 : 6);
+    fullmapHit = { cx, cy, r: R + (small ? 16 : 30) };
+    drawMapCircle(cx, cy, R, true, t);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fffaf2';
+    if (!small) {
+      ctx.font = '600 15px "Gowun Dodum", sans-serif';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('아스마라 전도', cx, cy - R - 16);
+    }
+
+    ctx.font = small ? '600 10px "JetBrains Mono", monospace' : '600 12px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'top';
+    const pct = totalCells ? Math.round((exploredCount / totalCells) * 100) : 0;
+    const closeHint = isTouch ? '지도 밖을 탭하면 닫힘' : 'M / ESC 닫기';
+    const gap = small ? '  ·  ' : '   ·   ';
+    ctx.fillText(`탐험도 ${pct}%${gap}발견 ${foundCount}/${landmarks.length}${gap}${closeHint}`, cx, cy + R + (small ? 10 : 14));
+    ctx.restore();
+  }
+
   // ---------- 게임 루프 ----------
-  function formatCoord(v) {
-    const n = Math.round(v);
-    const sign = n < 0 ? '-' : '';
-    return sign + String(Math.abs(n)).padStart(4, '0');
+  const DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+  function bearingLabel(x, y) {
+    const dist = Math.hypot(x, y);
+    if (dist < 90) return '출발점';
+    let a = Math.atan2(x, -y);            // 0 = 북, 양수 = 동쪽
+    if (a < 0) a += Math.PI * 2;
+    return `${DIRS[Math.round(a / (Math.PI / 4)) % 8]} ${Math.round(dist)}m`;
+  }
+
+  let toastTimer = 0;
+  function showToast(msg, final) {
+    toastEl.textContent = msg;
+    toastEl.classList.toggle('final', !!final);
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), final ? 4200 : 2800);
+  }
+
+  function checkDiscovery() {
+    for (const lm of landmarks) {
+      if (lm.found) continue;
+      if (Math.hypot(player.x - lm.x, player.y - lm.y) > DISCOVER_R) continue;
+      lm.found = true;
+      foundCount++;
+      if (foundCount === landmarks.length) {
+        showToast('아스마라의 랜드마크를 모두 발견했습니다!', true);
+      } else {
+        showToast(`${withObjParticle(lm.name)} 발견했습니다`);
+      }
+    }
   }
 
   let lastTime = performance.now();
+  const hudCache = { dir: null, pct: -1, found: -1 };
 
   function step(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
     const t = now / 1000;
 
+    // 전체 지도를 보는 동안은 이동을 멈춘다(일시정지)
     let dx = 0, dy = 0;
-    if (keys.has('w') || keys.has('arrowup')) dy -= 1;
-    if (keys.has('s') || keys.has('arrowdown')) dy += 1;
-    if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
-    if (keys.has('d') || keys.has('arrowright')) dx += 1;
-    if (joyActive) { dx += joyVector.x; dy += joyVector.y; }
+    if (!mapOpen) {
+      if (keys.has('w') || keys.has('arrowup')) dy -= 1;
+      if (keys.has('s') || keys.has('arrowdown')) dy += 1;
+      if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
+      if (keys.has('d') || keys.has('arrowright')) dx += 1;
+      if (joyActive) { dx += joyVector.x; dy += joyVector.y; }
+    }
 
     const len = Math.hypot(dx, dy);
     if (len > 1) { dx /= len; dy /= len; }
@@ -697,11 +1112,11 @@
     const moving = dx !== 0 || dy !== 0;
     if (moving) {
       player.facing = { x: dx / (len || 1), y: dy / (len || 1) };
-      const nx = player.x + dx * speed * dt;
-      if (!collides(nx, player.y)) player.x = nx;
-      const ny = player.y + dy * speed * dt;
-      if (!collides(player.x, ny)) player.y = ny;
+      tryMove(dx, dy, speed * dt);
     }
+
+    updateExploration();
+    checkDiscovery();
 
     const viewW = canvas.viewW || stage.clientWidth;
     const viewH = canvas.viewH || stage.clientHeight;
@@ -762,6 +1177,11 @@
     }
     const pSign = project(signpost.x, signpost.y);
     if (pSign) solids.push({ p: pSign, sign: true });
+    for (const lm of landmarks) {
+      if (!lm.height) continue;                 // 샘물은 기존 방식으로 따로 그림
+      const p = projectTall(lm.x, lm.y, lm.height);
+      if (p) solids.push({ p, lm });
+    }
     for (const f of pathFences) {
       const p = project(f.x, f.y);
       if (p) solids.push({ p, f });
@@ -777,6 +1197,18 @@
       else if (s.d) { drawMushroom(s.d.seed); }
       else if (s.sign) { drawSignpost(); }
       else if (s.f) { drawFence(s.f.angle); }
+      else if (s.lm) {
+        // 지평선 너머면 아래쪽을 잘라서 꼭대기만 솟아 보이게 하고, 멀수록 옅게 깔린다
+        if (s.p.sink > 0) {
+          const top = -s.lm.height * 1.25, bottom = 16;
+          const visible = (1 - s.p.sink) * (bottom - top);
+          ctx.beginPath();
+          ctx.rect(-220, top, 440, Math.max(0, visible));
+          ctx.clip();
+          ctx.globalAlpha *= 1 - s.p.sink * 0.38;
+        }
+        drawLandmarkBody(s.lm, t);
+      }
       ctx.restore();
     }
 
@@ -802,8 +1234,17 @@
     drawPlayer(t, moving);
     ctx.restore();
 
-    posXEl.textContent = formatCoord(player.x);
-    posYEl.textContent = formatCoord(-player.y);
+    drawMinimap(viewW, viewH, t);
+    if (mapOpen) drawFullMap(viewW, viewH, t);
+
+    const dirText = bearingLabel(player.x, player.y);
+    if (dirText !== hudCache.dir) { posDirEl.textContent = dirText; hudCache.dir = dirText; }
+    const pct = totalCells ? Math.round((exploredCount / totalCells) * 100) : 0;
+    if (pct !== hudCache.pct) { explorePctEl.textContent = pct + '%'; hudCache.pct = pct; }
+    if (foundCount !== hudCache.found) {
+      foundLabelEl.textContent = `${foundCount}/${landmarks.length}`;
+      hudCache.found = foundCount;
+    }
 
     requestAnimationFrame(step);
   }
@@ -811,10 +1252,18 @@
   requestAnimationFrame(step);
 
   // ---- 뷰어 상태 보존 (재게시 시 플레이어 위치 유지) ----
-  function snapshot() { return { x: player.x, y: player.y }; }
+  function snapshot() {
+    return { x: player.x, y: player.y, found: landmarks.filter((l) => l.found).map((l) => l.id) };
+  }
   function boot(data) {
-    if (data && typeof data.x === 'number' && typeof data.y === 'number') {
+    if (!data) return;
+    if (typeof data.x === 'number' && typeof data.y === 'number') {
       player.x = data.x; player.y = data.y;
+    }
+    if (Array.isArray(data.found)) {
+      for (const lm of landmarks) {
+        if (!lm.found && data.found.indexOf(lm.id) !== -1) { lm.found = true; foundCount++; }
+      }
     }
   }
   if (window.claude && window.claude.hot) {
