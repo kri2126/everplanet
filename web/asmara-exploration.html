@@ -1,0 +1,825 @@
+<title>아스마라 탐사</title>
+<style>
+  :root{
+    --bg-page:#fff2e2;
+    --panel:#fffaf2;
+    --panel-2:#fff4e6;
+    --line:#f0d9b8;
+    --text-primary:#5b4632;
+    --text-muted:#a8916f;
+    --accent:#ff8aa0;
+    --accent-soft:rgba(255,138,160,.16);
+    --accent-line:rgba(255,138,160,.4);
+    --mint:#4fb787;
+    --mono-num:#3f8f66;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg-page);
+    color:var(--text-primary);
+    font-family:'Gowun Dodum','Apple SD Gothic Neo',sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:20px 16px 28px;
+    gap:14px;
+  }
+
+  .frame{
+    width:100%;
+    max-width:980px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 18px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+  }
+
+  .title-block{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:0;
+  }
+
+  .planet-glyph{
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    flex:none;
+    background:
+      radial-gradient(circle at 32% 28%, #d9ffe4 0%, #9fe0a6 46%, #3f8f66 100%);
+    box-shadow:0 4px 0 rgba(63,143,102,.25);
+  }
+
+  h1{
+    font-family:'Black Han Sans','Gowun Dodum',sans-serif;
+    font-weight:400;
+    font-size:1.5rem;
+    letter-spacing:.01em;
+    margin:0;
+    line-height:1.1;
+    text-wrap:balance;
+  }
+
+  .subtitle{
+    margin:2px 0 0;
+    font-size:.8rem;
+    color:var(--text-muted);
+  }
+
+  .phase-chip{
+    flex:none;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.68rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:#c65a75;
+    background:var(--accent-soft);
+    border:1px solid var(--accent-line);
+    border-radius:999px;
+    padding:6px 12px;
+    white-space:nowrap;
+  }
+
+  .stage{
+    position:relative;
+    width:100%;
+    aspect-ratio:16/10;
+    border-radius:20px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,#5fb6ea 0%,#bfe3ff 60%,#eaf6ff 100%);
+    box-shadow:0 24px 50px -28px rgba(120,90,60,.45);
+    touch-action:none;
+  }
+
+  canvas{
+    display:block;
+    width:100%;
+    height:100%;
+  }
+
+  .vignette{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    box-shadow:inset 0 0 90px 20px rgba(255,255,255,.10), inset 0 0 130px 46px rgba(40,50,30,.14);
+  }
+
+  .hint{
+    position:absolute;
+    top:14px;
+    left:14px;
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    max-width:calc(100% - 28px);
+  }
+
+  kbd{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.68rem;
+    background:rgba(255,250,242,.85);
+    border:1px solid rgba(91,70,50,.18);
+    color:var(--text-primary);
+    padding:4px 8px;
+    border-radius:7px;
+    backdrop-filter:blur(2px);
+  }
+
+  .joystick-zone{
+    position:absolute;
+    left:22px;
+    bottom:22px;
+    width:104px;
+    height:104px;
+    border-radius:50%;
+    background:rgba(255,250,242,.45);
+    border:1px solid rgba(91,70,50,.22);
+    touch-action:none;
+  }
+
+  .joystick-zone[hidden]{display:none!important;}
+
+  .joystick-stick{
+    position:absolute;
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 35% 30%, #ffd0da, var(--accent));
+    box-shadow:0 4px 10px rgba(198,90,117,.35);
+  }
+
+  footer.hud{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:10px 18px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:18px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.72rem;
+    color:var(--text-muted);
+  }
+
+  .hud-field{display:flex;gap:6px;align-items:baseline;}
+  .hud-field b{color:var(--mono-num);font-weight:600;font-variant-numeric:tabular-nums;}
+
+  .legend{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    color:var(--text-muted);
+    font-size:.72rem;
+  }
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:9px;height:9px;border-radius:3px;flex:none;}
+
+  @media (max-width:600px){
+    h1{font-size:1.25rem;}
+    .phase-chip{display:none;}
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<div class="frame">
+  <header class="top">
+    <div class="title-block">
+      <div class="planet-glyph" aria-hidden="true"></div>
+      <div>
+        <h1>아스마라 탐사</h1>
+        <p class="subtitle">에버플래닛 프로토타입 · 1단계 — 작은 행성의 지평선 너머로</p>
+      </div>
+    </div>
+    <span class="phase-chip">PHASE 1 · EXPLORE ONLY</span>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="game"></canvas>
+    <div class="vignette"></div>
+    <div class="hint">
+      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd>
+    </div>
+    <div class="joystick-zone" id="joyZone" hidden>
+      <div class="joystick-stick" id="joyStick"></div>
+    </div>
+  </div>
+
+  <footer class="hud">
+    <div class="hud-field">좌표 X <b id="posX">0000</b></div>
+    <div class="hud-field">좌표 Y <b id="posY">0000</b></div>
+    <div class="legend">
+      <span><i class="swatch" style="background:#ff8aa0"></i>플레이어</span>
+      <span><i class="swatch" style="background:#4fa066"></i>나무</span>
+      <span><i class="swatch" style="background:#b9aec2"></i>바위</span>
+      <span><i class="swatch" style="background:#6ec6e8"></i>샘물</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const posXEl = document.getElementById('posX');
+  const posYEl = document.getElementById('posY');
+  const joyZone = document.getElementById('joyZone');
+  const joyStick = document.getElementById('joyStick');
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- 시드 고정 의사난수 ----------
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rand = mulberry32(20260913);
+
+  // ---------- 작은 행성 투영 ----------
+  // 실제 에버플래닛의 "글로브 뷰"를 참고: 캐릭터를 구(sphere)의 정점에 세워두고
+  // 정사영(orthographic) 방식으로 주변을 투영한다. 그러면 지평선 너머(구의 반대쪽 면)는
+  // 자연스럽게 화면에서 사라지고, 앞으로 걸어가야만 새로 드러난다 - 안개 같은 눈속임이 아니라
+  // 실제 "작은 행성 위에 서 있는" 기하학으로 시야 제한을 구현한다.
+  const PLANET_R = 520;              // 구의 반지름 (클수록 완만하고 시야가 넓어짐)
+  const HORIZON_D = PLANET_R * Math.PI / 2 * 0.985; // 이 거리 너머는 지평선 아래로 사라짐
+  const WORLD_RADIUS = 1500;         // 실제로 걸어다닐 수 있는 전체 범위(경계)
+  const PLAYER_RADIUS = 15;
+  // 완전히 위에서 내려다보는 정수직 시점 대신, 카메라를 살짝 앞으로 기울여
+  // "대각선으로 내려다보는" 3인칭 느낌을 낸다. 1에 가까울수록 완전 탑뷰, 작을수록 더 기울어짐.
+  const TILT = 0.62;
+
+  function project(x, y) {
+    const relx = x - player.x, rely = y - player.y;
+    const d = Math.hypot(relx, rely);
+    if (d > HORIZON_D) return null;
+    const angle = Math.atan2(rely, relx);
+    const screenDist = PLANET_R * Math.sin(d / PLANET_R);
+    const scale = Math.max(0.001, Math.cos(d / PLANET_R));
+    return { sx: Math.cos(angle) * screenDist, sy: Math.sin(angle) * screenDist * TILT, scale, d };
+  }
+
+  // 균등 분포로 원형 필드 안에 점 뿌리기
+  function samplePlanetPoint(minR, maxR) {
+    const r = Math.sqrt(rand()) * (maxR - minR) + minR;
+    const a = rand() * Math.PI * 2;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+  }
+
+  // ---------- 장식용 오솔길 (이동 제한 없음 - 시선을 안내하는 용도) ----------
+  const pathPts = [
+    { x: 10, y: 10 }, { x: 150, y: -230 }, { x: 30, y: -480 },
+    { x: 200, y: -740 }, { x: 90, y: -1020 }
+  ];
+  const pathTiles = [];
+  const pathFences = [];
+  for (let i = 0; i < pathPts.length - 1; i++) {
+    const a = pathPts[i], b = pathPts[i + 1];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    const tileCount = Math.round(len / 58);
+    for (let j = 0; j < tileCount; j++) {
+      const t = (j + 0.5) / tileCount;
+      pathTiles.push({
+        x: a.x + dx * t, y: a.y + dy * t,
+        angle: Math.atan2(dy, dx),
+        tone: (i + j) % 2
+      });
+    }
+    const fenceCount = Math.round(len / 150);
+    for (let j = 0; j < fenceCount; j++) {
+      const t = (j + 0.5) / fenceCount;
+      for (const side of [1, -1]) {
+        pathFences.push({
+          x: a.x + dx * t + nx * 78 * side,
+          y: a.y + dy * t + ny * 78 * side,
+          angle: Math.atan2(dy, dx)
+        });
+      }
+    }
+  }
+  function nearPath(x, y, threshold) {
+    for (let i = 0; i < pathPts.length - 1; i++) {
+      const a = pathPts[i], b = pathPts[i + 1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const lenSq = dx * dx + dy * dy;
+      let t = lenSq > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / lenSq : 0;
+      t = Math.max(0, Math.min(1, t));
+      const cx = a.x + dx * t, cy = a.y + dy * t;
+      if (Math.hypot(x - cx, y - cy) < threshold) return true;
+    }
+    return false;
+  }
+
+  // ---------- 자연물 배치 ----------
+  const obstacles = [];   // 나무 / 바위 (충돌 O)
+  const decorations = []; // 버섯 (충돌 X)
+
+  function overlapsExisting(x, y, radius) {
+    for (const o of obstacles) {
+      if (Math.hypot(x - o.x, y - o.y) < radius + o.radius + 16) return true;
+    }
+    return false;
+  }
+
+  function scatterObstacles(minR, maxR, count) {
+    for (let i = 0; i < count; i++) {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const p = samplePlanetPoint(minR, maxR);
+        if (Math.hypot(p.x, p.y) < 170) continue;
+        if (nearPath(p.x, p.y, 66)) continue;
+        const isTree = rand() < 0.58;
+        const radius = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
+        if (overlapsExisting(p.x, p.y, radius)) continue;
+        obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
+        break;
+      }
+    }
+  }
+  scatterObstacles(0, WORLD_RADIUS - 260, 150);
+  scatterObstacles(WORLD_RADIUS - 260, WORLD_RADIUS - 20, 90); // 가장자리 - 경계를 자연스럽게 가려주는 숲
+
+  for (let i = 0; i < 16; i++) {
+    const p = samplePlanetPoint(0, WORLD_RADIUS - 300);
+    if (Math.hypot(p.x, p.y) < 130) continue;
+    decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
+  }
+
+  const spring = { x: 230, y: -110, radius: 50 };
+  const signpost = { x: pathPts[pathPts.length - 1].x, y: pathPts[pathPts.length - 1].y - 30 };
+
+  // 지형 얼룩(넓은 톤 변화) + 잔디 - 필드 전체에 균등 분포
+  const terrainPatches = [];
+  for (let i = 0; i < 20; i++) {
+    const p = samplePlanetPoint(0, WORLD_RADIUS);
+    terrainPatches.push({ x: p.x, y: p.y, w: 140 + rand() * 90, angle: rand() * Math.PI });
+  }
+  const grassTufts = [];
+  for (let i = 0; i < 1400; i++) {
+    const p = samplePlanetPoint(0, WORLD_RADIUS);
+    grassTufts.push({ x: p.x, y: p.y, len: 4 + rand() * 6, angle: rand() * Math.PI * 2, phase: rand() * Math.PI * 2, tone: rand() });
+  }
+  const spores = [];
+  for (let i = 0; i < 26; i++) {
+    const p = samplePlanetPoint(0, HORIZON_D * 0.9);
+    spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+  }
+
+  // 하늘의 구름 (화면 고정 레이어, 완만하게 흘러감)
+  const clouds = [];
+  for (let i = 0; i < 9; i++) {
+    clouds.push({ x: rand() * 1.4 - 0.2, y: 0.05 + rand() * 0.32, w: 60 + rand() * 90, speed: 4 + rand() * 6, tone: rand() });
+  }
+
+  // ---------- 플레이어 ----------
+  const player = { x: 0, y: 60, facing: { x: 0, y: -1 } };
+
+  // ---------- 입력 ----------
+  const keys = new Set();
+  window.addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+
+  let joyVector = { x: 0, y: 0 };
+  let joyActive = false;
+  let joyPointerId = null;
+
+  if (matchMedia('(pointer: coarse)').matches) joyZone.hidden = false;
+
+  function setJoyFromEvent(e) {
+    const rect = joyZone.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
+    const max = rect.width / 2;
+    const dist = Math.min(Math.hypot(dx, dy), max);
+    const angle = Math.atan2(dy, dx);
+    dx = Math.cos(angle) * dist;
+    dy = Math.sin(angle) * dist;
+    joyStick.style.left = `calc(50% + ${dx}px)`;
+    joyStick.style.top = `calc(50% + ${dy}px)`;
+    joyVector = { x: dx / max, y: dy / max };
+  }
+
+  joyZone.addEventListener('pointerdown', (e) => {
+    joyActive = true;
+    joyPointerId = e.pointerId;
+    joyZone.setPointerCapture(e.pointerId);
+    setJoyFromEvent(e);
+  });
+  joyZone.addEventListener('pointermove', (e) => {
+    if (!joyActive || e.pointerId !== joyPointerId) return;
+    setJoyFromEvent(e);
+  });
+  function releaseJoy(e) {
+    if (e.pointerId !== joyPointerId) return;
+    joyActive = false;
+    joyVector = { x: 0, y: 0 };
+    joyStick.style.left = '50%';
+    joyStick.style.top = '50%';
+  }
+  joyZone.addEventListener('pointerup', releaseJoy);
+  joyZone.addEventListener('pointercancel', releaseJoy);
+
+  // ---------- 충돌 ----------
+  function collides(x, y) {
+    if (Math.hypot(x, y) > WORLD_RADIUS - PLAYER_RADIUS - 12) return true;
+    for (const o of obstacles) {
+      const solidRadius = o.type === 'tree' ? o.radius * 0.5 : o.radius * 0.82;
+      if (Math.hypot(x - o.x, y - o.y) < PLAYER_RADIUS + solidRadius) return true;
+    }
+    return false;
+  }
+
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.viewW = rect.width;
+    canvas.viewH = rect.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- 그리기 헬퍼 (모두 화면 좌표계에서 동작) ----------
+  function drawSky(viewW, viewH, t) {
+    const grad = ctx.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#5fb6ea');
+    grad.addColorStop(0.6, '#bfe3ff');
+    grad.addColorStop(1, '#eaf6ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    for (const c of clouds) {
+      const drift = reduceMotion ? 0 : (t * c.speed) % (viewW + c.w * 3);
+      const cx = ((c.x * viewW + drift) % (viewW + c.w * 3)) - c.w * 1.5;
+      const cy = c.y * viewH;
+      ctx.fillStyle = c.tone > 0.5 ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.8)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, c.w, c.w * 0.4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - c.w * 0.5, cy + c.w * 0.08, c.w * 0.55, c.w * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + c.w * 0.5, cy + c.w * 0.1, c.w * 0.5, c.w * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawPlanetDome(cx, cy) {
+    // TILT만큼 세로로 눌러서 그리면 원형 돔이 카메라를 기울인 것처럼 타원으로 보인다
+    // (그라디언트/도형 자체는 정원으로 만든 뒤 좌표계만 눌러서, 비율이 항상 정확히 맞는다)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, TILT);
+    const grad = ctx.createRadialGradient(0, -PLANET_R * 0.1, PLANET_R * 0.08, 0, 0, PLANET_R);
+    grad.addColorStop(0, '#7fd48a');
+    grad.addColorStop(0.55, '#5fbf5a');
+    grad.addColorStop(0.86, '#4aa14f');
+    grad.addColorStop(1, '#bfe3ff'); // 지평선에서 하늘색으로 부드럽게 이어짐
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, PLANET_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMushroom(seed) {
+    const scale = 0.85 + seed * 0.4;
+    const capColor = seed > 0.5 ? '#ff8aa0' : '#ffb454';
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 3, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff4e6';
+    ctx.fillRect(-3, -6, 6, 9);
+    ctx.beginPath(); ctx.arc(0, -6, 9, Math.PI, 0);
+    ctx.fillStyle = capColor; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(3, -8, 1.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFence(angle) {
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a97a4a';
+    ctx.fillRect(-16, -10, 5, 20);
+    ctx.fillRect(11, -10, 5, 20);
+    ctx.fillStyle = '#c79764';
+    ctx.fillRect(-18, -6, 36, 5);
+    ctx.fillRect(-18, 2, 36, 5);
+    ctx.restore();
+  }
+
+  function drawSignpost() {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 10, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a97a4a';
+    ctx.fillRect(-4, -34, 8, 44);
+    ctx.fillStyle = '#e7c88f';
+    ctx.beginPath();
+    ctx.moveTo(-30, -40); ctx.lineTo(30, -40); ctx.lineTo(30, -14); ctx.lineTo(-30, -14); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#7a5230';
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, -27);
+  }
+
+  function drawSpring() {
+    ctx.fillStyle = '#c9a86a';
+    ctx.beginPath(); ctx.ellipse(0, 6, spring.radius * 1.1, spring.radius * 0.76, 0, 0, Math.PI * 2); ctx.fill();
+    const waterGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, spring.radius);
+    waterGrad.addColorStop(0, '#dff7ff'); waterGrad.addColorStop(1, '#6ec6e8');
+    ctx.fillStyle = waterGrad;
+    ctx.beginPath(); ctx.ellipse(0, 0, spring.radius * 0.9, spring.radius * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c7c1d6';
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * spring.radius * 0.95, Math.sin(a) * spring.radius * 0.66, 8, 6, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawTree(o, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.2 + o.sway) * 0.05;
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, o.radius * 0.55, o.radius * 0.9, o.radius * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b98452';
+    ctx.fillRect(-o.radius * 0.12, -o.radius * 0.1, o.radius * 0.24, o.radius * 0.7);
+    ctx.save();
+    ctx.translate(0, -o.radius * 0.55);
+    ctx.rotate(sway);
+    ctx.fillStyle = o.tone > 0.5 ? '#5aba7c' : '#4fa066';
+    ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-o.radius * 0.35, -o.radius * 0.3, o.radius * 0.65, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.arc(-o.radius * 0.3, -o.radius * 0.45, o.radius * 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawStone(o) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, o.radius * 0.5, o.radius * 0.9, o.radius * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = o.tone > 0.5 ? '#cdc6dd' : '#b9aec2';
+    ctx.beginPath(); ctx.ellipse(0, 0, o.radius, o.radius * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.ellipse(-o.radius * 0.32, -o.radius * 0.3, o.radius * 0.32, o.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawPathTile(tone, angle) {
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = tone === 0 ? '#cbb98f' : '#bfa97c';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-30, -68, 60, 70, 8) : ctx.rect(-30, -68, 60, 70);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPlayer(t, moving) {
+    const bob = reduceMotion || !moving ? 0 : Math.sin(t * 9) * 1.6;
+    ctx.save();
+    ctx.translate(0, bob);
+
+    ctx.fillStyle = 'rgba(60,40,30,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 0.85, PLAYER_RADIUS * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#4fb787';
+    ctx.beginPath(); ctx.ellipse(0, PLAYER_RADIUS * 0.55, PLAYER_RADIUS * 0.62, PLAYER_RADIUS * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#3f8f66';
+    ctx.beginPath(); ctx.ellipse(-PLAYER_RADIUS * 0.28, PLAYER_RADIUS * 0.98, 5, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(PLAYER_RADIUS * 0.28, PLAYER_RADIUS * 0.98, 5, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+
+    const headGrad = ctx.createRadialGradient(-5, -8, 3, 0, -2, PLAYER_RADIUS + 4);
+    headGrad.addColorStop(0, '#ffe9d2'); headGrad.addColorStop(1, '#ffd9b8');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.35, PLAYER_RADIUS, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,100,60,0.35)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+    ctx.fillStyle = '#8a5a3a';
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 0.92, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+
+    const eyeOffX = player.facing.x * 1.6, eyeOffY = player.facing.y * 1.2;
+    ctx.fillStyle = '#4a3324';
+    ctx.beginPath(); ctx.arc(-4 + eyeOffX, -PLAYER_RADIUS * 0.38 + eyeOffY, 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4 + eyeOffX, -PLAYER_RADIUS * 0.38 + eyeOffY, 1.7, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,140,150,0.55)';
+    ctx.beginPath(); ctx.ellipse(-PLAYER_RADIUS * 0.55, -PLAYER_RADIUS * 0.18, 2.6, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(PLAYER_RADIUS * 0.55, -PLAYER_RADIUS * 0.18, 2.6, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = '#8a5a3a'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.28, 3.2, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 투영된 항목을 화면에 그리는 공용 래퍼: 위치 이동 + 축소(scale) + 지평선 페이드
+  function drawProjected(cx, cy, x, y, drawFn) {
+    const p = project(x, y);
+    if (!p) return null;
+    const fade = Math.min(1, p.scale / 0.22);
+    ctx.save();
+    ctx.translate(cx + p.sx, cy + p.sy);
+    ctx.scale(p.scale, p.scale);
+    ctx.globalAlpha = fade;
+    drawFn();
+    ctx.restore();
+    return p;
+  }
+
+  // ---------- 게임 루프 ----------
+  function formatCoord(v) {
+    const n = Math.round(v);
+    const sign = n < 0 ? '-' : '';
+    return sign + String(Math.abs(n)).padStart(4, '0');
+  }
+
+  let lastTime = performance.now();
+
+  function step(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    const t = now / 1000;
+
+    let dx = 0, dy = 0;
+    if (keys.has('w') || keys.has('arrowup')) dy -= 1;
+    if (keys.has('s') || keys.has('arrowdown')) dy += 1;
+    if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
+    if (keys.has('d') || keys.has('arrowright')) dx += 1;
+    if (joyActive) { dx += joyVector.x; dy += joyVector.y; }
+
+    const len = Math.hypot(dx, dy);
+    if (len > 1) { dx /= len; dy /= len; }
+
+    const speed = 200;
+    const moving = dx !== 0 || dy !== 0;
+    if (moving) {
+      player.facing = { x: dx / (len || 1), y: dy / (len || 1) };
+      const nx = player.x + dx * speed * dt;
+      if (!collides(nx, player.y)) player.x = nx;
+      const ny = player.y + dy * speed * dt;
+      if (!collides(player.x, ny)) player.y = ny;
+    }
+
+    const viewW = canvas.viewW || stage.clientWidth;
+    const viewH = canvas.viewH || stage.clientHeight;
+    const lookahead = viewH * 0.14;
+    const cx = viewW / 2, cy = viewH / 2 + lookahead;
+
+    ctx.clearRect(0, 0, viewW, viewH);
+    drawSky(viewW, viewH, t);
+    drawPlanetDome(cx, cy);
+
+    // 화면 좌표 기준으로 깊이(투영된 sy) 정렬을 위해 먼저 프로젝션 계산
+    const drawList = [];
+    for (const pt of terrainPatches) {
+      const p = project(pt.x, pt.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => {
+        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        ctx.beginPath(); ctx.ellipse(0, 0, pt.w, pt.w * 0.55, pt.angle, 0, Math.PI * 2); ctx.fill();
+      }});
+    }
+    for (const g of grassTufts) {
+      const p = project(g.x, g.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => {
+        const sway = reduceMotion ? 0 : Math.sin(t * 1.6 + g.phase) * 0.18;
+        ctx.strokeStyle = g.tone > 0.5 ? '#4aa85f' : '#e9f7d8';
+        ctx.globalAlpha *= g.tone > 0.5 ? 1 : 0.75;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(g.angle + sway) * g.len, -g.len * 1.4 + Math.sin(g.angle + sway) * 2);
+        ctx.stroke();
+      }});
+    }
+    for (const tile of pathTiles) {
+      const p = project(tile.x, tile.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => drawPathTile(tile.tone, tile.angle) });
+    }
+
+    // 지평선 아래(=layer 0)를 먼저 그린 뒤, 입체감 있는 오브젝트(layer 1)를 y-정렬해서 그린다
+    drawList.sort((a, b) => a.p.sy - b.p.sy);
+    for (const item of drawList) {
+      ctx.save();
+      ctx.translate(cx + item.p.sx, cy + item.p.sy);
+      ctx.scale(item.p.scale, item.p.scale);
+      ctx.globalAlpha = Math.min(1, item.p.scale / 0.22);
+      item.draw();
+      ctx.restore();
+    }
+
+    const solids = [];
+    drawProjected(cx, cy, spring.x, spring.y, drawSpring) && solids.push(0);
+    for (const o of obstacles) {
+      const p = project(o.x, o.y);
+      if (p) solids.push({ p, o });
+    }
+    for (const d of decorations) {
+      const p = project(d.x, d.y);
+      if (p) solids.push({ p, d });
+    }
+    const pSign = project(signpost.x, signpost.y);
+    if (pSign) solids.push({ p: pSign, sign: true });
+    for (const f of pathFences) {
+      const p = project(f.x, f.y);
+      if (p) solids.push({ p, f });
+    }
+    solids.sort((a, b) => (a.p ? a.p.sy : 0) - (b.p ? b.p.sy : 0));
+    for (const s of solids) {
+      if (!s || !s.p) continue;
+      ctx.save();
+      ctx.translate(cx + s.p.sx, cy + s.p.sy);
+      ctx.scale(s.p.scale, s.p.scale);
+      ctx.globalAlpha = Math.min(1, s.p.scale / 0.22);
+      if (s.o) { s.o.type === 'tree' ? drawTree(s.o, t) : drawStone(s.o); }
+      else if (s.d) { drawMushroom(s.d.seed); }
+      else if (s.sign) { drawSignpost(); }
+      else if (s.f) { drawFence(s.f.angle); }
+      ctx.restore();
+    }
+
+    for (const spore of spores) {
+      if (!reduceMotion) {
+        spore.y -= spore.speed * dt;
+        spore.x += Math.sin(t * 0.6 + spore.phase) * 4 * dt;
+        if (Math.hypot(spore.x, spore.y) > HORIZON_D * 0.9) {
+          const p = samplePlanetPoint(0, HORIZON_D * 0.3);
+          spore.x = p.x; spore.y = p.y;
+        }
+      }
+      drawProjected(cx, cy, spore.x, spore.y, () => {
+        const twinkle = reduceMotion ? 0.6 : (Math.sin(t * 2 + spore.phase) + 1) / 2;
+        ctx.globalAlpha *= 0.35 + twinkle * 0.5;
+        ctx.fillStyle = '#fff7e0';
+        ctx.beginPath(); ctx.arc(0, 0, spore.size, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    drawPlayer(t, moving);
+    ctx.restore();
+
+    posXEl.textContent = formatCoord(player.x);
+    posYEl.textContent = formatCoord(-player.y);
+
+    requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+
+  // ---- 뷰어 상태 보존 (재게시 시 플레이어 위치 유지) ----
+  function snapshot() { return { x: player.x, y: player.y }; }
+  function boot(data) {
+    if (data && typeof data.x === 'number' && typeof data.y === 'number') {
+      player.x = data.x; player.y = data.y;
+    }
+  }
+  if (window.claude && window.claude.hot) {
+    window.claude.hot.snapshot(snapshot);
+    window.claude.hot.ready ? window.claude.hot.ready(boot) : boot(window.claude.hot.data);
+  }
+})();
+</script>
