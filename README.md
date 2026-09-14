@@ -12,6 +12,10 @@
 
 - [`NEXON_IP_PARTNER_INTRO.md`](./NEXON_IP_PARTNER_INTRO.md) — 프로젝트 소개글(넥슨 IP 라이선스 활용 파트너 신청서 초안 겸용). 이 프로젝트를 만든 이유, 플레이 링크, 포트폴리오 요약, 기획서를 한 번에 정리했습니다.
 
+- `roadmap/` — 단계별 기획서 폴더. 작업 단위가 확정될 때마다 번호를 붙여 쌓아갑니다.
+  - [`roadmap/ROADMAP_1.md`](./roadmap/ROADMAP_1.md) — 1단계: 이동·환경·카메라 (완료)
+  - [`roadmap/ROADMAP_2.md`](./roadmap/ROADMAP_2.md) — 2단계: 미니맵·전체 지도(M)·랜드마크 (완료)
+
 - `web/asmara-exploration.html` — 현재 플레이 가능한 웹 프로토타입(HTML5 Canvas, 바닐라 JS).
   브라우저에서 파일을 열면 바로 실행됩니다. 원작 실제 플레이 영상을 참고해 구현한 '작은 행성'
   정구형 투영 렌더링(둥근 지평선 너머는 걸어가야 드러남)이 핵심 특징입니다.
