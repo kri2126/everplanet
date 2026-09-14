@@ -1,5 +1,7 @@
 # 에버플래닛 프로토타입 (Everplanet Prototype)
 
+🎮 **[지금 바로 플레이하기](https://kri2126.github.io/everplanet/web/asmara-exploration.html)** — 설치 없이 브라우저에서 바로 실행됩니다.
+
 넥슨 서비스 종료 후 러쉬에잇이 IP 개방 프로젝트로 재개발 중인 캐주얼 MMORPG '에버플래닛'의
 첫 번째 행성(아스마라)을 개인 학습 목적으로 다시 구현해보는 싱글플레이어 프로토타입입니다.
 
