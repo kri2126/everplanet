@@ -289,7 +289,6 @@
   const toastEl = document.getElementById('toast');
   const joyZone = document.getElementById('joyZone');
   const joyStick = document.getElementById('joyStick');
-
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- 시드 고정 의사난수 ----------
@@ -304,7 +303,8 @@
 
   // 균등 분포로 원형 필드 안에 점 뿌리기 (구역별 rand()에 바인딩해서 만들어 쓴다)
   function makeSamplePlanetPoint(rand) {
-    return function(minR, maxR) {   const r = Math.sqrt(rand()) * (maxR - minR) + minR;
+    return function(minR, maxR) {
+      const r = Math.sqrt(rand()) * (maxR - minR) + minR;
       const a = rand() * Math.PI * 2;
       return { x: Math.cos(a) * r, y: Math.sin(a) * r };
     };
@@ -493,8 +493,7 @@
     }
     const spores = [];
     for (let i = 0; i < (opts.sporeCount ?? 26); i++) {
-      const p = samplePlanetPoint(0, HORIZON_D * 0.9);
-      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+      const p = samplePlanetPoint(0, HORIZON_D * 0.9);      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
     }
 
     const clouds = [];
@@ -523,7 +522,7 @@
     ],
     spring: { x: 230, y: -110, radius: 50 },
     landmarkDefs: [
-      { id: 'spring',  name:  '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
+      { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
       { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
       { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
       { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
@@ -728,7 +727,7 @@
     ctx.beginPath(); ctx.ellipse(0, 3, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff4e6';
     ctx.fillRect(-3, -6, 6, 9);
-    ctx.beginPath(); ctx.arc(0, -6,9, Math.PI, 0);
+    ctx.beginPath(); ctx.arc(0, -6, 9, Math.PI, 0);
     ctx.fillStyle = capColor; ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
@@ -871,7 +870,6 @@
     ctx.fillStyle = '#d8c9a8';
     ctx.fillRect(-46, -80, 46, 9);
   }
-
   function drawCrystal(t) {
     const pulse = reduceMotion ? 0.5 : (Math.sin(t * 1.5) + 1) / 2;
     drawGroundShadow(40);
@@ -924,7 +922,8 @@
     ctx.translate(0, -46);
     ctx.rotate(spin);
     const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 32);
-    if (locked) {     grad.addColorStop(0, '#cfc9cf');
+    if (locked) {
+      grad.addColorStop(0, '#cfc9cf');
       grad.addColorStop(0.5, '#8b8590');
       grad.addColorStop(1, 'rgba(139,133,144,0)');
       ctx.globalAlpha *= 0.4;
