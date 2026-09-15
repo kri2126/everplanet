@@ -903,9 +903,9 @@
     else if (lm.id === 'crystal') drawCrystal(t);
   }
 
-  function drawPortalBody(t) {
+  function drawPortalBody(t, locked) {
     drawGroundShadow(46);
-    ctx.fillStyle = '#8f8296';
+    ctx.fillStyle = locked ? '#7a7178' : '#8f8296';
     ctx.beginPath();
     ctx.moveTo(-30, 8); ctx.lineTo(-30, -70);
     ctx.quadraticCurveTo(-30, -96, 0, -96);
@@ -919,19 +919,37 @@
     ctx.moveTo(-30, -70); ctx.quadraticCurveTo(-30, -96, 0, -96);
     ctx.lineTo(0, -84); ctx.quadraticCurveTo(-18, -84, -18, -68); ctx.closePath(); ctx.fill();
 
-    const spin = reduceMotion ? 0 : t * 1.4;
+    const spin = reduceMotion || locked ? 0 : t * 1.4;
     const pulse = reduceMotion ? 0.6 : (Math.sin(t * 2) + 1) / 2;
     ctx.save();
     ctx.translate(0, -46);
     ctx.rotate(spin);
     const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 32);
-    grad.addColorStop(0, '#fff2ff');
-    grad.addColorStop(0.5, '#c79bf0');
-    grad.addColorStop(1, 'rgba(199,155,240,0)');
-    ctx.globalAlpha *= 0.65 + pulse * 0.3;
+    if (locked) {
+      grad.addColorStop(0, '#cfc9cf');
+      grad.addColorStop(0.5, '#8b8590');
+      grad.addColorStop(1, 'rgba(139,133,144,0)');
+      ctx.globalAlpha *= 0.4;
+    } else {
+      grad.addColorStop(0, '#fff2ff');
+      grad.addColorStop(0.5, '#c79bf0');
+      grad.addColorStop(1, 'rgba(199,155,240,0)');
+      ctx.globalAlpha *= 0.65 + pulse * 0.3;
+    }
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.ellipse(0, 0, 30, 32, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+
+    if (locked) {
+      ctx.save();
+      ctx.translate(0, -46);
+      ctx.font = '600 15px "Gowun Dodum", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(40,34,30,0.55)';
+      ctx.fillText('🔒', 0, 2);
+      ctx.restore();
+    }
   }
 
   function drawPathTile(tone, angle) {
@@ -1044,17 +1062,19 @@
     }
 
     if (z.portal) {
+      const locked = isPortalLocked(z);
       const mx = toMapX(z.portal.x), my = toMapY(z.portal.y);
-      mapMarker(mx, my, '#c79bf0', isFull ? 8 : 5);
+      mapMarker(mx, my, locked ? '#9c94a0' : '#c79bf0', isFull ? 8 : 5);
       if (isFull) {
         ctx.font = '600 13px "Gowun Dodum", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(40,34,30,0.85)';
-        ctx.strokeText('포탈', mx, my - 15);
-        ctx.fillStyle = '#fffaf2';
-        ctx.fillText('포탈', mx, my - 15);
+        const label = locked ? '포탈 🔒' : '포탈';
+        ctx.strokeText(label, mx, my - 15);
+        ctx.fillStyle = locked ? '#d8d2db' : '#fffaf2';
+        ctx.fillText(label, mx, my - 15);
       }
     }
 
@@ -1086,6 +1106,30 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText(isTouch ? '탭 · 지도' : 'M  지도', cx, cy + R + 5);
+
+    const z = currentZone;
+    if (z.landmarks.length > 0) {
+      const locked = isPortalLocked(z);
+      const questY = cy + R + 20;
+      const label = `★ 랜드마크 ${z.foundCount}/${z.landmarks.length}`;
+      ctx.font = '700 11px "Gowun Dodum", sans-serif';
+      const w = ctx.measureText(label).width + 16;
+      ctx.fillStyle = 'rgba(38,32,28,0.55)';
+      if (ctx.roundRect) {
+        ctx.beginPath(); ctx.roundRect(cx - w / 2, questY, w, 18, 9); ctx.fill();
+      } else {
+        ctx.fillRect(cx - w / 2, questY, w, 18);
+      }
+      ctx.fillStyle = z.foundCount === z.landmarks.length ? '#8ee0a8' : '#f0b23c';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx, questY + 9);
+      if (z.portal) {
+        ctx.font = '600 9px "JetBrains Mono", monospace';
+        ctx.fillStyle = locked ? 'rgba(220,210,225,0.75)' : 'rgba(180,240,200,0.9)';
+        ctx.textBaseline = 'top';
+        ctx.fillText(locked ? '포탈 잠김 🔒' : '포탈 열림', cx, questY + 20);
+      }
+    }
   }
 
   function drawFullMap(viewW, viewH, t) {
@@ -1113,7 +1157,10 @@
     const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
     const closeHint = isTouch ? '지도 밖을 탭하면 닫힘' : 'M / ESC 닫기';
     const gap = small ? '  ·  ' : '   ·   ';
-    const foundText = z.landmarks.length ? `발견 ${z.foundCount}/${z.landmarks.length}${gap}` : '';
+    let foundText = z.landmarks.length ? `발견 ${z.foundCount}/${z.landmarks.length}${gap}` : '';
+    if (z.landmarks.length && z.portal) {
+      foundText += (isPortalLocked(z) ? '포탈 잠김' : '포탈 열림') + gap;
+    }
     ctx.fillText(`탐험도 ${pct}%${gap}${foundText}${closeHint}`, cx, cy + R + (small ? 10 : 14));
     ctx.restore();
   }
@@ -1136,6 +1183,10 @@
     toastTimer = setTimeout(() => toastEl.classList.remove('show'), final ? 4200 : 2800);
   }
 
+  function isPortalLocked(z) {
+    return z.landmarks.length > 0 && z.foundCount < z.landmarks.length;
+  }
+
   function checkDiscovery() {
     const z = currentZone;
     for (const lm of z.landmarks) {
@@ -1144,17 +1195,27 @@
       lm.found = true;
       z.foundCount++;
       if (z.foundCount === z.landmarks.length) {
-        showToast(`${z.name}의 랜드마크를 모두 발견했습니다!`, true);
+        const portalMsg = z.portal ? ` 포탈이 열렸습니다!` : '';
+        showToast(`${z.name}의 랜드마크를 모두 발견했습니다!${portalMsg}`, true);
       } else {
         showToast(`${withObjParticle(lm.name)} 발견했습니다`);
       }
     }
   }
 
+  let lastLockToast = -99;
   function checkPortal() {
     const z = currentZone;
     if (!z.portal || transition) return;
     if (Math.hypot(player.x - z.portal.x, player.y - z.portal.y) < z.portal.triggerR) {
+      if (isPortalLocked(z)) {
+        const now = performance.now() / 1000;
+        if (now - lastLockToast > 3) {
+          lastLockToast = now;
+          showToast(`포탈이 잠겨 있습니다 — 랜드마크 ${z.foundCount}/${z.landmarks.length}를 모두 찾아야 열립니다`);
+        }
+        return;
+      }
       startTransition(z.portal.toZone, z.portal.spawn);
     }
   }
@@ -1294,7 +1355,7 @@
         drawSinkClipped(s.lm.height, s.p.sink, () => drawLandmarkBody(s.lm, t));
       }
       else if (s.portal) {
-        drawSinkClipped(s.portal.height, s.p.sink, () => drawPortalBody(t));
+        drawSinkClipped(s.portal.height, s.p.sink, () => drawPortalBody(t, isPortalLocked(z)));
       }
       ctx.restore();
     }
