@@ -289,6 +289,7 @@
   const toastEl = document.getElementById('toast');
   const joyZone = document.getElementById('joyZone');
   const joyStick = document.getElementById('joyStick');
+
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- 시드 고정 의사난수 ----------
@@ -493,7 +494,8 @@
     }
     const spores = [];
     for (let i = 0; i < (opts.sporeCount ?? 26); i++) {
-      const p = samplePlanetPoint(0, HORIZON_D * 0.9);      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+      const p = samplePlanetPoint(0, HORIZON_D * 0.9);
+      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
     }
 
     const clouds = [];
@@ -870,6 +872,7 @@
     ctx.fillStyle = '#d8c9a8';
     ctx.fillRect(-46, -80, 46, 9);
   }
+
   function drawCrystal(t) {
     const pulse = reduceMotion ? 0.5 : (Math.sin(t * 1.5) + 1) / 2;
     drawGroundShadow(40);
