@@ -242,10 +242,10 @@
       <div class="planet-glyph" aria-hidden="true"></div>
       <div>
         <h1>아스마라 탐사</h1>
-        <p class="subtitle">에버플래닛 프로토타입 · 2단계 — 지도를 그리며 랜드마크를 찾아서</p>
+        <p class="subtitle">에버플래닛 프로토타입 · 지도를 그리며 랜드마크를 찾고, 포탈로 다음 구역까지 (구역 특색은 추후 반영 예정)</p>
       </div>
     </div>
-    <span class="phase-chip">PHASE 2 · MAP &amp; LANDMARK</span>
+    <span class="phase-chip">PHASE 3 · PORTAL (PROTO)</span>
   </header>
 
   <div class="stage" id="stage">
@@ -261,6 +261,7 @@
   </div>
 
   <footer class="hud">
+    <div class="hud-field">구역 <b id="zoneLabel">초원</b></div>
     <div class="hud-field">위치 <b id="posDir">출발점</b></div>
     <div class="hud-field">탐험도 <b id="explorePct">0%</b></div>
     <div class="hud-field">발견 <b id="foundLabel">0/5</b></div>
@@ -269,6 +270,7 @@
       <span><i class="swatch" style="background:#4fa066"></i>나무</span>
       <span><i class="swatch" style="background:#b9aec2"></i>바위</span>
       <span><i class="swatch" style="background:#f0b23c"></i>랜드마크</span>
+      <span><i class="swatch" style="background:#c79bf0"></i>포탈</span>
     </div>
   </footer>
 </div>
@@ -283,6 +285,7 @@
   const posDirEl = document.getElementById('posDir');
   const explorePctEl = document.getElementById('explorePct');
   const foundLabelEl = document.getElementById('foundLabel');
+  const zoneLabelEl = document.getElementById('zoneLabel');
   const toastEl = document.getElementById('toast');
   const joyZone = document.getElementById('joyZone');
   const joyStick = document.getElementById('joyStick');
@@ -298,19 +301,20 @@
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
-  const rand = mulberry32(20260913);
+
+  // 균등 분포로 원형 필드 안에 점 뿌리기 (구역별 rand()에 바인딩해서 만들어 쓴다)
+  function makeSamplePlanetPoint(rand) {
+    return function(minR, maxR) {
+      const r = Math.sqrt(rand()) * (maxR - minR) + minR;
+      const a = rand() * Math.PI * 2;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+    };
+  }
 
   // ---------- 작은 행성 투영 ----------
-  // 실제 에버플래닛의 "글로브 뷰"를 참고: 캐릭터를 구(sphere)의 정점에 세워두고
-  // 정사영(orthographic) 방식으로 주변을 투영한다. 그러면 지평선 너머(구의 반대쪽 면)는
-  // 자연스럽게 화면에서 사라지고, 앞으로 걸어가야만 새로 드러난다 - 안개 같은 눈속임이 아니라
-  // 실제 "작은 행성 위에 서 있는" 기하학으로 시야 제한을 구현한다.
-  const PLANET_R = 520;              // 구의 반지름 (클수록 완만하고 시야가 넓어짐)
-  const HORIZON_D = PLANET_R * Math.PI / 2 * 0.985; // 이 거리 너머는 지평선 아래로 사라짐
-  const WORLD_RADIUS = 1500;         // 실제로 걸어다닐 수 있는 전체 범위(경계)
+  const PLANET_R = 520;
+  const HORIZON_D = PLANET_R * Math.PI / 2 * 0.985;
   const PLAYER_RADIUS = 15;
-  // 완전히 위에서 내려다보는 정수직 시점 대신, 카메라를 살짝 앞으로 기울여
-  // "대각선으로 내려다보는" 3인칭 느낌을 낸다. 1에 가까울수록 완전 탑뷰, 작을수록 더 기울어짐.
   const TILT = 0.62;
 
   function project(x, y) {
@@ -323,12 +327,6 @@
     return { sx: Math.cos(angle) * screenDist, sy: Math.sin(angle) * screenDist * TILT, scale, d };
   }
 
-  // 높은 랜드마크 전용 투영.
-  // 지구에서 수평선 너머의 배가 돛대부터 보이듯, 높은 물체는 지평선 너머에서도 꼭대기가 보인다.
-  // 가시 거리를 높이에 비례해 늘리고, 지평선 너머에 있을 때는 지평선에 붙여 그리면서
-  // 아래쪽을 잘라(sink) 꼭대기만 드러나게 한다. 또 너무 작아져 점이 되지 않도록 최소 배율을 둔다.
-  // 최소 배율이 너무 작으면 먼 랜드마크가 몇 px짜리 점이 되어 "저기 뭔가 보인다"가 성립하지 않는다.
-  // 일반 오브젝트의 축소(cos)를 따르되 0.32 아래로는 줄어들지 않게 하고, 가라앉는 정도도 0.65에서 멈춘다.
   const LM_MIN_SCALE = 0.32;
   const LM_MAX_SINK = 0.65;
   function projectTall(x, y, height) {
@@ -338,10 +336,9 @@
     const maxD = HORIZON_D + extra;
     if (d > maxD) return null;
     const angle = Math.atan2(rely, relx);
-    const dd = Math.min(d, HORIZON_D);              // 지평선 너머면 지평선 위치에 고정
+    const dd = Math.min(d, HORIZON_D);
     const screenDist = PLANET_R * Math.sin(dd / PLANET_R);
     const scale = Math.max(LM_MIN_SCALE, Math.cos(dd / PLANET_R));
-    // sink 0 = 전체가 보임, 1 = 완전히 지평선 아래
     const raw = extra > 0 ? Math.max(0, d - HORIZON_D) / extra : 0;
     const sink = Math.min(LM_MAX_SINK, Math.pow(raw, 1.3));
     return {
@@ -351,215 +348,216 @@
     };
   }
 
-  // 균등 분포로 원형 필드 안에 점 뿌리기
-  function samplePlanetPoint(minR, maxR) {
-    const r = Math.sqrt(rand()) * (maxR - minR) + minR;
-    const a = rand() * Math.PI * 2;
-    return { x: Math.cos(a) * r, y: Math.sin(a) * r };
-  }
-
-  // ---------- 장식용 오솔길 (이동 제한 없음 - 시선을 안내하는 용도) ----------
-  const pathPts = [
-    { x: 10, y: 10 }, { x: 150, y: -230 }, { x: 30, y: -480 },
-    { x: 200, y: -740 }, { x: 90, y: -1020 }
-  ];
-  const pathTiles = [];
-  const pathFences = [];
-  for (let i = 0; i < pathPts.length - 1; i++) {
-    const a = pathPts[i], b = pathPts[i + 1];
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy);
-    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
-    const tileCount = Math.round(len / 58);
-    for (let j = 0; j < tileCount; j++) {
-      const t = (j + 0.5) / tileCount;
-      pathTiles.push({
-        x: a.x + dx * t, y: a.y + dy * t,
-        angle: Math.atan2(dy, dx),
-        tone: (i + j) % 2
-      });
+  function drawSinkClipped(height, sink, drawFn) {
+    if (sink > 0) {
+      const top = -height * 1.25, bottom = 16;
+      const visible = (1 - sink) * (bottom - top);
+      ctx.beginPath();
+      ctx.rect(-220, top, 440, Math.max(0, visible));
+      ctx.clip();
+      ctx.globalAlpha *= 1 - sink * 0.38;
     }
-    const fenceCount = Math.round(len / 150);
-    for (let j = 0; j < fenceCount; j++) {
-      const t = (j + 0.5) / fenceCount;
-      for (const side of [1, -1]) {
-        pathFences.push({
-          x: a.x + dx * t + nx * 78 * side,
-          y: a.y + dy * t + ny * 78 * side,
-          angle: Math.atan2(dy, dx)
-        });
-      }
-    }
-  }
-  function nearPath(x, y, threshold) {
-    for (let i = 0; i < pathPts.length - 1; i++) {
-      const a = pathPts[i], b = pathPts[i + 1];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const lenSq = dx * dx + dy * dy;
-      let t = lenSq > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / lenSq : 0;
-      t = Math.max(0, Math.min(1, t));
-      const cx = a.x + dx * t, cy = a.y + dy * t;
-      if (Math.hypot(x - cx, y - cy) < threshold) return true;
-    }
-    return false;
+    drawFn();
   }
 
-  // ---------- 자연물 배치 ----------
-  const obstacles = [];   // 나무 / 바위 (충돌 O)
-  const decorations = []; // 버섯 (충돌 X)
-
-  function overlapsExisting(x, y, radius) {
-    for (const o of obstacles) {
-      if (Math.hypot(x - o.x, y - o.y) < radius + o.radius + 16) return true;
-    }
-    return false;
-  }
-
-  function scatterObstacles(minR, maxR, count) {
-    for (let i = 0; i < count; i++) {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const p = samplePlanetPoint(minR, maxR);
-        if (Math.hypot(p.x, p.y) < 170) continue;
-        if (nearPath(p.x, p.y, 66)) continue;
-        const isTree = rand() < 0.58;
-        const radius = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
-        if (overlapsExisting(p.x, p.y, radius)) continue;
-        obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
-        break;
-      }
-    }
-  }
-  scatterObstacles(0, WORLD_RADIUS - 260, 150);
-  scatterObstacles(WORLD_RADIUS - 260, WORLD_RADIUS - 20, 90); // 가장자리 - 경계를 자연스럽게 가려주는 숲
-
-  for (let i = 0; i < 16; i++) {
-    const p = samplePlanetPoint(0, WORLD_RADIUS - 300);
-    if (Math.hypot(p.x, p.y) < 130) continue;
-    decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
-  }
-
-  const spring = { x: 230, y: -110, radius: 50 };
-
-  // ---------- 랜드마크 ----------
-  // 행성 곳곳에 실루엣이 확실히 다른 목표물을 배치한다. height가 클수록 더 멀리서 보인다.
-  // 샘물은 기존 자산을 그대로 쓰므로 draw를 갖지 않는다(별도로 그려짐).
-  const landmarks = [
-    { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
-    { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
-    { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
-    { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
-    { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' }
-  ];
   const DISCOVER_R = 120;
-  let foundCount = 0;
+  const EXPLORE_R = 500;
+  const CELL = 50;
+  const FOG_SIZE = 600;
 
-  // 랜드마크 자리에 겹친 나무/바위는 치운다
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    for (const lm of landmarks) {
-      if (Math.hypot(obstacles[i].x - lm.x, obstacles[i].y - lm.y) < 150) { obstacles.splice(i, 1); break; }
-    }
-  }
-
-  // 받침조사 판별 (발견 알림 문구용)
   function withObjParticle(name) {
     const code = name.charCodeAt(name.length - 1);
     if (code < 0xAC00 || code > 0xD7A3) return name + '를';
     return name + ((code - 0xAC00) % 28 === 0 ? '를' : '을');
   }
 
-  // ---------- 탐험 기록 (fog of war) ----------
-  // 시야 반경은 804지만 그 근처는 축소율 2.4%라 사실상 보이지 않는다.
-  // "형태를 알아볼 수 있는 거리"인 500까지만 탐험으로 인정한다.
-  const EXPLORE_R = 500;
-  const CELL = 50;
-  const GRID_N = Math.ceil((WORLD_RADIUS * 2) / CELL);
-  const GRID_ORIGIN = -WORLD_RADIUS;
-  const explored = new Uint8Array(GRID_N * GRID_N);
-  let exploredCount = 0;
-  let totalCells = 0;
-  for (let gy = 0; gy < GRID_N; gy++) {
-    for (let gx = 0; gx < GRID_N; gx++) {
-      const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
-      const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
-      if (Math.hypot(wx, wy) <= WORLD_RADIUS) totalCells++;
+  function makeZone(opts) {
+    const rand = mulberry32(opts.seed);
+    const radius = opts.radius;
+    const samplePlanetPoint = makeSamplePlanetPoint(rand);
+
+    let pathPts = [], pathTiles = [], pathFences = [], signpost = null;
+    if (opts.pathPts) {
+      pathPts = opts.pathPts;
+      for (let i = 0; i < pathPts.length - 1; i++) {
+        const a = pathPts[i], b = pathPts[i + 1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+        const tileCount = Math.round(len / 58);
+        for (let j = 0; j < tileCount; j++) {
+          const t = (j + 0.5) / tileCount;
+          pathTiles.push({
+            x: a.x + dx * t, y: a.y + dy * t,
+            angle: Math.atan2(dy, dx),
+            tone: (i + j) % 2
+          });
+        }
+        const fenceCount = Math.round(len / 150);
+        for (let j = 0; j < fenceCount; j++) {
+          const t = (j + 0.5) / fenceCount;
+          for (const side of [1, -1]) {
+            pathFences.push({
+              x: a.x + dx * t + nx * 78 * side,
+              y: a.y + dy * t + ny * 78 * side,
+              angle: Math.atan2(dy, dx)
+            });
+          }
+        }
+      }
+      signpost = { x: pathPts[pathPts.length - 1].x, y: pathPts[pathPts.length - 1].y - 30 };
     }
-  }
+    function nearPath(x, y, threshold) {
+      for (let i = 0; i < pathPts.length - 1; i++) {
+        const a = pathPts[i], b = pathPts[i + 1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy;
+        let t = lenSq > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / lenSq : 0;
+        t = Math.max(0, Math.min(1, t));
+        const cx = a.x + dx * t, cy = a.y + dy * t;
+        if (Math.hypot(x - cx, y - cy) < threshold) return true;
+      }
+      return false;
+    }
 
-  // 밝혀진 영역은 별도 캔버스에 원으로 누적한다(격자보다 훨씬 자연스러운 모양이 나온다).
-  // 격자는 탐험도 % 계산에만 쓴다.
-  const FOG_SIZE = 600;
-  const FOG_SCALE = FOG_SIZE / (WORLD_RADIUS * 2);
-  const fogCanvas = document.createElement('canvas');
-  fogCanvas.width = FOG_SIZE; fogCanvas.height = FOG_SIZE;
-  const fogCtx = fogCanvas.getContext('2d');
-  fogCtx.fillStyle = '#6fbf72';
+    const obstacles = [];
+    const decorations = [];
 
-  let lastExploreX = Infinity, lastExploreY = Infinity;
-  function updateExploration() {
-    if (Math.hypot(player.x - lastExploreX, player.y - lastExploreY) < 25) return;
-    lastExploreX = player.x; lastExploreY = player.y;
+    function overlapsExisting(x, y, radius) {
+      for (const o of obstacles) {
+        if (Math.hypot(x - o.x, y - o.y) < radius + o.radius + 16) return true;
+      }
+      return false;
+    }
 
-    fogCtx.beginPath();
-    fogCtx.arc((player.x - GRID_ORIGIN) * FOG_SCALE, (player.y - GRID_ORIGIN) * FOG_SCALE, EXPLORE_R * FOG_SCALE, 0, Math.PI * 2);
-    fogCtx.fill();
-
-    const gx0 = Math.max(0, Math.floor((player.x - EXPLORE_R - GRID_ORIGIN) / CELL));
-    const gx1 = Math.min(GRID_N - 1, Math.floor((player.x + EXPLORE_R - GRID_ORIGIN) / CELL));
-    const gy0 = Math.max(0, Math.floor((player.y - EXPLORE_R - GRID_ORIGIN) / CELL));
-    const gy1 = Math.min(GRID_N - 1, Math.floor((player.y + EXPLORE_R - GRID_ORIGIN) / CELL));
-    for (let gy = gy0; gy <= gy1; gy++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        const idx = gy * GRID_N + gx;
-        if (explored[idx]) continue;
-        const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
-        const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
-        if (Math.hypot(wx, wy) > WORLD_RADIUS) continue;
-        if (Math.hypot(wx - player.x, wy - player.y) > EXPLORE_R) continue;
-        explored[idx] = 1;
-        exploredCount++;
+    function scatterObstacles(minR, maxR, count) {
+      for (let i = 0; i < count; i++) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const p = samplePlanetPoint(minR, maxR);
+          if (Math.hypot(p.x, p.y) < 170) continue;
+          if (nearPath(p.x, p.y, 66)) continue;
+          const isTree = rand() < 0.58;
+          const radius = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
+          if (overlapsExisting(p.x, p.y, radius)) continue;
+          obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
+          break;
+        }
       }
     }
-  }
-  const signpost = { x: pathPts[pathPts.length - 1].x, y: pathPts[pathPts.length - 1].y - 30 };
+    scatterObstacles(0, radius - 260, opts.obstacleCore ?? 150);
+    scatterObstacles(radius - 260, radius - 20, opts.obstacleEdge ?? 90);
 
-  // 지형 얼룩(넓은 톤 변화) + 잔디 - 필드 전체에 균등 분포
-  const terrainPatches = [];
-  for (let i = 0; i < 20; i++) {
-    const p = samplePlanetPoint(0, WORLD_RADIUS);
-    terrainPatches.push({ x: p.x, y: p.y, w: 140 + rand() * 90, angle: rand() * Math.PI });
-  }
-  const grassTufts = [];
-  for (let i = 0; i < 1400; i++) {
-    const p = samplePlanetPoint(0, WORLD_RADIUS);
-    grassTufts.push({ x: p.x, y: p.y, len: 4 + rand() * 6, angle: rand() * Math.PI * 2, phase: rand() * Math.PI * 2, tone: rand() });
-  }
-  const spores = [];
-  for (let i = 0; i < 26; i++) {
-    const p = samplePlanetPoint(0, HORIZON_D * 0.9);
-    spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+    for (let i = 0; i < (opts.mushroomCount ?? 16); i++) {
+      const p = samplePlanetPoint(0, radius - 300);
+      if (Math.hypot(p.x, p.y) < 130) continue;
+      decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
+    }
+
+    const spring = opts.spring || null;
+
+    const landmarks = (opts.landmarkDefs || []).map((l) => ({ ...l }));
+    let foundCount = 0;
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      for (const lm of landmarks) {
+        if (Math.hypot(obstacles[i].x - lm.x, obstacles[i].y - lm.y) < 150) { obstacles.splice(i, 1); break; }
+      }
+    }
+
+    const GRID_N = Math.ceil((radius * 2) / CELL);
+    const GRID_ORIGIN = -radius;
+    const explored = new Uint8Array(GRID_N * GRID_N);
+    let totalCells = 0;
+    for (let gy = 0; gy < GRID_N; gy++) {
+      for (let gx = 0; gx < GRID_N; gx++) {
+        const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
+        const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
+        if (Math.hypot(wx, wy) <= radius) totalCells++;
+      }
+    }
+
+    const FOG_SCALE = FOG_SIZE / (radius * 2);
+    const fogCanvas = document.createElement('canvas');
+    fogCanvas.width = FOG_SIZE; fogCanvas.height = FOG_SIZE;
+    const fogCtx = fogCanvas.getContext('2d');
+    fogCtx.fillStyle = '#6fbf72';
+
+    const terrainPatches = [];
+    for (let i = 0; i < (opts.terrainCount ?? 20); i++) {
+      const p = samplePlanetPoint(0, radius);
+      terrainPatches.push({ x: p.x, y: p.y, w: 140 + rand() * 90, angle: rand() * Math.PI });
+    }
+    const grassTufts = [];
+    for (let i = 0; i < (opts.grassCount ?? 1400); i++) {
+      const p = samplePlanetPoint(0, radius);
+      grassTufts.push({ x: p.x, y: p.y, len: 4 + rand() * 6, angle: rand() * Math.PI * 2, phase: rand() * Math.PI * 2, tone: rand() });
+    }
+    const spores = [];
+    for (let i = 0; i < (opts.sporeCount ?? 26); i++) {
+      const p = samplePlanetPoint(0, HORIZON_D * 0.9);
+      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+    }
+
+    const clouds = [];
+    for (let i = 0; i < (opts.cloudCount ?? 9); i++) {
+      clouds.push({ x: rand() * 1.4 - 0.2, y: 0.05 + rand() * 0.32, w: 60 + rand() * 90, speed: 4 + rand() * 6, tone: rand() });
+    }
+
+    return {
+      id: opts.id, name: opts.name, radius,
+      rand, samplePlanetPoint,
+      pathPts, pathTiles, pathFences, signpost,
+      obstacles, decorations, spring,
+      landmarks, foundCount,
+      GRID_N, GRID_ORIGIN, explored, exploredCount: 0, totalCells, FOG_SCALE, fogCanvas, fogCtx,
+      lastExploreX: Infinity, lastExploreY: Infinity,
+      terrainPatches, grassTufts, spores, clouds,
+      portal: opts.portal || null
+    };
   }
 
-  // 하늘의 구름 (화면 고정 레이어, 완만하게 흘러감)
-  const clouds = [];
-  for (let i = 0; i < 9; i++) {
-    clouds.push({ x: rand() * 1.4 - 0.2, y: 0.05 + rand() * 0.32, w: 60 + rand() * 90, speed: 4 + rand() * 6, tone: rand() });
+  const zone1 = makeZone({
+    id: 'zone1', name: '초원', seed: 20260913, radius: 1500,
+    pathPts: [
+      { x: 10, y: 10 }, { x: 150, y: -230 }, { x: 30, y: -480 },
+      { x: 200, y: -740 }, { x: 90, y: -1020 }
+    ],
+    spring: { x: 230, y: -110, radius: 50 },
+    landmarkDefs: [
+      { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
+      { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
+      { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
+      { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
+      { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' }
+    ],
+    portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
+  });
+
+  const zone2 = makeZone({
+    id: 'zone2', name: '맵2', seed: 20260915, radius: 1500,
+    portal: { x: 0, y: 250, height: 100, toZone: 'zone1', spawn: { x: 650, y: 950 }, triggerR: 50 }
+  });
+
+  const zones = { zone1, zone2 };
+  let currentZone = zone1;
+
+  let transition = null;
+  function startTransition(toZoneId, spawn) {
+    transition = { phase: 'out', t: 0, dur: 0.35, toZoneId, spawn };
   }
 
-  // ---------- 플레이어 ----------
   const player = { x: 0, y: 60, facing: { x: 0, y: -1 } };
 
-  // ---------- 입력 ----------
   const keys = new Set();
   let mapOpen = false;
   window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     keys.add(k);
-    if (k === 'm') { mapOpen = !mapOpen; keys.clear(); e.preventDefault(); }
+    if (k === 'm' && !transition) { mapOpen = !mapOpen; keys.clear(); e.preventDefault(); }
     else if (k === 'escape' && mapOpen) { mapOpen = false; }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
-  // 모바일: 미니맵을 탭하면 전체 지도, 지도 밖을 탭하면 닫힘
   let minimapHit = { cx: 0, cy: 0, r: 0 };
   let fullmapHit = { cx: 0, cy: 0, r: 0 };
   canvas.addEventListener('pointerdown', (e) => {
@@ -567,7 +565,7 @@
     const px = e.clientX - rect.left, py = e.clientY - rect.top;
     if (mapOpen) {
       if (Math.hypot(px - fullmapHit.cx, py - fullmapHit.cy) > fullmapHit.r) mapOpen = false;
-    } else if (Math.hypot(px - minimapHit.cx, py - minimapHit.cy) <= minimapHit.r) {
+    } else if (!transition && Math.hypot(px - minimapHit.cx, py - minimapHit.cy) <= minimapHit.r) {
       mapOpen = true;
     }
   });
@@ -615,27 +613,25 @@
   joyZone.addEventListener('pointerup', releaseJoy);
   joyZone.addEventListener('pointercancel', releaseJoy);
 
-  // ---------- 충돌 ----------
   function collides(x, y) {
-    if (Math.hypot(x, y) > WORLD_RADIUS - PLAYER_RADIUS - 12) return true;
-    for (const o of obstacles) {
+    const z = currentZone;
+    if (Math.hypot(x, y) > z.radius - PLAYER_RADIUS - 12) return true;
+    for (const o of z.obstacles) {
       const solidRadius = o.type === 'tree' ? o.radius * 0.5 : o.radius * 0.82;
       if (Math.hypot(x - o.x, y - o.y) < PLAYER_RADIUS + solidRadius) return true;
     }
-    for (const lm of landmarks) {
+    for (const lm of z.landmarks) {
       if (lm.solid && Math.hypot(x - lm.x, y - lm.y) < PLAYER_RADIUS + lm.solid) return true;
     }
     return false;
   }
 
-  // 나무에 정면으로 부딪히면 완전히 멈춰서 "멀리 보이는 랜드마크로 걸어간다"는 흐름이 끊긴다.
-  // 막혔을 때는 진행 방향을 조금씩 틀어서 장애물을 타고 미끄러지게 한다.
   function tryMove(dx, dy, dist) {
     const nx = player.x + dx * dist, ny = player.y + dy * dist;
     if (!collides(nx, ny)) { player.x = nx; player.y = ny; return; }
     if (dx && !collides(player.x + dx * dist, player.y)) { player.x += dx * dist; return; }
     if (dy && !collides(player.x, player.y + dy * dist)) { player.y += dy * dist; return; }
-    const px = -dy, py = dx;                       // 진행 방향의 수직
+    const px = -dy, py = dx;
     for (const blend of [0.7, 1]) {
       for (const sign of [1, -1]) {
         const sx = dx * 0.35 + px * sign * blend;
@@ -644,6 +640,33 @@
         const cx = player.x + (sx / len) * dist;
         const cy = player.y + (sy / len) * dist;
         if (!collides(cx, cy)) { player.x = cx; player.y = cy; return; }
+      }
+    }
+  }
+
+  function updateExploration() {
+    const z = currentZone;
+    if (Math.hypot(player.x - z.lastExploreX, player.y - z.lastExploreY) < 25) return;
+    z.lastExploreX = player.x; z.lastExploreY = player.y;
+
+    z.fogCtx.beginPath();
+    z.fogCtx.arc((player.x - z.GRID_ORIGIN) * z.FOG_SCALE, (player.y - z.GRID_ORIGIN) * z.FOG_SCALE, EXPLORE_R * z.FOG_SCALE, 0, Math.PI * 2);
+    z.fogCtx.fill();
+
+    const gx0 = Math.max(0, Math.floor((player.x - EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gx1 = Math.min(z.GRID_N - 1, Math.floor((player.x + EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gy0 = Math.max(0, Math.floor((player.y - EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gy1 = Math.min(z.GRID_N - 1, Math.floor((player.y + EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = gy * z.GRID_N + gx;
+        if (z.explored[idx]) continue;
+        const wx = z.GRID_ORIGIN + (gx + 0.5) * CELL;
+        const wy = z.GRID_ORIGIN + (gy + 0.5) * CELL;
+        if (Math.hypot(wx, wy) > z.radius) continue;
+        if (Math.hypot(wx - player.x, wy - player.y) > EXPLORE_R) continue;
+        z.explored[idx] = 1;
+        z.exploredCount++;
       }
     }
   }
@@ -660,7 +683,6 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // ---------- 그리기 헬퍼 (모두 화면 좌표계에서 동작) ----------
   function drawSky(viewW, viewH, t) {
     const grad = ctx.createLinearGradient(0, 0, 0, viewH);
     grad.addColorStop(0, '#5fb6ea');
@@ -669,7 +691,7 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, viewW, viewH);
 
-    for (const c of clouds) {
+    for (const c of currentZone.clouds) {
       const drift = reduceMotion ? 0 : (t * c.speed) % (viewW + c.w * 3);
       const cx = ((c.x * viewW + drift) % (viewW + c.w * 3)) - c.w * 1.5;
       const cy = c.y * viewH;
@@ -683,8 +705,6 @@
   }
 
   function drawPlanetDome(cx, cy) {
-    // TILT만큼 세로로 눌러서 그리면 원형 돔이 카메라를 기울인 것처럼 타원으로 보인다
-    // (그라디언트/도형 자체는 정원으로 만든 뒤 좌표계만 눌러서, 비율이 항상 정확히 맞는다)
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(1, TILT);
@@ -692,7 +712,7 @@
     grad.addColorStop(0, '#7fd48a');
     grad.addColorStop(0.55, '#5fbf5a');
     grad.addColorStop(0.86, '#4aa14f');
-    grad.addColorStop(1, '#bfe3ff'); // 지평선에서 하늘색으로 부드럽게 이어짐
+    grad.addColorStop(1, '#bfe3ff');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(0, 0, PLANET_R, 0, Math.PI * 2);
@@ -750,7 +770,7 @@
     ctx.fillText('?', 0, -27);
   }
 
-  function drawSpring() {
+  function drawSpring(spring) {
     ctx.fillStyle = '#c9a86a';
     ctx.beginPath(); ctx.ellipse(0, 6, spring.radius * 1.1, spring.radius * 0.76, 0, 0, Math.PI * 2); ctx.fill();
     const waterGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, spring.radius);
@@ -792,7 +812,6 @@
     ctx.beginPath(); ctx.ellipse(-o.radius * 0.32, -o.radius * 0.3, o.radius * 0.32, o.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
   }
 
-  // ---------- 랜드마크 그리기 ----------
   function drawGroundShadow(rx) {
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
     ctx.beginPath(); ctx.ellipse(0, 6, rx, rx * 0.32, 0, 0, Math.PI * 2); ctx.fill();
@@ -884,6 +903,37 @@
     else if (lm.id === 'crystal') drawCrystal(t);
   }
 
+  function drawPortalBody(t) {
+    drawGroundShadow(46);
+    ctx.fillStyle = '#8f8296';
+    ctx.beginPath();
+    ctx.moveTo(-30, 8); ctx.lineTo(-30, -70);
+    ctx.quadraticCurveTo(-30, -96, 0, -96);
+    ctx.quadraticCurveTo(30, -96, 30, -70); ctx.lineTo(30, 8);
+    ctx.lineTo(18, 8); ctx.lineTo(18, -68);
+    ctx.quadraticCurveTo(18, -84, 0, -84);
+    ctx.quadraticCurveTo(-18, -84, -18, -68); ctx.lineTo(-18, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath();
+    ctx.moveTo(-30, -70); ctx.quadraticCurveTo(-30, -96, 0, -96);
+    ctx.lineTo(0, -84); ctx.quadraticCurveTo(-18, -84, -18, -68); ctx.closePath(); ctx.fill();
+
+    const spin = reduceMotion ? 0 : t * 1.4;
+    const pulse = reduceMotion ? 0.6 : (Math.sin(t * 2) + 1) / 2;
+    ctx.save();
+    ctx.translate(0, -46);
+    ctx.rotate(spin);
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 32);
+    grad.addColorStop(0, '#fff2ff');
+    grad.addColorStop(0.5, '#c79bf0');
+    grad.addColorStop(1, 'rgba(199,155,240,0)');
+    ctx.globalAlpha *= 0.65 + pulse * 0.3;
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, 0, 30, 32, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   function drawPathTile(tone, angle) {
     ctx.save();
     ctx.rotate(angle);
@@ -933,7 +983,6 @@
     ctx.restore();
   }
 
-  // 투영된 항목을 화면에 그리는 공용 래퍼: 위치 이동 + 축소(scale) + 지평선 페이드
   function drawProjected(cx, cy, x, y, drawFn) {
     const p = project(x, y);
     if (!p) return null;
@@ -947,7 +996,6 @@
     return p;
   }
 
-  // ---------- 지도 ----------
   function mapMarker(mx, my, tint, size) {
     ctx.fillStyle = tint;
     ctx.strokeStyle = 'rgba(255,250,242,0.95)';
@@ -959,10 +1007,10 @@
     ctx.fill(); ctx.stroke();
   }
 
-  // 발견하지 않은 지역은 흐리게가 아니라 완전히 가린다 - 발견의 쾌감은 거기서 나온다.
   function drawMapCircle(cx, cy, R, isFull, t) {
-    const toMapX = (wx) => cx + (wx / WORLD_RADIUS) * R;
-    const toMapY = (wy) => cy + (wy / WORLD_RADIUS) * R;
+    const z = currentZone;
+    const toMapX = (wx) => cx + (wx / z.radius) * R;
+    const toMapY = (wy) => cy + (wy / z.radius) * R;
 
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -971,7 +1019,7 @@
 
     ctx.save();
     ctx.clip();
-    ctx.drawImage(fogCanvas, cx - R, cy - R, R * 2, R * 2);
+    ctx.drawImage(z.fogCanvas, cx - R, cy - R, R * 2, R * 2);
     ctx.restore();
 
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -979,7 +1027,7 @@
     ctx.lineWidth = isFull ? 3 : 2;
     ctx.stroke();
 
-    for (const lm of landmarks) {
+    for (const lm of z.landmarks) {
       if (!lm.found) continue;
       const mx = toMapX(lm.x), my = toMapY(lm.y);
       mapMarker(mx, my, lm.tint, isFull ? 7 : 4.5);
@@ -995,7 +1043,21 @@
       }
     }
 
-    // 플레이어 - 점 + 바라보는 방향
+    if (z.portal) {
+      const mx = toMapX(z.portal.x), my = toMapY(z.portal.y);
+      mapMarker(mx, my, '#c79bf0', isFull ? 8 : 5);
+      if (isFull) {
+        ctx.font = '600 13px "Gowun Dodum", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(40,34,30,0.85)';
+        ctx.strokeText('포탈', mx, my - 15);
+        ctx.fillStyle = '#fffaf2';
+        ctx.fillText('포탈', mx, my - 15);
+      }
+    }
+
     const px = toMapX(player.x), py = toMapY(player.y);
     const fa = Math.atan2(player.facing.y, player.facing.x);
     ctx.save();
@@ -1037,29 +1099,30 @@
     fullmapHit = { cx, cy, r: R + (small ? 16 : 30) };
     drawMapCircle(cx, cy, R, true, t);
 
+    const z = currentZone;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fffaf2';
     if (!small) {
       ctx.font = '600 15px "Gowun Dodum", sans-serif';
       ctx.textBaseline = 'bottom';
-      ctx.fillText('아스마라 전도', cx, cy - R - 16);
+      ctx.fillText(`${z.name} 전도`, cx, cy - R - 16);
     }
 
     ctx.font = small ? '600 10px "JetBrains Mono", monospace' : '600 12px "JetBrains Mono", monospace';
     ctx.textBaseline = 'top';
-    const pct = totalCells ? Math.round((exploredCount / totalCells) * 100) : 0;
+    const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
     const closeHint = isTouch ? '지도 밖을 탭하면 닫힘' : 'M / ESC 닫기';
     const gap = small ? '  ·  ' : '   ·   ';
-    ctx.fillText(`탐험도 ${pct}%${gap}발견 ${foundCount}/${landmarks.length}${gap}${closeHint}`, cx, cy + R + (small ? 10 : 14));
+    const foundText = z.landmarks.length ? `발견 ${z.foundCount}/${z.landmarks.length}${gap}` : '';
+    ctx.fillText(`탐험도 ${pct}%${gap}${foundText}${closeHint}`, cx, cy + R + (small ? 10 : 14));
     ctx.restore();
   }
 
-  // ---------- 게임 루프 ----------
   const DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
   function bearingLabel(x, y) {
     const dist = Math.hypot(x, y);
     if (dist < 90) return '출발점';
-    let a = Math.atan2(x, -y);            // 0 = 북, 양수 = 동쪽
+    let a = Math.atan2(x, -y);
     if (a < 0) a += Math.PI * 2;
     return `${DIRS[Math.round(a / (Math.PI / 4)) % 8]} ${Math.round(dist)}m`;
   }
@@ -1074,30 +1137,51 @@
   }
 
   function checkDiscovery() {
-    for (const lm of landmarks) {
+    const z = currentZone;
+    for (const lm of z.landmarks) {
       if (lm.found) continue;
       if (Math.hypot(player.x - lm.x, player.y - lm.y) > DISCOVER_R) continue;
       lm.found = true;
-      foundCount++;
-      if (foundCount === landmarks.length) {
-        showToast('아스마라의 랜드마크를 모두 발견했습니다!', true);
+      z.foundCount++;
+      if (z.foundCount === z.landmarks.length) {
+        showToast(`${z.name}의 랜드마크를 모두 발견했습니다!`, true);
       } else {
         showToast(`${withObjParticle(lm.name)} 발견했습니다`);
       }
     }
   }
 
+  function checkPortal() {
+    const z = currentZone;
+    if (!z.portal || transition) return;
+    if (Math.hypot(player.x - z.portal.x, player.y - z.portal.y) < z.portal.triggerR) {
+      startTransition(z.portal.toZone, z.portal.spawn);
+    }
+  }
+
   let lastTime = performance.now();
-  const hudCache = { dir: null, pct: -1, found: -1 };
+  const hudCache = { dir: null, pct: -1, found: -1, zone: null };
 
   function step(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
     const t = now / 1000;
 
-    // 전체 지도를 보는 동안은 이동을 멈춘다(일시정지)
+    if (transition) {
+      transition.t += dt;
+      if (transition.phase === 'out' && transition.t >= transition.dur) {
+        currentZone = zones[transition.toZoneId];
+        player.x = transition.spawn.x;
+        player.y = transition.spawn.y;
+        transition.phase = 'in';
+        transition.t = 0;
+      } else if (transition.phase === 'in' && transition.t >= transition.dur) {
+        transition = null;
+      }
+    }
+
     let dx = 0, dy = 0;
-    if (!mapOpen) {
+    if (!mapOpen && !transition) {
       if (keys.has('w') || keys.has('arrowup')) dy -= 1;
       if (keys.has('s') || keys.has('arrowdown')) dy += 1;
       if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
@@ -1115,9 +1199,13 @@
       tryMove(dx, dy, speed * dt);
     }
 
-    updateExploration();
-    checkDiscovery();
+    if (!transition) {
+      updateExploration();
+      checkDiscovery();
+      checkPortal();
+    }
 
+    const z = currentZone;
     const viewW = canvas.viewW || stage.clientWidth;
     const viewH = canvas.viewH || stage.clientHeight;
     const lookahead = viewH * 0.14;
@@ -1127,16 +1215,15 @@
     drawSky(viewW, viewH, t);
     drawPlanetDome(cx, cy);
 
-    // 화면 좌표 기준으로 깊이(투영된 sy) 정렬을 위해 먼저 프로젝션 계산
     const drawList = [];
-    for (const pt of terrainPatches) {
+    for (const pt of z.terrainPatches) {
       const p = project(pt.x, pt.y);
       if (p) drawList.push({ p, layer: 0, draw: () => {
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.beginPath(); ctx.ellipse(0, 0, pt.w, pt.w * 0.55, pt.angle, 0, Math.PI * 2); ctx.fill();
       }});
     }
-    for (const g of grassTufts) {
+    for (const g of z.grassTufts) {
       const p = project(g.x, g.y);
       if (p) drawList.push({ p, layer: 0, draw: () => {
         const sway = reduceMotion ? 0 : Math.sin(t * 1.6 + g.phase) * 0.18;
@@ -1149,12 +1236,11 @@
         ctx.stroke();
       }});
     }
-    for (const tile of pathTiles) {
+    for (const tile of z.pathTiles) {
       const p = project(tile.x, tile.y);
       if (p) drawList.push({ p, layer: 0, draw: () => drawPathTile(tile.tone, tile.angle) });
     }
 
-    // 지평선 아래(=layer 0)를 먼저 그린 뒤, 입체감 있는 오브젝트(layer 1)를 y-정렬해서 그린다
     drawList.sort((a, b) => a.p.sy - b.p.sy);
     for (const item of drawList) {
       ctx.save();
@@ -1166,23 +1252,29 @@
     }
 
     const solids = [];
-    drawProjected(cx, cy, spring.x, spring.y, drawSpring) && solids.push(0);
-    for (const o of obstacles) {
+    if (z.spring) { const p = project(z.spring.x, z.spring.y); if (p) solids.push({ p, spring: z.spring }); }
+    for (const o of z.obstacles) {
       const p = project(o.x, o.y);
       if (p) solids.push({ p, o });
     }
-    for (const d of decorations) {
+    for (const d of z.decorations) {
       const p = project(d.x, d.y);
       if (p) solids.push({ p, d });
     }
-    const pSign = project(signpost.x, signpost.y);
-    if (pSign) solids.push({ p: pSign, sign: true });
-    for (const lm of landmarks) {
-      if (!lm.height) continue;                 // 샘물은 기존 방식으로 따로 그림
+    if (z.signpost) {
+      const pSign = project(z.signpost.x, z.signpost.y);
+      if (pSign) solids.push({ p: pSign, sign: true });
+    }
+    for (const lm of z.landmarks) {
+      if (!lm.height) continue;
       const p = projectTall(lm.x, lm.y, lm.height);
       if (p) solids.push({ p, lm });
     }
-    for (const f of pathFences) {
+    if (z.portal) {
+      const p = projectTall(z.portal.x, z.portal.y, z.portal.height);
+      if (p) solids.push({ p, portal: z.portal });
+    }
+    for (const f of z.pathFences) {
       const p = project(f.x, f.y);
       if (p) solids.push({ p, f });
     }
@@ -1197,27 +1289,22 @@
       else if (s.d) { drawMushroom(s.d.seed); }
       else if (s.sign) { drawSignpost(); }
       else if (s.f) { drawFence(s.f.angle); }
+      else if (s.spring) { drawSpring(s.spring); }
       else if (s.lm) {
-        // 지평선 너머면 아래쪽을 잘라서 꼭대기만 솟아 보이게 하고, 멀수록 옅게 깔린다
-        if (s.p.sink > 0) {
-          const top = -s.lm.height * 1.25, bottom = 16;
-          const visible = (1 - s.p.sink) * (bottom - top);
-          ctx.beginPath();
-          ctx.rect(-220, top, 440, Math.max(0, visible));
-          ctx.clip();
-          ctx.globalAlpha *= 1 - s.p.sink * 0.38;
-        }
-        drawLandmarkBody(s.lm, t);
+        drawSinkClipped(s.lm.height, s.p.sink, () => drawLandmarkBody(s.lm, t));
+      }
+      else if (s.portal) {
+        drawSinkClipped(s.portal.height, s.p.sink, () => drawPortalBody(t));
       }
       ctx.restore();
     }
 
-    for (const spore of spores) {
+    for (const spore of z.spores) {
       if (!reduceMotion) {
         spore.y -= spore.speed * dt;
         spore.x += Math.sin(t * 0.6 + spore.phase) * 4 * dt;
         if (Math.hypot(spore.x, spore.y) > HORIZON_D * 0.9) {
-          const p = samplePlanetPoint(0, HORIZON_D * 0.3);
+          const p = z.samplePlanetPoint(0, HORIZON_D * 0.3);
           spore.x = p.x; spore.y = p.y;
         }
       }
@@ -1237,32 +1324,48 @@
     drawMinimap(viewW, viewH, t);
     if (mapOpen) drawFullMap(viewW, viewH, t);
 
+    if (transition) {
+      const alpha = transition.phase === 'out'
+        ? Math.min(1, transition.t / transition.dur)
+        : Math.max(0, 1 - transition.t / transition.dur);
+      ctx.fillStyle = `rgba(20,16,14,${alpha})`;
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+
     const dirText = bearingLabel(player.x, player.y);
     if (dirText !== hudCache.dir) { posDirEl.textContent = dirText; hudCache.dir = dirText; }
-    const pct = totalCells ? Math.round((exploredCount / totalCells) * 100) : 0;
+    const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
     if (pct !== hudCache.pct) { explorePctEl.textContent = pct + '%'; hudCache.pct = pct; }
-    if (foundCount !== hudCache.found) {
-      foundLabelEl.textContent = `${foundCount}/${landmarks.length}`;
-      hudCache.found = foundCount;
+    if (z.foundCount !== hudCache.found) {
+      foundLabelEl.textContent = z.landmarks.length ? `${z.foundCount}/${z.landmarks.length}` : '-';
+      hudCache.found = z.foundCount;
     }
+    if (z.name !== hudCache.zone) { zoneLabelEl.textContent = z.name; hudCache.zone = z.name; }
 
     requestAnimationFrame(step);
   }
 
   requestAnimationFrame(step);
 
-  // ---- 뷰어 상태 보존 (재게시 시 플레이어 위치 유지) ----
   function snapshot() {
-    return { x: player.x, y: player.y, found: landmarks.filter((l) => l.found).map((l) => l.id) };
+    const found = {};
+    for (const id in zones) found[id] = zones[id].landmarks.filter((l) => l.found).map((l) => l.id);
+    return { zone: currentZone.id, x: player.x, y: player.y, found };
   }
   function boot(data) {
     if (!data) return;
+    if (data.zone && zones[data.zone]) currentZone = zones[data.zone];
     if (typeof data.x === 'number' && typeof data.y === 'number') {
       player.x = data.x; player.y = data.y;
     }
-    if (Array.isArray(data.found)) {
-      for (const lm of landmarks) {
-        if (!lm.found && data.found.indexOf(lm.id) !== -1) { lm.found = true; foundCount++; }
+    if (data.found) {
+      for (const id in zones) {
+        const list = data.found[id];
+        if (!Array.isArray(list)) continue;
+        const z = zones[id];
+        for (const lm of z.landmarks) {
+          if (!lm.found && list.indexOf(lm.id) !== -1) { lm.found = true; z.foundCount++; }
+        }
       }
     }
   }
