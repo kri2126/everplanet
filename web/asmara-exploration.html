@@ -304,8 +304,7 @@
 
   // 균등 분포로 원형 필드 안에 점 뿌리기 (구역별 rand()에 바인딩해서 만들어 쓴다)
   function makeSamplePlanetPoint(rand) {
-    return function(minR, maxR) {
-      const r = Math.sqrt(rand()) * (maxR - minR) + minR;
+    return function(minR, maxR) {   const r = Math.sqrt(rand()) * (maxR - minR) + minR;
       const a = rand() * Math.PI * 2;
       return { x: Math.cos(a) * r, y: Math.sin(a) * r };
     };
@@ -524,7 +523,7 @@
     ],
     spring: { x: 230, y: -110, radius: 50 },
     landmarkDefs: [
-      { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
+      { id: 'spring',  name:  '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
       { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
       { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
       { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
@@ -729,7 +728,7 @@
     ctx.beginPath(); ctx.ellipse(0, 3, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff4e6';
     ctx.fillRect(-3, -6, 6, 9);
-    ctx.beginPath(); ctx.arc(0, -6, 9, Math.PI, 0);
+    ctx.beginPath(); ctx.arc(0, -6,9, Math.PI, 0);
     ctx.fillStyle = capColor; ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
@@ -925,8 +924,7 @@
     ctx.translate(0, -46);
     ctx.rotate(spin);
     const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 32);
-    if (locked) {
-      grad.addColorStop(0, '#cfc9cf');
+    if (locked) {     grad.addColorStop(0, '#cfc9cf');
       grad.addColorStop(0.5, '#8b8590');
       grad.addColorStop(1, 'rgba(139,133,144,0)');
       ctx.globalAlpha *= 0.4;
@@ -1003,8 +1001,19 @@
 
   // 나무/랜드마크처럼 큰 오브젝트에 가려졌을 때, 플레이어가 대략 어디 있는지 보여주는
   // 점선 테두리. 실제 스프라이트 대신 단순한 캡슐 윤곽만 그려서 "숨겨졌다"는 게 분명히 읽히게 한다.
-  function drawPlayerOutline() {
+  // occluder가 주어지면 그 오브젝트의 대략적인 화면 범위(reach 박스)로 클립해서,
+  // 실제로 가려진 부분에만 점선이 그려지고 캐릭터가 튀어나온 부분은 점선이 안 보이게 한다.
+  function drawPlayerOutline(occluder) {
     ctx.save();
+    if (occluder) {
+      const { sx, sy, scale, reach } = occluder;
+      const rx = Math.max(reach.w * scale, 1);
+      const ry = Math.max((reach.upH + reach.downH) / 2 * scale, 1);
+      const ccy = sy + (reach.downH - reach.upH) / 2 * scale;
+      ctx.beginPath();
+      ctx.ellipse(sx, ccy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+    }
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = 'rgba(255,138,160,0.18)';
     ctx.strokeStyle = 'rgba(255,138,160,0.95)';
@@ -1385,7 +1394,7 @@
     solids.push({ p: project(player.x, player.y), isPlayer: true });
     solids.sort((a, b) => (a.p ? a.p.sy : 0) - (b.p ? b.p.sy : 0));
 
-    let playerOccluded = false;
+    let occluderInfo = null;
     for (const s of solids) {
       if (s.isPlayer || !s.p) continue;
       if (s.p.sy <= 0) continue; // 플레이어보다 화면 위(더 먼 쪽)에 있는 것은 가릴 수 없다
@@ -1394,7 +1403,7 @@
       const scale = s.p.scale;
       if (Math.abs(s.p.sx) > reach.w * scale) continue;
       if (0 >= s.p.sy - reach.upH * scale && 0 <= s.p.sy + reach.downH * scale) {
-        playerOccluded = true;
+        occluderInfo = { sx: s.p.sx, sy: s.p.sy, scale, reach };
         break;
       }
     }
@@ -1437,10 +1446,10 @@
       });
     }
 
-    if (playerOccluded) {
+    if (occluderInfo) {
       ctx.save();
       ctx.translate(cx, cy);
-      drawPlayerOutline();
+      drawPlayerOutline(occluderInfo);
       ctx.restore();
     }
 
