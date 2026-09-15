@@ -15,6 +15,7 @@
 - `roadmap/` — 단계별 기획서 폴더. 작업 단위가 확정될 때마다 번호를 붙여 쌓아갑니다.
   - [`roadmap/ROADMAP_1.md`](./roadmap/ROADMAP_1.md) — 1단계: 이동·환경·카메라 (완료)
   - [`roadmap/ROADMAP_2.md`](./roadmap/ROADMAP_2.md) — 2단계: 미니맵·전체 지도(M)·랜드마크 (완료)
+  - [`roadmap/ROADMAP_3.md`](./roadmap/ROADMAP_3.md) — 3단계: 완주 보상(전체 지도 공개)·포탈·두 번째 구역 (예정)
 
 - `web/asmara-exploration.html` — 현재 플레이 가능한 웹 프로토타입(HTML5 Canvas, 바닐라 JS).
   브라우저에서 파일을 열면 바로 실행됩니다. 원작 실제 플레이 영상을 참고해 구현한 '작은 행성'
