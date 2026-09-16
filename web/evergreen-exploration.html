@@ -419,10 +419,45 @@
     return name + ((code - 0xAC00) % 28 === 0 ? '를' : '을');
   }
 
+  // ── 지역 분화 (로드맵 4 작업 D) ──────────────────────────────────
+  // 씬을 통째로 나누는 게 아니라, 기존 makeZone()이 만든 오브젝트 하나하나에
+  // "어느 지역 소속인지"를 방위(각도)로 태깅하는 레이어. 기존 랜드마크 좌표·
+  // 포탈 로직은 전혀 건드리지 않는다 (1구역 = 에버그린, zone1에만 적용).
+  function bearingOf(x, y) {
+    let a = Math.atan2(x, -y) * 180 / Math.PI; // bearingLabel()과 동일 기준
+    if (a < 0) a += 360;
+    return a;
+  }
+
+  const AREAS = [
+    { id: 'temple',  name: '겸손한 사원',    from: 200, to: 260, treeRatio: 0.30, densityMul: 0.8, groundTint: '#a99570' },
+    { id: 'camp',    name: '붙박이 야영지',  from: 260, to: 320, treeRatio: 0.45, densityMul: 0.5, groundTint: '#8fbf6a' },
+    { id: 'river',   name: '늘 푸른 강가',   from: 320, to: 40,  treeRatio: 0.75, densityMul: 1.0, groundTint: '#5fbf9a' },
+    { id: 'marsh',   name: '뮤렌 습지대',    from: 40,  to: 72,  treeRatio: 0.60, densityMul: 1.3, groundTint: '#4a7d6b' },
+    { id: 'logging', name: '해안 벌목지',    from: 72,  to: 115, treeRatio: 0.35, densityMul: 0.9, groundTint: '#b09a62' },
+    { id: 'harbor',  name: '에버그린 항구',  from: 115, to: 175, treeRatio: 0.30, densityMul: 0.5, groundTint: '#7faec4' },
+    { id: 'cave',    name: '지붕 없는 동굴', from: 175, to: 200, treeRatio: 0.20, densityMul: 1.1, groundTint: '#6b6f7d' }
+  ];
+
+  const OBSERVATORY_R = 300; // ① 별내림 천문대 = 중심(스폰), 기본 톤 유지
+
+  function areaAt(x, y) {
+    if (Math.hypot(x, y) < OBSERVATORY_R) return null;
+    const b = bearingOf(x, y);
+    return AREAS.find(a => a.from < a.to ? (b >= a.from && b < a.to)
+                                         : (b >= a.from || b < a.to)) || null;
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
   function makeZone(opts) {
     const rand = mulberry32(opts.seed);
     const radius = opts.radius;
     const samplePlanetPoint = makeSamplePlanetPoint(rand);
+    const useAreas = opts.id === 'zone1';
 
     let pathPts = [], pathTiles = [], pathFences = [], signpost = null;
     if (opts.pathPts) {
@@ -484,7 +519,11 @@
           const p = samplePlanetPoint(minR, maxR);
           if (Math.hypot(p.x, p.y) < 170) continue;
           if (nearPath(p.x, p.y, 66)) continue;
-          const isTree = rand() < 0.58;
+          const area = useAreas ? areaAt(p.x, p.y) : null;
+          // 지역별 밀도 배수로 재분배 — 전체 총합은 유지하고 지역마다 빽빽함만 다르게 (로드맵 4 작업 D)
+          if (area && rand() > area.densityMul) continue;
+          const treeRatio = area ? area.treeRatio : 0.58;
+          const isTree = rand() < treeRatio;
           const radius = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
           if (overlapsExisting(p.x, p.y, radius)) continue;
           obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
@@ -560,7 +599,8 @@
       GRID_N, GRID_ORIGIN, explored, exploredCount: 0, totalCells, FOG_SCALE, fogCanvas, fogCtx,
       lastExploreX: Infinity, lastExploreY: Infinity,
       terrainPatches, grassTufts, spores, clouds,
-      portal: opts.portal || null
+      portal: opts.portal || null,
+      useAreas, visitedAreas: useAreas ? new Set() : null
     };
   }
 
@@ -576,7 +616,8 @@
       { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
       { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
       { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
-      { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' }
+      { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' },
+      { id: 'cave',    name: '지붕 없는 동굴', x: -120, y: 972, height: 90,  solid: 50, tint: '#6b6f7d' }
     ],
     portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
   });
@@ -784,8 +825,14 @@
     ctx.beginPath(); ctx.ellipse(0, 3, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff4e6';
     ctx.fillRect(-3, -6, 6, 9);
+    ctx.strokeStyle = '#8a6a4a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-3, -6, 6, 9);
     ctx.beginPath(); ctx.arc(0, -6, 9, Math.PI, 0);
     ctx.fillStyle = capColor; ctx.fill();
+    ctx.strokeStyle = '#7a3a2a';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(3, -8, 1.3, 0, Math.PI * 2); ctx.fill();
@@ -797,12 +844,14 @@
     ctx.rotate(angle);
     ctx.fillStyle = 'rgba(0,0,0,0.14)';
     ctx.beginPath(); ctx.ellipse(0, 8, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.2;
     ctx.fillStyle = '#a97a4a';
-    ctx.fillRect(-16, -10, 5, 20);
-    ctx.fillRect(11, -10, 5, 20);
+    ctx.beginPath(); ctx.rect(-16, -10, 5, 20); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(11, -10, 5, 20); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#c79764';
-    ctx.fillRect(-18, -6, 36, 5);
-    ctx.fillRect(-18, 2, 36, 5);
+    ctx.beginPath(); ctx.rect(-18, -6, 36, 5); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(-18, 2, 36, 5); ctx.fill(); ctx.stroke();
     ctx.restore();
   }
 
@@ -843,18 +892,32 @@
 
   function drawTree(o, t) {
     const sway = reduceMotion ? 0 : Math.sin(t * 1.2 + o.sway) * 0.05;
+    const R = o.radius;
     ctx.fillStyle = 'rgba(0,0,0,0.14)';
-    ctx.beginPath(); ctx.ellipse(0, o.radius * 0.55, o.radius * 0.9, o.radius * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, R * 0.55, R * 0.9, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#b98452';
-    ctx.fillRect(-o.radius * 0.12, -o.radius * 0.1, o.radius * 0.24, o.radius * 0.7);
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = Math.max(1, R * 0.05);
+    ctx.beginPath();
+    if (ctx.roundRect) { ctx.roundRect(-R * 0.14, -R * 0.1, R * 0.28, R * 0.75, R * 0.06); }
+    else { ctx.rect(-R * 0.14, -R * 0.1, R * 0.28, R * 0.75); }
+    ctx.fill(); ctx.stroke();
     ctx.save();
-    ctx.translate(0, -o.radius * 0.55);
+    ctx.translate(0, -R * 0.5);
     ctx.rotate(sway);
-    ctx.fillStyle = o.tone > 0.5 ? '#5aba7c' : '#4fa066';
-    ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(-o.radius * 0.35, -o.radius * 0.3, o.radius * 0.65, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.beginPath(); ctx.arc(-o.radius * 0.3, -o.radius * 0.45, o.radius * 0.35, 0, Math.PI * 2); ctx.fill();
+    const leaf = o.tone > 0.5 ? '#5aba7c' : '#4fa066';
+    const leafDark = o.tone > 0.5 ? '#3f8f5c' : '#3a7d52';
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = Math.max(1, R * 0.045);
+    ctx.lineJoin = 'round';
+    // 층진 뭉툭한 수관 — 아래(넓게)→가운데→위(좁게) 세 겹, 각 겹에 외곽선
+    ctx.fillStyle = leafDark;
+    ctx.beginPath(); ctx.arc(0, R * 0.22, R * 0.92, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = leaf;
+    ctx.beginPath(); ctx.arc(-R * 0.08, -R * 0.1, R * 0.78, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(R * 0.1, -R * 0.55, R * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.24)';
+    ctx.beginPath(); ctx.arc(-R * 0.28, -R * 0.55, R * 0.3, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -862,7 +925,9 @@
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.beginPath(); ctx.ellipse(0, o.radius * 0.5, o.radius * 0.9, o.radius * 0.3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = o.tone > 0.5 ? '#cdc6dd' : '#b9aec2';
-    ctx.beginPath(); ctx.ellipse(0, 0, o.radius, o.radius * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7d7488';
+    ctx.lineWidth = Math.max(1, o.radius * 0.08);
+    ctx.beginPath(); ctx.ellipse(0, 0, o.radius, o.radius * 0.82, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.beginPath(); ctx.ellipse(-o.radius * 0.32, -o.radius * 0.3, o.radius * 0.32, o.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -875,21 +940,26 @@
   function drawBigTree(t) {
     const sway = reduceMotion ? 0 : Math.sin(t * 0.8) * 0.03;
     drawGroundShadow(62);
+    ctx.strokeStyle = '#6b4423';
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
     ctx.fillStyle = '#a9743f';
     ctx.beginPath();
     ctx.moveTo(-17, 8); ctx.lineTo(-10, -58); ctx.lineTo(10, -58); ctx.lineTo(17, 8);
-    ctx.closePath(); ctx.fill();
+    ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.fillRect(4, -58, 8, 66);
     ctx.save();
     ctx.translate(0, -62);
     ctx.rotate(sway);
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = 2.2;
     ctx.fillStyle = '#3f9a63';
-    ctx.beginPath(); ctx.ellipse(0, 0, 66, 40, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(-34, -22, 38, 27, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(32, -20, 34, 25, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 66, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-34, -22, 38, 27, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(32, -20, 34, 25, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#56b87a';
-    ctx.beginPath(); ctx.ellipse(-6, -34, 40, 26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-6, -34, 40, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.26)';
     ctx.beginPath(); ctx.ellipse(-24, -44, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
@@ -897,13 +967,16 @@
 
   function drawRockPeak() {
     drawGroundShadow(64);
+    ctx.strokeStyle = '#6d6478';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
     ctx.fillStyle = '#9c90ad';
     ctx.beginPath();
     ctx.moveTo(-58, 8); ctx.lineTo(-22, -68); ctx.lineTo(6, -34); ctx.lineTo(26, -96);
-    ctx.lineTo(60, 8); ctx.closePath(); ctx.fill();
+    ctx.lineTo(60, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#b9aec2';
     ctx.beginPath();
-    ctx.moveTo(26, -96); ctx.lineTo(60, 8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill();
+    ctx.moveTo(26, -96); ctx.lineTo(60, 8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.beginPath();
     ctx.moveTo(26, -96); ctx.lineTo(38, -62); ctx.lineTo(14, -62); ctx.closePath(); ctx.fill();
@@ -915,17 +988,19 @@
     drawGroundShadow(58);
     ctx.fillStyle = '#c7b795';
     ctx.beginPath(); ctx.ellipse(0, 4, 54, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8f8262';
+    ctx.lineWidth = 2;
     const cols = [[-38, 52], [-12, 74], [16, 38], [40, 62]];
     for (const [x, h] of cols) {
       ctx.fillStyle = '#e0d2b2';
-      ctx.fillRect(x - 9, -h, 18, h);
+      ctx.beginPath(); ctx.rect(x - 9, -h, 18, h); ctx.fill(); ctx.stroke();
       ctx.fillStyle = 'rgba(0,0,0,0.13)';
       ctx.fillRect(x + 3, -h, 6, h);
       ctx.fillStyle = '#d8c9a8';
-      ctx.beginPath(); ctx.ellipse(x, -h, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, -h, 13, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
     ctx.fillStyle = '#d8c9a8';
-    ctx.fillRect(-46, -80, 46, 9);
+    ctx.beginPath(); ctx.rect(-46, -80, 46, 9); ctx.fill(); ctx.stroke();
   }
 
   function drawCrystal(t) {
@@ -938,12 +1013,15 @@
     ctx.fillStyle = glow;
     ctx.beginPath(); ctx.arc(0, -52, 62, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+    ctx.strokeStyle = '#8452b8';
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
     const shards = [[0, -104, 17], [-24, -62, 12], [22, -70, 13]];
     for (const [x, top, w] of shards) {
       ctx.fillStyle = '#b87fe6';
       ctx.beginPath();
       ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, 8); ctx.lineTo(x - w, top * 0.36);
-      ctx.closePath(); ctx.fill();
+      ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillStyle = 'rgba(255,255,255,0.42)';
       ctx.beginPath();
       ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, top * 0.36);
@@ -951,11 +1029,35 @@
     }
   }
 
+  function drawCaveEntrance(t) {
+    drawGroundShadow(60);
+    ctx.strokeStyle = '#4a4552';
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#7d7488';
+    ctx.beginPath();
+    ctx.moveTo(-52, 10); ctx.lineTo(-46, -50); ctx.quadraticCurveTo(-40, -92, 0, -96);
+    ctx.quadraticCurveTo(40, -92, 46, -50); ctx.lineTo(52, 10); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    const glow = reduceMotion ? 0.5 : (Math.sin(t * 1.2) + 1) / 2;
+    const mouth = ctx.createRadialGradient(0, -20, 4, 0, -20, 46);
+    mouth.addColorStop(0, `rgba(60,40,80,${0.5 + glow * 0.15})`);
+    mouth.addColorStop(1, '#0d0a14');
+    ctx.fillStyle = mouth;
+    ctx.beginPath();
+    ctx.moveTo(-30, 10); ctx.lineTo(-26, -40); ctx.quadraticCurveTo(-22, -68, 0, -70);
+    ctx.quadraticCurveTo(22, -68, 26, -40); ctx.lineTo(30, 10); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.ellipse(-30, -60, 10, 20, 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+
   function drawLandmarkBody(lm, t) {
     if (lm.id === 'tree') drawBigTree(t);
     else if (lm.id === 'rock') drawRockPeak();
     else if (lm.id === 'ruins') drawRuins();
     else if (lm.id === 'crystal') drawCrystal(t);
+    else if (lm.id === 'cave') drawCaveEntrance(t);
   }
 
   function drawPortalBody(t, locked) {
@@ -1093,6 +1195,7 @@
     rock:    { w: 64, upH: 100, downH: 14 },
     ruins:   { w: 56, upH: 88,  downH: 24 },
     crystal: { w: 46, upH: 118, downH: 20 },
+    cave:    { w: 58, upH: 96,  downH: 14 },
   };
   function objectReach(s) {
     if (s.o) {
@@ -1733,6 +1836,13 @@
       updateExploration();
       checkDiscovery();
       checkPortal();
+      if (currentZone.useAreas) {
+        const area = areaAt(player.x, player.y);
+        if (area && !currentZone.visitedAreas.has(area.id)) {
+          currentZone.visitedAreas.add(area.id);
+          showToast(`${area.name}에 들어섰습니다`);
+        }
+      }
     }
 
     const z = currentZone;
@@ -1749,7 +1859,8 @@
     for (const pt of z.terrainPatches) {
       const p = project(pt.x, pt.y);
       if (p) drawList.push({ p, layer: 0, draw: () => {
-        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        const area = z.useAreas ? areaAt(pt.x, pt.y) : null;
+        ctx.fillStyle = area ? hexA(area.groundTint, 0.16) : 'rgba(255,255,255,0.10)';
         ctx.beginPath(); ctx.ellipse(0, 0, pt.w, pt.w * 0.55, pt.angle, 0, Math.PI * 2); ctx.fill();
       }});
     }
