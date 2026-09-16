@@ -6,6 +6,10 @@
 
 전제: Unity 2021 LTS 이상, 2D 템플릿 기준으로 작성했습니다 (2D URP/기본 2D 아무거나 상관없음).
 
+> **참고**: 이 가이드는 프로젝트 초기의 **Unity·다중 행성 계획**을 기준으로 작성되었습니다.
+> 현재 실제로 플레이 가능한 버전은 웹(HTML5) 구현이고, 무대도 에버그린 한 곳으로 좁혔습니다.
+> 확정된 설계는 `roadmap/` 폴더의 로드맵 문서들이 기준입니다.
+
 ---
 
 ## 0. 프로젝트 준비
@@ -36,7 +40,7 @@
 | 파일 이름 | planetName | sceneName | requiredLevel | respawnPlanet |
 |---|---|---|---|---|
 | Planet_MyPlanet | 마이 플래닛 | MyPlanet | 1 | (비워둠) |
-| Planet_Asmara | 아스마라 | Asmara | 1 | Planet_MyPlanet |
+| Planet_Evergreen | 에버그린 | Evergreen | 1 | Planet_MyPlanet |
 | Planet_Ithaca | 이타카 | Ithaca | 5 | Planet_MyPlanet |
 | Planet_Novaruna | 노바루나 | Novaruna | 10 | Planet_MyPlanet |
 
@@ -48,7 +52,7 @@
 
 | 파일 이름 | maxHP | attackPower | defensePower | xpReward | moveSpeed | detectRange | attackRange |
 |---|---|---|---|---|---|---|---|
-| Enemy_AsmaraSlime | 20 | 4 | 0 | 8 | 1.5 | 4 | 1 |
+| Enemy_EvergreenSlime | 20 | 4 | 0 | 8 | 1.5 | 4 | 1 |
 | Enemy_IthacaGolem | 50 | 10 | 3 | 20 | 1.8 | 5 | 1.2 |
 | Enemy_NovarunaWisp | 80 | 16 | 5 | 35 | 2.2 | 6 | 1.5 |
 
@@ -56,7 +60,7 @@
 
 ## 4. 씬 만들기
 
-`File > New Scene` 으로 4개의 씬을 만들어 `Assets/Scenes` 에 저장합니다: `MyPlanet`, `Asmara`, `Ithaca`, `Novaruna`
+`File > New Scene` 으로 4개의 씬을 만들어 `Assets/Scenes` 에 저장합니다: `MyPlanet`, `Evergreen`, `Ithaca`, `Novaruna`
 (3-1에서 적어둔 sceneName과 정확히 일치해야 함).
 
 `File > Build Settings` 을 열고 4개 씬을 전부 Build Settings의 Scenes In Build 목록에 드래그해서 추가하세요
@@ -95,21 +99,21 @@
 
 ## 8. 포탈 배치 (행성 이동)
 
-`MyPlanet` 씬에 포탈 3개 (아스마라/이타카/노바루나행 각각):
+`MyPlanet` 씬에 포탈 3개 (에버그린/이타카/노바루나행 각각):
 
-1. 빈 GameObject `Portal_Asmara` 생성, 위치는 자유
+1. 빈 GameObject `Portal_Evergreen` 생성, 위치는 자유
 2. `Collider2D` 부착 후 `Is Trigger` 체크
-3. `PlanetPortal` 스크립트 부착, `Destination`에 `Planet_Asmara` 연결
+3. `PlanetPortal` 스크립트 부착, `Destination`에 `Planet_Evergreen` 연결
 4. 같은 방식으로 `Portal_Ithaca` -> `Planet_Ithaca`, `Portal_Novaruna` -> `Planet_Novaruna` 생성
 
-각 행성 씬(`Asmara`, `Ithaca`, `Novaruna`)에도 마이 플래닛으로 돌아가는 포탈을 하나씩 만들어서
+각 행성 씬(`Evergreen`, `Ithaca`, `Novaruna`)에도 마이 플래닛으로 돌아가는 포탈을 하나씩 만들어서
 `Destination`을 `Planet_MyPlanet`으로 연결하세요.
 
 (스프라이트를 씌워서 눈에 보이게 만드는 걸 추천 - 안 그러면 빈 트리거라 어디 있는지 안 보입니다.)
 
 ## 9. 몬스터 프리팹 만들기
 
-각 행성 씬(Asmara/Ithaca/Novaruna)에:
+각 행성 씬(Evergreen/Ithaca/Novaruna)에:
 
 1. 빈 GameObject 생성, 스프라이트 추가
 2. 컴포넌트 부착:
@@ -133,7 +137,7 @@
 ## 11. 테스트
 
 1. `MyPlanet` 씬에서 Play
-2. 포탈에 다가가서 `E`를 눌러 아스마라로 이동 (요구 레벨 1이라 바로 갈 수 있음)
+2. 포탈에 다가가서 `E`를 눌러 에버그린으로 이동 (요구 레벨 1이라 바로 갈 수 있음)
 3. 몬스터에게 다가가 `Space`(또는 마우스 왼쪽)로 공격, 처치 시 경험치 획득 확인
 4. 레벨 5, 10을 달성해서 이타카/노바루나가 열리는지 확인
 5. 체력이 0이 되면 마이 플래닛으로 리스폰되는지 확인
