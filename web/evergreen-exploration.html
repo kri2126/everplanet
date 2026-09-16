@@ -252,7 +252,7 @@
     <canvas id="game"></canvas>
     <div class="vignette"></div>
     <div class="hint">
-      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>M</kbd><kbd>지도</kbd>
+      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>M</kbd><kbd>지도</kbd><kbd>M M</kbd><kbd>전경도</kbd>
     </div>
     <div class="toast" id="toast"></div>
     <div class="joystick-zone" id="joyZone" hidden>
@@ -549,12 +549,13 @@
   const player = { x: 0, y: 60, facing: { x: 0, y: -1 } };
 
   const keys = new Set();
-  let mapOpen = false;
+  // 0 = 닫힘, 1 = 현재 구역 지도, 2 = 에버그린 전경도(월드맵)
+  let mapView = 0;
   window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     keys.add(k);
-    if (k === 'm' && !transition) { mapOpen = !mapOpen; keys.clear(); e.preventDefault(); }
-    else if (k === 'escape' && mapOpen) { mapOpen = false; }
+    if (k === 'm' && !transition) { mapView = (mapView + 1) % 3; keys.clear(); e.preventDefault(); }
+    else if (k === 'escape' && mapView) { mapView = 0; }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
@@ -563,10 +564,16 @@
   canvas.addEventListener('pointerdown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left, py = e.clientY - rect.top;
-    if (mapOpen) {
-      if (Math.hypot(px - fullmapHit.cx, py - fullmapHit.cy) > fullmapHit.r) mapOpen = false;
+    if (mapView === 2) {
+      const h = worldMapHit;
+      const inside = h && px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h;
+      if (!inside) mapView = 0;
+    } else if (mapView === 1) {
+      // 지도 안을 탭하면 전경도로, 밖을 탭하면 닫힘
+      if (Math.hypot(px - fullmapHit.cx, py - fullmapHit.cy) > fullmapHit.r) mapView = 0;
+      else mapView = 2;
     } else if (!transition && Math.hypot(px - minimapHit.cx, py - minimapHit.cy) <= minimapHit.r) {
-      mapOpen = true;
+      mapView = 1;
     }
   });
 
@@ -1184,6 +1191,348 @@
     }
   }
 
+  // ── 월드맵 (M 두 번) ──────────────────────────────────────────────
+  // 원작 에버그린 월드맵을 참고한 그림책풍 전경도.
+  // 8개 지역을 원작 진행 순서대로 잇고, 각 지역의 구현 상태를 함께 보여준다.
+  // status: 'current'(지금 여기) | 'done'(구현 완료) | 'planned'(예정)
+  const WORLD_AREAS = [
+    { n: 1, name: '별내림 천문대', x: 0.17, y: 0.76, status: 'current', desc: '시작 지점' },
+    { n: 2, name: '겸손한 사원',   x: 0.12, y: 0.52, status: 'planned', desc: '옛 유적지' },
+    { n: 3, name: '붙박이 야영지', x: 0.25, y: 0.30, status: 'planned', desc: '첫 마을' },
+    { n: 4, name: '늘 푸른 강가',  x: 0.46, y: 0.19, status: 'planned', desc: '강가 들판' },
+    { n: 5, name: '뮤렌 습지대',   x: 0.66, y: 0.24, status: 'planned', desc: '세계수 습지' },
+    { n: 6, name: '해안 벌목지',   x: 0.83, y: 0.42, status: 'planned', desc: '간척지' },
+    { n: 7, name: '에버그린 항구', x: 0.78, y: 0.64, status: 'planned', desc: '거점 · 포탈' },
+    { n: 8, name: '지붕 없는 동굴', x: 0.50, y: 0.74, status: 'planned', desc: '던전' }
+  ];
+
+  let worldMapHit = null;
+
+  function roundRectPath(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 결정적 잡음 — 섬 윤곽이 매 프레임 흔들리지 않도록
+  function wob(i) {
+    const s = Math.sin(i * 127.1) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  function drawCloudPuff(cx, cy, r, alpha) {
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - r * 0.62, cy + r * 0.12, r * 0.60, r * 0.44, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + r * 0.64, cy + r * 0.14, r * 0.56, r * 0.40, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawIslandBlob(ix, iy, iw, ih) {
+    const cx = ix + iw / 2, cy = iy + ih / 2;
+    const N = 22;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const rr = 0.90 + wob(i) * 0.12;
+      pts.push({ x: cx + Math.cos(a) * iw * 0.50 * rr, y: cy + Math.sin(a) * ih * 0.50 * rr });
+    }
+    const mid = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+    const path = () => {
+      ctx.beginPath();
+      const m0 = mid(pts[N - 1], pts[0]);
+      ctx.moveTo(m0.x, m0.y);
+      for (let i = 0; i < N; i++) {
+        const cur = pts[i], nxt = pts[(i + 1) % N];
+        const m = mid(cur, nxt);
+        ctx.quadraticCurveTo(cur.x, cur.y, m.x, m.y);
+      }
+      ctx.closePath();
+    };
+
+    // 얕은 바다 테두리
+    ctx.save();
+    ctx.translate(0, ih * 0.03);
+    path();
+    ctx.fillStyle = 'rgba(126,178,208,0.42)';
+    ctx.fill();
+    ctx.restore();
+
+    // 섬 본체
+    path();
+    const g = ctx.createLinearGradient(cx, cy - ih * 0.5, cx, cy + ih * 0.5);
+    g.addColorStop(0, '#93dc8d');
+    g.addColorStop(0.55, '#70c375');
+    g.addColorStop(1, '#4f9d5c');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(66,126,78,0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 중앙 산괴 — 노드와 겹치지 않도록 위쪽 가운데에 낮게
+    ctx.save();
+    ctx.translate(cx + iw * 0.03, cy - ih * 0.30);
+    ctx.fillStyle = 'rgba(88,168,99,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(-iw * 0.13, ih * 0.07);
+    ctx.lineTo(-iw * 0.045, -ih * 0.10);
+    ctx.lineTo(iw * 0.025, ih * 0.015);
+    ctx.lineTo(iw * 0.085, -ih * 0.075);
+    ctx.lineTo(iw * 0.155, ih * 0.07);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.beginPath();
+    ctx.moveTo(-iw * 0.045, -ih * 0.10);
+    ctx.lineTo(-iw * 0.008, -ih * 0.028);
+    ctx.lineTo(-iw * 0.085, -ih * 0.005);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWorldMap(viewW, viewH, t) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,26,22,0.62)';
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    const small = viewW < 620;
+    const pad = small ? 8 : 18;
+    const PW = Math.min(viewW - pad * 2, 760);
+    const PH = Math.min(viewH - pad * 2, 520);
+    const px = (viewW - PW) / 2, py = (viewH - PH) / 2;
+    worldMapHit = { x: px, y: py, w: PW, h: PH };
+
+    // 양피지 패널
+    ctx.save();
+    ctx.shadowColor = 'rgba(40,30,20,0.45)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    roundRectPath(px, py, PW, PH, small ? 12 : 18);
+    const pg = ctx.createLinearGradient(px, py, px, py + PH);
+    pg.addColorStop(0, '#fdf4de');
+    pg.addColorStop(1, '#f2e0bb');
+    ctx.fillStyle = pg;
+    ctx.fill();
+    ctx.restore();
+
+    roundRectPath(px, py, PW, PH, small ? 12 : 18);
+    ctx.strokeStyle = '#c9a877';
+    ctx.lineWidth = small ? 2 : 3;
+    ctx.stroke();
+
+    // 패널 안쪽을 클립하고 하늘빛을 깐다
+    ctx.save();
+    roundRectPath(px + 4, py + 4, PW - 8, PH - 8, small ? 9 : 15);
+    ctx.clip();
+    const sg = ctx.createLinearGradient(px, py, px, py + PH);
+    sg.addColorStop(0, 'rgba(150,205,240,0.45)');
+    sg.addColorStop(1, 'rgba(198,230,245,0.30)');
+    ctx.fillStyle = sg;
+    ctx.fillRect(px, py, PW, PH);
+
+    // 섬 영역 (아래쪽은 명판 자리로 비워둔다)
+    const ix = px + PW * 0.13;
+    const iy = py + PH * (small ? 0.12 : 0.13);
+    const iw = PW * 0.74;
+    const ih = PH * (small ? 0.46 : 0.64);
+
+    drawIslandBlob(ix, iy, iw, ih);
+
+    // 경로 — 원작 진행 순서대로 잇는다
+    const pt = (a) => ({ x: ix + a.x * iw, y: iy + a.y * ih });
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < WORLD_AREAS.length - 1; i++) {
+      const A = pt(WORLD_AREAS[i]), B = pt(WORLD_AREAS[i + 1]);
+      const open = WORLD_AREAS[i].status !== 'planned' && WORLD_AREAS[i + 1].status !== 'planned';
+      ctx.save();
+      ctx.setLineDash(open ? [] : [5, 7]);
+      ctx.strokeStyle = open ? 'rgba(232,206,150,0.95)' : 'rgba(120,110,90,0.38)';
+      ctx.lineWidth = open ? (small ? 5 : 7) : (small ? 2 : 3);
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+      const nx = -(B.y - A.y), ny = (B.x - A.x);
+      const nl = Math.hypot(nx, ny) || 1;
+      const bend = (i % 2 ? 1 : -1) * Math.min(26, nl * 0.16);
+      ctx.quadraticCurveTo(mx + (nx / nl) * bend, my + (ny / nl) * bend, B.x, B.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 구름 테두리 — 패널 네 변을 따라 둘러 액자처럼
+    const nC = small ? 16 : 22;
+    const perim = 2 * (PW + PH);
+    for (let i = 0; i < nC; i++) {
+      const d = ((i + wob(i) * 0.6) / nC) * perim;
+      let cxp, cyp;
+      if (d < PW)                    { cxp = px + d;                 cyp = py; }
+      else if (d < PW + PH)          { cxp = px + PW;                cyp = py + (d - PW); }
+      else if (d < 2 * PW + PH)      { cxp = px + PW - (d - PW - PH); cyp = py + PH; }
+      else                           { cxp = px;                     cyp = py + PH - (d - 2 * PW - PH); }
+      const inward = (small ? 8 : 14) + wob(i + 5) * (small ? 10 : 18);
+      cxp += (px + PW / 2 - cxp) * (inward / Math.max(PW, PH));
+      cyp += (py + PH / 2 - cyp) * (inward / Math.max(PW, PH));
+      drawCloudPuff(cxp, cyp, (small ? 15 : 24) * (0.72 + wob(i + 3) * 0.55), 0.92);
+    }
+
+    // 지역 노드
+    ctx.textAlign = 'center';
+    for (const a of WORLD_AREAS) {
+      const p = pt(a);
+      const cur = a.status === 'current';
+      const planned = a.status === 'planned';
+      const r = small ? 9 : 12;
+
+      // 그림자
+      ctx.fillStyle = 'rgba(60,70,50,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + r * 0.72, r * 0.95, r * 0.40, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 표식
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = planned ? '#cbbfa6' : (cur ? '#ff8aa0' : '#ffd166');
+      ctx.fill();
+      ctx.strokeStyle = planned ? 'rgba(110,100,85,0.5)' : 'rgba(120,80,60,0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 현재 위치는 맥동하는 고리로 강조
+      if (cur) {
+        const pulse = 1 + Math.sin(t * 3) * 0.16;
+        ctx.strokeStyle = 'rgba(255,138,160,0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 1.75 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 번호
+      ctx.fillStyle = planned ? 'rgba(90,80,65,0.75)' : '#5b4632';
+      ctx.font = `700 ${small ? 9 : 11}px "JetBrains Mono", monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(a.n), p.x, p.y + 0.5);
+
+      // 이름표 — 좁은 화면에서는 아래 범례가 이름을 대신한다
+      if (small) continue;
+      const label = planned ? `${a.name} 🔒` : a.name;
+      ctx.font = `600 ${small ? 9 : 11}px "Gowun Dodum", sans-serif`;
+      ctx.textBaseline = 'top';
+      const lw = ctx.measureText(label).width + (small ? 8 : 12);
+      const ly = p.y + r + (small ? 3 : 5);
+      roundRectPath(p.x - lw / 2, ly, lw, small ? 14 : 17, 5);
+      ctx.fillStyle = planned ? 'rgba(255,250,240,0.72)' : 'rgba(255,250,240,0.95)';
+      ctx.fill();
+      ctx.strokeStyle = planned ? 'rgba(150,140,120,0.35)' : 'rgba(180,140,100,0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = planned ? '#8b8067' : '#5b4632';
+      ctx.fillText(label, p.x, ly + (small ? 2 : 3));
+    }
+    ctx.restore();
+
+    // 좁은 화면 범례 — 번호 ↔ 지역 이름 (2열)
+    if (small) {
+      const lx = px + PW * 0.06;
+      const lyTop = iy + ih + 4;
+      const colW = (PW * 0.88) / 2;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 9px "Gowun Dodum", sans-serif';
+      WORLD_AREAS.forEach((a, i) => {
+        const col = i % 2, row = (i / 2) | 0;
+        const ex = lx + col * colW;
+        const ey = lyTop + row * 12 + 5;
+        const planned = a.status === 'planned';
+        ctx.beginPath();
+        ctx.arc(ex + 5, ey, 5, 0, Math.PI * 2);
+        ctx.fillStyle = planned ? '#cbbfa6' : (a.status === 'current' ? '#ff8aa0' : '#ffd166');
+        ctx.fill();
+        ctx.fillStyle = '#5b4632';
+        ctx.font = '700 7px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(a.n), ex + 5, ey + 0.5);
+        ctx.textAlign = 'left';
+        ctx.font = '600 9px "Gowun Dodum", sans-serif';
+        ctx.fillStyle = planned ? 'rgba(110,100,82,0.85)' : '#5b4632';
+        ctx.fillText(planned ? `${a.name} 🔒` : a.name, ex + 13, ey);
+      });
+      ctx.textAlign = 'center';
+    }
+
+    // 나무 명판 — "에버그린" (좁은 화면에서는 아래 한 줄이 대신한다)
+    if (!small) {
+    const plateW = small ? 104 : 168;
+    const plateH = small ? 20 : 34;
+    const plx = px + PW / 2 - plateW / 2;
+    const ply = py + PH - plateH - (small ? 5 : 14);
+    ctx.save();
+    ctx.shadowColor = 'rgba(60,40,20,0.35)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    roundRectPath(plx, ply, plateW, plateH, 8);
+    const wg = ctx.createLinearGradient(plx, ply, plx, ply + plateH);
+    wg.addColorStop(0, '#e2b877');
+    wg.addColorStop(1, '#c99354');
+    ctx.fillStyle = wg;
+    ctx.fill();
+    ctx.restore();
+    roundRectPath(plx, ply, plateW, plateH, 8);
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#5b3a1c';
+    ctx.font = `700 ${small ? 12 : 18}px "Black Han Sans", "Gowun Dodum", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('에버그린', px + PW / 2, ply + plateH / 2 + 1);
+    }
+
+    // 상단 제목 · 하단 안내
+    const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
+    const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    if (!small) {
+      // 넓은 화면에서만 상단 제목 — 좁은 화면은 HUD 칩에 가려서 아래로 내린다
+      ctx.font = '600 12px "JetBrains Mono", monospace';
+      const tw = ctx.measureText(titleTxt).width + 20;
+      const ty = py + 11;
+      roundRectPath(px + PW / 2 - tw / 2, ty - 3, tw, 21, 8);
+      ctx.fillStyle = 'rgba(255,250,240,0.88)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(180,150,110,0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(91,70,50,0.92)';
+      ctx.fillText(titleTxt, px + PW / 2, ty + 2);
+    }
+
+    const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
+    if (small) {
+      ctx.font = '600 8px "JetBrains Mono", monospace';
+      ctx.fillStyle = 'rgba(91,70,50,0.85)';
+      ctx.fillText(`${titleTxt}  ·  ${hint}`, px + PW / 2, py + PH - 13);
+    } else {
+      ctx.font = '600 11px "JetBrains Mono", monospace';
+      let hy = py + PH + 10;
+      let outside = true;
+      if (hy + 14 > viewH) { hy = py + PH - 46; outside = false; }
+      ctx.fillStyle = outside ? 'rgba(255,250,242,0.92)' : 'rgba(91,70,50,0.8)';
+      ctx.fillText(`🔒 표시는 아직 만들지 않은 지역입니다  ·  ${hint}`, viewW / 2, hy);
+    }
+    ctx.restore();
+  }
+
   function drawFullMap(viewW, viewH, t) {
     ctx.save();
     ctx.fillStyle = 'rgba(38,32,28,0.55)';
@@ -1207,7 +1556,7 @@
     ctx.font = small ? '600 10px "JetBrains Mono", monospace' : '600 12px "JetBrains Mono", monospace';
     ctx.textBaseline = 'top';
     const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
-    const closeHint = isTouch ? '지도 밖을 탭하면 닫힘' : 'M / ESC 닫기';
+    const closeHint = isTouch ? '지도를 탭하면 전경도' : 'M 한 번 더 → 전경도';
     const gap = small ? '  ·  ' : '   ·   ';
     let foundText = z.landmarks.length ? `발견 ${z.foundCount}/${z.landmarks.length}${gap}` : '';
     if (z.landmarks.length && z.portal) {
@@ -1294,7 +1643,7 @@
     }
 
     let dx = 0, dy = 0;
-    if (!mapOpen && !transition) {
+    if (!mapView && !transition) {
       if (keys.has('w') || keys.has('arrowup')) dy -= 1;
       if (keys.has('s') || keys.has('arrowdown')) dy += 1;
       if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
@@ -1456,7 +1805,8 @@
     }
 
     drawMinimap(viewW, viewH, t);
-    if (mapOpen) drawFullMap(viewW, viewH, t);
+    if (mapView === 1) drawFullMap(viewW, viewH, t);
+    else if (mapView === 2) drawWorldMap(viewW, viewH, t);
 
     if (transition) {
       const alpha = transition.phase === 'out'
