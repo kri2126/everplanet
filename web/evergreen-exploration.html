@@ -1471,10 +1471,10 @@
 
     // 나무 명판 — "에버그린" (좁은 화면에서는 아래 한 줄이 대신한다)
     if (!small) {
-    const plateW = small ? 104 : 168;
-    const plateH = small ? 20 : 34;
+    const plateW = 168;
+    const plateH = 34;
     const plx = px + PW / 2 - plateW / 2;
-    const ply = py + PH - plateH - (small ? 5 : 14);
+    const ply = py + PH - plateH - 30;
     ctx.save();
     ctx.shadowColor = 'rgba(60,40,20,0.35)';
     ctx.shadowBlur = 8;
@@ -1498,38 +1498,17 @@
     }
 
     // 상단 제목 · 하단 안내
+    // 한 줄 캡션 — 제목·진행도·안내를 모아 패널 맨 아래에 둔다.
+    // (상단에 두면 HUD 조작 칩과, 명판 옆에 두면 명판과 겹치는 창 비율이 있다)
     const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
     const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    if (!small) {
-      // 넓은 화면에서만 상단 제목 — 좁은 화면은 HUD 칩에 가려서 아래로 내린다
-      ctx.font = '600 12px "JetBrains Mono", monospace';
-      const tw = ctx.measureText(titleTxt).width + 20;
-      const ty = py + 11;
-      roundRectPath(px + PW / 2 - tw / 2, ty - 3, tw, 21, 8);
-      ctx.fillStyle = 'rgba(255,250,240,0.88)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(180,150,110,0.45)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(91,70,50,0.92)';
-      ctx.fillText(titleTxt, px + PW / 2, ty + 2);
-    }
-
     const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
-    if (small) {
-      ctx.font = '600 8px "JetBrains Mono", monospace';
-      ctx.fillStyle = 'rgba(91,70,50,0.85)';
-      ctx.fillText(`${titleTxt}  ·  ${hint}`, px + PW / 2, py + PH - 13);
-    } else {
-      ctx.font = '600 11px "JetBrains Mono", monospace';
-      let hy = py + PH + 10;
-      let outside = true;
-      if (hy + 14 > viewH) { hy = py + PH - 46; outside = false; }
-      ctx.fillStyle = outside ? 'rgba(255,250,242,0.92)' : 'rgba(91,70,50,0.8)';
-      ctx.fillText(`🔒 표시는 아직 만들지 않은 지역입니다  ·  ${hint}`, viewW / 2, hy);
-    }
+    const lockTxt = small ? '🔒 미구현' : '🔒 표시는 아직 만들지 않은 지역';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = `600 ${small ? 8 : 11}px "JetBrains Mono", monospace`;
+    ctx.fillStyle = 'rgba(91,70,50,0.85)';
+    ctx.fillText(`${titleTxt}  ·  ${lockTxt}  ·  ${hint}`, px + PW / 2, py + PH - (small ? 5 : 9));
     ctx.restore();
   }
 
