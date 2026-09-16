@@ -5,7 +5,8 @@ namespace Everplanet.Data
     /// <summary>
     /// 행성 하나를 정의하는 데이터 에셋.
     /// Project 창에서 우클릭 -> Create -> Everplanet -> Planet Definition 으로 생성해서
-    /// 아스마라 / 이타카 / 노바루나 3개를 각각 만들어 사용한다.
+    /// 에버그린 / 이타카 / 노바루나 3개를 각각 만들어 사용한다.
+    /// (초기 Unity 다중 행성 계획 기준. 현재 웹 구현은 에버그린 한 무대만 다룬다.)
     /// </summary>
     [CreateAssetMenu(fileName = "NewPlanet", menuName = "Everplanet/Planet Definition")]
     public class PlanetDefinition : ScriptableObject
