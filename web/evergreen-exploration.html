@@ -14,6 +14,14 @@
     --accent-line:rgba(255,138,160,.4);
     --mint:#4fb787;
     --mono-num:#3f8f66;
+    /* 그림책풍 팔레트 — 전경도(월드맵)에서 이미 쓴 양피지·나무 톤과 통일 */
+    --parchment-1:#fdf4de;
+    --parchment-2:#f2e0bb;
+    --wood-1:#e8c48b;
+    --wood-2:#c99354;
+    --wood-line:#c9a877;
+    --wood-dark:#a97a4a;
+    --wood-text:#3a2412;
   }
 
   *{box-sizing:border-box;}
@@ -46,10 +54,21 @@
     justify-content:space-between;
     gap:12px;
     flex-wrap:wrap;
-    padding:14px 18px;
-    background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:18px;
+    padding:14px 20px;
+    background:linear-gradient(180deg, var(--parchment-1) 0%, var(--parchment-2) 100%);
+    border:2px solid var(--wood-line);
+    border-radius:10px 22px 14px 26px;
+    box-shadow:0 2px 0 rgba(255,255,255,.55) inset, 0 10px 22px -16px rgba(120,90,60,.55);
+    position:relative;
+  }
+
+  header.top::before{
+    content:"";
+    position:absolute;
+    inset:4px;
+    border:1px dashed rgba(169,122,74,.4);
+    border-radius:7px 18px 11px 22px;
+    pointer-events:none;
   }
 
   .title-block{
@@ -93,10 +112,12 @@
     text-transform:uppercase;
     color:#c65a75;
     background:var(--accent-soft);
-    border:1px solid var(--accent-line);
-    border-radius:999px;
+    border:1px dashed var(--accent-line);
+    border-radius:4px 11px 4px 11px;
     padding:6px 12px;
     white-space:nowrap;
+    transform:rotate(-1.4deg);
+    box-shadow:0 2px 4px -1px rgba(120,90,60,.25);
   }
 
   .stage{
@@ -137,13 +158,17 @@
   kbd{
     font-family:'JetBrains Mono',monospace;
     font-size:.68rem;
-    background:rgba(255,250,242,.85);
-    border:1px solid rgba(91,70,50,.18);
-    color:var(--text-primary);
-    padding:4px 8px;
-    border-radius:7px;
-    backdrop-filter:blur(2px);
+    font-weight:600;
+    background:linear-gradient(180deg, var(--wood-1), var(--wood-2));
+    border:1px solid var(--wood-dark);
+    color:var(--wood-text);
+    padding:4px 9px;
+    border-radius:5px 8px 5px 8px;
+    box-shadow:0 2px 0 rgba(120,80,40,.4), 0 3px 7px -2px rgba(60,40,20,.4);
+    display:inline-block;
   }
+  .hint kbd:nth-child(odd){transform:rotate(-2deg);}
+  .hint kbd:nth-child(even){transform:rotate(1.6deg);}
 
   .joystick-zone{
     position:absolute;
@@ -177,27 +202,37 @@
     justify-content:space-between;
     gap:12px;
     flex-wrap:wrap;
-    padding:10px 18px;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:18px;
-    font-family:'JetBrains Mono',monospace;
-    font-size:.72rem;
-    color:var(--text-muted);
+    padding:10px 20px;
+    background:linear-gradient(180deg, var(--wood-1) 0%, var(--wood-2) 100%);
+    border:2px solid var(--wood-dark);
+    border-radius:22px 10px 26px 14px;
+    font-family:'Gowun Dodum',sans-serif;
+    font-size:.78rem;
+    color:var(--wood-text);
+    box-shadow:0 2px 0 rgba(255,255,255,.2) inset, 0 10px 22px -16px rgba(90,60,30,.55);
   }
 
   .hud-field{display:flex;gap:6px;align-items:baseline;}
-  .hud-field b{color:var(--mono-num);font-weight:600;font-variant-numeric:tabular-nums;}
+  .hud-field b{
+    color:#5b3a1c;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    font-family:'JetBrains Mono',monospace;
+    background:rgba(255,250,242,.92);
+    padding:1px 7px;
+    border-radius:5px;
+    border:1px solid rgba(169,122,74,.5);
+  }
 
   .legend{
     display:flex;
     gap:14px;
     flex-wrap:wrap;
-    color:var(--text-muted);
+    color:rgba(58,36,18,.8);
     font-size:.72rem;
   }
   .legend span{display:inline-flex;align-items:center;gap:6px;}
-  .swatch{width:9px;height:9px;border-radius:3px;flex:none;}
+  .swatch{width:9px;height:9px;border-radius:3px;flex:none;box-shadow:0 0 0 1px rgba(58,36,18,.35);}
 
   /* 터치 기기에서는 키보드 안내가 의미 없다 (조이스틱 + 미니맵 탭으로 안내) */
   @media (pointer: coarse){
@@ -208,22 +243,35 @@
     position:absolute;
     left:50%;
     top:64px;
-    transform:translate(-50%,-6px);
-    padding:9px 18px;
-    border-radius:999px;
-    background:rgba(255,250,242,.94);
-    border:1px solid var(--accent-line);
+    transform:translate(-50%,-6px) rotate(-1.2deg);
+    padding:9px 20px;
+    border-radius:3px 14px 3px 14px;
+    background:linear-gradient(180deg, var(--parchment-1), var(--parchment-2));
+    border:1px solid var(--wood-line);
     color:var(--text-primary);
     font-size:.82rem;
+    font-weight:600;
     letter-spacing:.01em;
     white-space:nowrap;
-    box-shadow:0 10px 24px -12px rgba(120,90,60,.5);
+    box-shadow:0 10px 24px -12px rgba(120,90,60,.5), 0 1px 0 rgba(255,255,255,.6) inset;
     opacity:0;
     pointer-events:none;
     transition:opacity .28s ease, transform .28s ease;
   }
-  .toast.show{opacity:1;transform:translate(-50%,0);}
-  .toast.final{background:rgba(255,238,243,.96);border-color:var(--accent);}
+  .toast::before{
+    content:"";
+    position:absolute;
+    top:-5px;
+    left:50%;
+    transform:translateX(-50%);
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffd0da, #c65a75);
+    box-shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0) rotate(-1.2deg);}
+  .toast.final{background:linear-gradient(180deg,#fff0e8,#ffe0e8);border-color:var(--accent);}
 
   @media (max-width:600px){
     h1{font-size:1.25rem;}
@@ -1090,8 +1138,19 @@
     const toMapY = (wy) => cy + (wy / z.radius) * R;
 
     ctx.save();
+
+    // 나무 테 바탕 — 그림자 + 살짝 큰 원으로 액자 느낌
+    ctx.save();
+    ctx.shadowColor = 'rgba(50,34,18,0.45)';
+    ctx.shadowBlur = isFull ? 18 : 9;
+    ctx.shadowOffsetY = isFull ? 6 : 3;
+    ctx.beginPath(); ctx.arc(cx, cy, R + (isFull ? 5 : 3.5), 0, Math.PI * 2);
+    ctx.fillStyle = '#c99354';
+    ctx.fill();
+    ctx.restore();
+
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(62,54,48,0.9)';
+    ctx.fillStyle = 'rgba(64,46,32,0.92)';
     ctx.fill();
 
     ctx.save();
@@ -1099,9 +1158,14 @@
     ctx.drawImage(z.fogCanvas, cx - R, cy - R, R * 2, R * 2);
     ctx.restore();
 
+    // 나무 테 — 이중 링 (전경도 명판과 같은 톤)
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,250,242,0.92)';
-    ctx.lineWidth = isFull ? 3 : 2;
+    ctx.strokeStyle = '#e8c48b';
+    ctx.lineWidth = isFull ? 4.5 : 3;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R - (isFull ? 3 : 2), 0, Math.PI * 2);
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = isFull ? 2 : 1.4;
     ctx.stroke();
 
     for (const lm of z.landmarks) {
@@ -1160,33 +1224,49 @@
     const cy = margin + R;
     minimapHit = { cx, cy, r: R + 8 };
     drawMapCircle(cx, cy, R, false, t);
-    ctx.fillStyle = 'rgba(255,250,242,0.92)';
+
+    // "M 지도" 안내 — 조작 칩과 같은 작은 나무 팻말
+    const mLabel = isTouch ? '탭 · 지도' : 'M  지도';
     ctx.font = '600 10px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(isTouch ? '탭 · 지도' : 'M  지도', cx, cy + R + 5);
+    const mw = ctx.measureText(mLabel).width + 14;
+    const mY = cy + R + 5;
+    roundRectPath(cx - mw / 2, mY, mw, 16, 6);
+    const mg = ctx.createLinearGradient(0, mY, 0, mY + 16);
+    mg.addColorStop(0, '#e8c48b'); mg.addColorStop(1, '#c99354');
+    ctx.fillStyle = mg; ctx.fill();
+    ctx.strokeStyle = '#a97a4a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#3a2412';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(mLabel, cx, mY + 8.5);
 
     const z = currentZone;
     if (z.landmarks.length > 0) {
       const locked = isPortalLocked(z);
-      const questY = cy + R + 20;
+      const questY = mY + 16 + 5;
       const label = `★ 랜드마크 ${z.foundCount}/${z.landmarks.length}`;
       ctx.font = '700 11px "Gowun Dodum", sans-serif';
       const w = ctx.measureText(label).width + 16;
-      ctx.fillStyle = 'rgba(38,32,28,0.55)';
-      if (ctx.roundRect) {
-        ctx.beginPath(); ctx.roundRect(cx - w / 2, questY, w, 18, 9); ctx.fill();
-      } else {
-        ctx.fillRect(cx - w / 2, questY, w, 18);
-      }
-      ctx.fillStyle = z.foundCount === z.landmarks.length ? '#8ee0a8' : '#f0b23c';
+      roundRectPath(cx - w / 2, questY, w, 18, 9);
+      const qg = ctx.createLinearGradient(0, questY, 0, questY + 18);
+      qg.addColorStop(0, '#fdf4de'); qg.addColorStop(1, '#f2e0bb');
+      ctx.fillStyle = qg; ctx.fill();
+      ctx.strokeStyle = '#c9a877'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = z.foundCount === z.landmarks.length ? '#2f8f52' : '#b8720f';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, cx, questY + 9);
+      ctx.fillText(label, cx, questY + 9.5);
       if (z.portal) {
+        const ptxt = locked ? '포탈 잠김 🔒' : '포탈 열림';
         ctx.font = '600 9px "JetBrains Mono", monospace';
-        ctx.fillStyle = locked ? 'rgba(220,210,225,0.75)' : 'rgba(180,240,200,0.9)';
-        ctx.textBaseline = 'top';
-        ctx.fillText(locked ? '포탈 잠김 🔒' : '포탈 열림', cx, questY + 20);
+        const pw = ctx.measureText(ptxt).width + 12;
+        const pY = questY + 18 + 3;
+        roundRectPath(cx - pw / 2, pY, pw, 15, 7);
+        ctx.fillStyle = locked ? 'rgba(205,196,184,0.9)' : 'rgba(222,248,230,0.94)';
+        ctx.fill();
+        ctx.strokeStyle = locked ? 'rgba(120,105,90,0.6)' : '#8fd6a6';
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = locked ? '#6b5c4a' : '#237a46';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ptxt, cx, pY + 7.5);
       }
     }
   }
@@ -1514,7 +1594,7 @@
 
   function drawFullMap(viewW, viewH, t) {
     ctx.save();
-    ctx.fillStyle = 'rgba(38,32,28,0.55)';
+    ctx.fillStyle = 'rgba(52,38,26,0.58)';
     ctx.fillRect(0, 0, viewW, viewH);
 
     const small = viewW < 620;
@@ -1525,10 +1605,14 @@
 
     const z = currentZone;
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fffaf2';
+    ctx.lineJoin = 'round';
     if (!small) {
-      ctx.font = '600 15px "Gowun Dodum", sans-serif';
+      ctx.font = '700 15px "Gowun Dodum", sans-serif';
       ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(45,30,15,0.7)';
+      ctx.strokeText(`${z.name} 전도`, cx, cy - R - 16);
+      ctx.fillStyle = '#fdf4de';
       ctx.fillText(`${z.name} 전도`, cx, cy - R - 16);
     }
 
@@ -1541,7 +1625,12 @@
     if (z.landmarks.length && z.portal) {
       foundText += (isPortalLocked(z) ? '포탈 잠김' : '포탈 열림') + gap;
     }
-    ctx.fillText(`탐험도 ${pct}%${gap}${foundText}${closeHint}`, cx, cy + R + (small ? 10 : 14));
+    const captionTxt = `탐험도 ${pct}%${gap}${foundText}${closeHint}`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(45,30,15,0.7)';
+    ctx.strokeText(captionTxt, cx, cy + R + (small ? 10 : 14));
+    ctx.fillStyle = '#fdf4de';
+    ctx.fillText(captionTxt, cx, cy + R + (small ? 10 : 14));
     ctx.restore();
   }
 
