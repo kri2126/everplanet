@@ -402,20 +402,24 @@
   const STEP_UP = 14;      // 점프 없이도 자연스럽게 올라설 수 있는 높이 차 (계단 한 칸)
   const JUMP_CLEAR = 34;   // 점프로 넘을 수 있는 턱 높이의 상한 (작업 C 단구 설계 기준)
 
-  function groundHeightAt(zone, x, y) {
-    let top = 0;
+  // ── 로드맵 5 작업 B: 물 ───────────────────────────────────────────
+  // 물도 plateaus와 같은 도형 목록에 음수 top으로 얹는다(§3). 도형마다
+  // blocked(깊은 물처럼 무조건 막힘)·speedMul(여울처럼 느려짐)을 더 둘 수 있고,
+  // 겹치는 도형이 있으면 "나중에 선언된 도형이 이긴다" 규칙으로 하나를 고른다
+  // (다리·돌계단이 그 아래 물/절벽보다 뒤에 선언되어 우선하는 식) — 최고 높이가
+  // 아니라 선언 순서로 고르는 이유는, 물처럼 top이 0보다 낮은 도형도 있어서
+  // "높이가 가장 큰 도형이 이긴다"로는 물이 항상 진다.
+  function terrainAt(zone, x, y) {
+    let result = { top: 0, blocked: false, speedMul: 1 };
     for (const p of zone.plateaus) {
-      if (p.shape === 'circle') {
-        if (Math.hypot(x - p.x, y - p.y) <= p.r) top = Math.max(top, p.top);
-      } else if (p.shape === 'rect') {
-        const ang = -(p.angle || 0);
-        const dx = x - p.x, dy = y - p.y;
-        const lx = dx * Math.cos(ang) - dy * Math.sin(ang);
-        const ly = dx * Math.sin(ang) + dy * Math.cos(ang);
-        if (Math.abs(lx) <= p.w / 2 && Math.abs(ly) <= p.h / 2) top = Math.max(top, p.top);
-      }
+      if (!shapeContains(p, x, y)) continue;
+      result = { top: shapeTopAt(p, x, y), blocked: !!p.blocked, speedMul: p.speedMul != null ? p.speedMul : 1 };
     }
-    return top;
+    return result;
+  }
+
+  function groundHeightAt(zone, x, y) {
+    return terrainAt(zone, x, y).top;
   }
 
   function tryJump() {
@@ -513,11 +517,95 @@
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
   }
 
+  // ── 로드맵 5 작업 B/C: 지형 도형(plateaus) 공용 헬퍼 ───────────────────
+  // 광장·물·다리·돌계단을 전부 같은 도형 목록(zone.plateaus)으로 표현한다.
+  // circle/rect는 로컬 좌표계, sector는 원점(0,0) 기준 방위·반경 부채꼴이라
+  // bearingOf()/hypot으로 바로 판정한다 — 지형은 난수가 아니라 좌표를 직접
+  // 박아야 하므로(로드맵 5 §10) 부채꼴이 좌표를 쓰기에 가장 자연스럽다.
+  function inBearingRange(bearing, from, to) {
+    return from <= to ? (bearing >= from && bearing <= to) : (bearing >= from || bearing <= to);
+  }
+
+  function shapeContains(p, x, y) {
+    if (p.shape === 'circle') {
+      return Math.hypot(x - p.x, y - p.y) <= p.r;
+    } else if (p.shape === 'rect') {
+      const ang = -(p.angle || 0);
+      const dx = x - p.x, dy = y - p.y;
+      const lx = dx * Math.cos(ang) - dy * Math.sin(ang);
+      const ly = dx * Math.sin(ang) + dy * Math.cos(ang);
+      return Math.abs(lx) <= p.w / 2 && Math.abs(ly) <= p.h / 2;
+    } else if (p.shape === 'sector') {
+      const r = Math.hypot(x, y);
+      return r >= p.rFrom && r <= p.rTo && inBearingRange(bearingOf(x, y), p.bearingFrom, p.bearingTo);
+    }
+    return false;
+  }
+
+  // sector에 topFrom/topTo가 있으면 반경에 따라 선형 보간(완만한 비탈용) —
+  // 없으면 평평한 top 그대로.
+  function shapeTopAt(p, x, y) {
+    if (p.shape === 'sector' && p.topFrom != null && p.topTo != null) {
+      const r = Math.hypot(x, y);
+      const frac = Math.max(0, Math.min(1, (r - p.rFrom) / (p.rTo - p.rFrom)));
+      return p.topFrom + (p.topTo - p.topFrom) * frac;
+    }
+    return p.top;
+  }
+
+  // 도형 경계를 화면/미니맵에 그릴 수 있도록 월드 좌표 폴리곤으로 잘게 썬다.
+  function shapeBoundaryPoints(p, steps = 14) {
+    const pts = [];
+    if (p.shape === 'circle') {
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        pts.push({ x: p.x + Math.cos(a) * p.r, y: p.y + Math.sin(a) * p.r });
+      }
+    } else if (p.shape === 'rect') {
+      const ang = p.angle || 0;
+      const corners = [[-p.w / 2, -p.h / 2], [p.w / 2, -p.h / 2], [p.w / 2, p.h / 2], [-p.w / 2, p.h / 2]];
+      for (const [lx, ly] of corners) {
+        pts.push({ x: p.x + lx * Math.cos(ang) - ly * Math.sin(ang), y: p.y + lx * Math.sin(ang) + ly * Math.cos(ang) });
+      }
+    } else if (p.shape === 'sector') {
+      let span = p.bearingTo - p.bearingFrom;
+      if (span <= 0) span += 360;
+      const addArc = (r, reverse) => {
+        for (let i = 0; i <= steps; i++) {
+          const k = reverse ? steps - i : i;
+          const bearing = p.bearingFrom + span * (k / steps);
+          const rad = bearing * Math.PI / 180;
+          pts.push({ x: r * Math.sin(rad), y: -r * Math.cos(rad) });
+        }
+      };
+      addArc(p.rFrom, false);
+      addArc(p.rTo, true);
+    }
+    return pts;
+  }
+
+  // 나무/바위 등 산개 오브젝트가 물·다리·돌계단·몬스터 공터 위에 놓이지 않도록
+  // 하는 제외 판정. plateaus 배열 자체는 건드리지 않고 별도 목록에서만 쓴다.
+  const SCATTER_EXCLUDE_KINDS = new Set(['water-deep', 'water-shallow', 'bridge', 'stairs']);
+  function isScatterExcluded(plateaus, monsterClearings, x, y) {
+    for (const c of monsterClearings) {
+      if (Math.hypot(x - c.x, y - c.y) <= c.r) return true;
+    }
+    for (const p of plateaus) {
+      if (SCATTER_EXCLUDE_KINDS.has(p.kind) && shapeContains(p, x, y)) return true;
+    }
+    return false;
+  }
+
   function makeZone(opts) {
     const rand = mulberry32(opts.seed);
     const radius = opts.radius;
     const samplePlanetPoint = makeSamplePlanetPoint(rand);
     const useAreas = opts.id === 'zone1';
+    // 로드맵 5 작업 B/C: 지형(물·단구·다리·돌계단)과 몬스터 공터는 좌표를 직접
+    // 박아서 opts로 받는다 — 난수 시드는 건드리지 않는다(§10)
+    const plateaus = opts.plateaus || [];
+    const monsterClearings = opts.monsterClearings || [];
 
     let pathPts = [], pathTiles = [], pathFences = [], signpost = null;
     if (opts.pathPts) {
@@ -579,6 +667,7 @@
           const p = samplePlanetPoint(minR, maxR);
           if (Math.hypot(p.x, p.y) < 170) continue;
           if (nearPath(p.x, p.y, 66)) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
           const area = useAreas ? areaAt(p.x, p.y) : null;
           // 지역별 밀도 배수로 재분배 — 전체 총합은 유지하고 지역마다 빽빽함만 다르게 (로드맵 4 작업 D)
           if (area && rand() > area.densityMul) continue;
@@ -597,6 +686,7 @@
     for (let i = 0; i < (opts.mushroomCount ?? 16); i++) {
       const p = samplePlanetPoint(0, radius - 300);
       if (Math.hypot(p.x, p.y) < 130) continue;
+      if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
       decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
     }
 
@@ -661,10 +751,12 @@
       terrainPatches, grassTufts, spores, clouds,
       portal: opts.portal || null,
       useAreas,
-      // 로드맵 5 작업 A/B/C용 지형 높이 목록. { shape:'circle', x,y,r,top } 또는
-      // { shape:'rect', x,y,w,h,angle,top } 형태. 지금은 비어 있어 groundHeightAt()이
-      // 항상 0(평지)을 돌려준다 — 작업 C(맵 재구성)에서 실제 단구·물·다리를 채운다.
-      plateaus: opts.plateaus || []
+      // 로드맵 5 작업 A/B/C: 지형 높이·물 목록 — { shape:'circle'|'rect'|'sector', ..., top,
+      // blocked?, speedMul?, kind? }. sector는 원점 기준 방위·반경 부채꼴(광장·물·다리·돌계단용).
+      plateaus,
+      // 로드맵 5 §9: 몬스터 자리만 비워둔 공터. { x, y, r } — 지금은 오브젝트 스캐터
+      // 제외에만 쓰고, 실제 몬스터 배치는 전투 로드맵에서 다룬다.
+      monsterClearings
     };
   }
 
@@ -675,6 +767,40 @@
       { x: 200, y: -740 }, { x: 90, y: -1020 }
     ],
     spring: { x: 230, y: -110, radius: 50 },
+    // 로드맵 5 작업 C: 착륙 광장 지형 — 전부 좌표를 직접 박은 부채꼴(sector, 원점 기준
+    // 방위·반경)이다. 겹치는 곳은 배열에서 나중에 나온 도형이 이긴다(terrainAt 참고):
+    // 절벽·물 반달보다 다리·돌계단을 뒤에 둬서, 물/절벽을 가로지르는 통로가 실제로 뚫리게 한다.
+    // 정확한 좌표 출처는 roadmap/ROADMAP_5.md §4-1 표. 절벽의 반경(170~260)만 표에 없어
+    // 광장 바닥(170)과 물 반달 시작(185) 사이 폭에 맞춰 직접 정함.
+    plateaus: [
+      // 절벽 — 광장을 감싸는 벽, 높이 70이라 점프 최고 높이(약 37.6)로도 못 넘음
+      { shape: 'sector', kind: 'cliff', bearingFrom: 300, bearingTo: 10, rFrom: 170, rTo: 260, top: 70 },
+      { shape: 'sector', kind: 'cliff', bearingFrom: 30,  bearingTo: 55, rFrom: 170, rTo: 260, top: 70 },
+      // 물 반달 — 깊은 물, 무조건 막힘(다리로만 건넘)
+      { shape: 'sector', kind: 'water-deep', bearingFrom: 75, bearingTo: 300, rFrom: 185, rTo: 340, top: -30, blocked: true },
+      // 개울(여울) — 샘물 지대(230,-110, 방위64.4°·거리255)가 이 구간 한가운데. 느려지지만 통과 가능
+      { shape: 'sector', kind: 'water-shallow', bearingFrom: 55, bearingTo: 75, rFrom: 185, rTo: 340, top: -6, speedMul: 0.55 },
+      // 나무다리 — 통로 1. 물 반달 위를 가로지르므로 물보다 뒤에 선언해 우선시킴
+      { shape: 'sector', kind: 'bridge', bearingFrom: 145, bearingTo: 155, rFrom: 180, rTo: 350, top: 10 },
+      // 돌계단 — 통로 2. 12씩 4칸이라 한 칸씩은 STEP_UP(14) 이내라 점프 없이 올라가짐
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 170, rTo: 188, top: 12 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 188, rTo: 206, top: 24 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 206, rTo: 224, top: 36 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 224, rTo: 240, top: 48 },
+      // 계단 위 단구 고원 — 계단이 끝나는 곳(240)부터 기존 랜드마크가 있던 바깥 들판 쪽으로
+      { shape: 'sector', kind: 'plateau', bearingFrom: 10, bearingTo: 30, rFrom: 240, rTo: 500, top: 48 },
+      // 다리 건너 비탈 — 완만하게 10(다리 높이)에서 20까지, 슬라임 비탈 공터로 이어짐
+      { shape: 'sector', kind: 'slope', bearingFrom: 125, bearingTo: 175, rFrom: 350, rTo: 750, topFrom: 10, topTo: 20 },
+      // 별밭 공터 — 독립된 단구 위 평지(§9 공터 2)
+      { shape: 'circle', kind: 'plateau', x: 620, y: -430, r: 200, top: 30 }
+    ],
+    // 로드맵 5 §9: 몬스터 공터 3곳 — 지형만 미리 잡아두고 오브젝트 스캐터에서 제외.
+    // 실제 몬스터는 전투 로드맵에서 배치한다.
+    monsterClearings: [
+      { id: 'slime-slope', name: '슬라임 비탈', x: 330, y: 570, r: 190 },
+      { id: 'starfield',   name: '별밭 공터',   x: 620, y: -430, r: 170 },
+      { id: 'old-well',    name: '옛 우물터',   x: -720, y: 180, r: 160 }
+    ],
     // [2026-09-20 수정] 기존 6개 랜드마크(샘물·고목·바위산·유적·결정·동굴)를 전부 제거하고
     // 포탈을 처음부터 열어뒀다 — "발견 X/Y를 채워야 포탈이 열리는" 구조를 그만두고,
     // 도착하자마자 다음 맵으로 넘어갈 수 있게 한다. isPortalLocked()는 landmarks.length가
@@ -794,10 +920,13 @@
     for (const lm of z.landmarks) {
       if (lm.solid && Math.hypot(x - lm.x, y - lm.y) < PLAYER_RADIUS + lm.solid) return true;
     }
-    // 로드맵 5 작업 A: 걸어서 오를 수 없을 만큼 높은 지형 턱은 막는다. 계단 한 칸(STEP_UP)
+    // 로드맵 5 작업 A/B: 걸어서 오를 수 없을 만큼 높은 지형 턱은 막는다. 계단 한 칸(STEP_UP)
     // 정도는 걸어서 자연스럽게 오르고, 그보다 높으면 점프로 현재 높이(atZ)를 올린 뒤에만 지나간다.
-    const top = groundHeightAt(z, x, y);
-    if (top - atZ > STEP_UP) return true;
+    // 깊은 물처럼 높이차와 무관하게 무조건 막히는 지형은 terrainAt().blocked로 따로 처리한다
+    // (물은 땅보다 낮아서 "너무 높다" 판정만으로는 못 막기 때문 — §3).
+    const terr = terrainAt(z, x, y);
+    if (terr.blocked) return true;
+    if (terr.top - atZ > STEP_UP) return true;
     return false;
   }
 
@@ -1198,6 +1327,45 @@
     ctx.restore();
   }
 
+  // ── 로드맵 5 작업 B/C: 물·단구 도형 그리기 ─────────────────────────
+  // 색만으로 종류를 구분한다(절벽 옆면 줄무늬·폭포 등 세부 장식은 다음 단계 과제).
+  function terrainShapeStyle(kind) {
+    switch (kind) {
+      case 'water-deep':    return { fill: 'rgba(28,66,126,0.82)',  stroke: 'rgba(255,255,255,0.32)', strokeW: 2 };
+      case 'water-shallow': return { fill: 'rgba(140,205,225,0.55)', stroke: 'rgba(255,255,255,0.4)',  strokeW: 1.4 };
+      case 'cliff':         return { fill: 'rgba(184,141,84,0.5)',  stroke: 'rgba(122,88,48,0.65)',   strokeW: 2.4 };
+      case 'bridge':        return { fill: 'rgba(196,158,110,0.85)', stroke: 'rgba(120,86,48,0.8)',   strokeW: 2 };
+      case 'stairs':        return { fill: 'rgba(210,196,168,0.75)', stroke: 'rgba(150,130,95,0.7)',  strokeW: 1.6 };
+      case 'slope':         return { fill: 'rgba(150,190,120,0.2)',  stroke: null };
+      default:               return { fill: 'rgba(150,190,120,0.32)', stroke: 'rgba(110,150,85,0.45)', strokeW: 1.4 };
+    }
+  }
+
+  // 도형의 월드 경계를 전부 투영해서 화면 폴리곤으로 채운다. 경계점 중 하나라도
+  // 지평선 밖(투영 실패)이면 이번 프레임은 건너뛴다 — 일그러진 폴리곤보다 낫다.
+  function drawTerrainShape(p, cx, cy) {
+    const worldPts = shapeBoundaryPoints(p, p.shape === 'circle' ? 20 : 12);
+    const screenPts = [];
+    for (const wp of worldPts) {
+      const sp = project(wp.x, wp.y);
+      if (!sp) return;
+      screenPts.push(sp);
+    }
+    if (screenPts.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(cx + screenPts[0].sx, cy + screenPts[0].sy);
+    for (let i = 1; i < screenPts.length; i++) ctx.lineTo(cx + screenPts[i].sx, cy + screenPts[i].sy);
+    ctx.closePath();
+    const style = terrainShapeStyle(p.kind);
+    ctx.fillStyle = style.fill;
+    ctx.fill();
+    if (style.stroke) {
+      ctx.strokeStyle = style.stroke;
+      ctx.lineWidth = style.strokeW || 2;
+      ctx.stroke();
+    }
+  }
+
   function drawPlayer(t, moving, z) {
     const bob = reduceMotion || !moving ? 0 : Math.sin(t * 9) * 1.6;
     // z(점프 높이)는 project()의 거리 계산과 무관한 순수 스크린-Y 오프셋이다 — 화면 위로
@@ -1316,6 +1484,21 @@
     ctx.fill(); ctx.stroke();
   }
 
+  // 로드맵 5 작업 B: 미니맵/구역 지도용 물·단구 실루엣. toMapX/toMapY는 원점 기준
+  // 단순 축척이라(플레이어 위치와 무관) 지평선 컬링 없이 항상 그릴 수 있다.
+  function drawMapTerrainSilhouette(p, toMapX, toMapY) {
+    const worldPts = shapeBoundaryPoints(p, p.shape === 'circle' ? 16 : 10);
+    if (worldPts.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(toMapX(worldPts[0].x), toMapY(worldPts[0].y));
+    for (let i = 1; i < worldPts.length; i++) ctx.lineTo(toMapX(worldPts[i].x), toMapY(worldPts[i].y));
+    ctx.closePath();
+    ctx.fillStyle = p.kind === 'water-deep' ? 'rgba(40,90,150,0.9)'
+      : p.kind === 'water-shallow' ? 'rgba(120,190,215,0.85)'
+      : 'rgba(196,158,110,0.75)'; // 절벽·다리·돌계단·단구·비탈은 전부 황토 계열 한 색
+    ctx.fill();
+  }
+
   function drawMapCircle(cx, cy, R, isFull, t) {
     const z = currentZone;
     const toMapX = (wx) => cx + (wx / z.radius) * R;
@@ -1340,6 +1523,11 @@
     ctx.save();
     ctx.clip();
     ctx.drawImage(z.fogCanvas, cx - R, cy - R, R * 2, R * 2);
+    // 로드맵 5 작업 B: 물/단구 실루엣을 fog 위에, 단 이미 탐험한 자리에만 보이게
+    // source-atop으로 합성한다 — "걸어서 드러난 만큼만 보인다"는 원칙은 그대로 둔다
+    ctx.globalCompositeOperation = 'source-atop';
+    for (const p of z.plateaus) drawMapTerrainSilhouette(p, toMapX, toMapY);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
 
     // 나무 테 — 이중 링 (전경도 명판과 같은 톤)
@@ -1922,7 +2110,9 @@
     const len = Math.hypot(dx, dy);
     if (len > 1) { dx /= len; dy /= len; }
 
-    const speed = 200;
+    // 로드맵 5 작업 B: 여울(shallow water)에 서 있으면 느려진다. 목적지가 아니라
+    // "지금 서 있는 자리" 기준으로 재는 게 자연스럽다(물에 들어가는 순간부터 느려짐).
+    const speed = 200 * terrainAt(currentZone, player.x, player.y).speedMul;
     const moving = dx !== 0 || dy !== 0;
     if (moving) {
       player.facing = { x: dx / (len || 1), y: dy / (len || 1) };
@@ -1993,6 +2183,9 @@
       item.draw();
       ctx.restore();
     }
+
+    // 로드맵 5 작업 B/C: 물·단구는 오브젝트보다 아래, 바닥 장식보다 위 레이어에 그린다
+    for (const p of z.plateaus) drawTerrainShape(p, cx, cy);
 
     const solids = [];
     if (z.spring) { const p = project(z.spring.x, z.spring.y); if (p) solids.push({ p, spring: z.spring }); }
