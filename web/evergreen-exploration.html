@@ -196,6 +196,32 @@
     box-shadow:0 4px 10px rgba(198,90,117,.35);
   }
 
+  .jump-btn{
+    /* 조이스틱 바로 오른쪽, 같은 아래쪽 줄에 배치한다. 오른쪽 위에는 미니맵이 있어서
+       화면 비율이 짧은 기기(16:10 stage)에서는 오른쪽 어디든 미니맵과 겹치기 쉽지만,
+       조이스틱 옆(왼쪽 아래 묶음)은 항상 미니맵과 다른 좌우 영역이라 안전하다 */
+    position:absolute;
+    left:138px;
+    bottom:22px;
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff6da, var(--wood-2));
+    border:1px solid rgba(91,70,50,.3);
+    box-shadow:0 4px 10px rgba(120,80,40,.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Gowun Dodum',sans-serif;
+    font-size:.72rem;
+    font-weight:700;
+    color:var(--wood-text);
+    touch-action:none;
+    user-select:none;
+  }
+  .jump-btn[hidden]{display:none!important;}
+  .jump-btn:active{background:radial-gradient(circle at 35% 30%, #ffe9b0, var(--wood-2));}
+
   footer.hud{
     display:flex;
     align-items:center;
@@ -290,7 +316,7 @@
       <div class="planet-glyph" aria-hidden="true"></div>
       <div>
         <h1>에버그린 탐사</h1>
-        <p class="subtitle">에버플래닛 프로토타입 · 지도를 그리며 랜드마크를 찾고, 포탈로 다음 구역까지 (구역 특색은 추후 반영 예정)</p>
+        <p class="subtitle">에버플래닛 프로토타입 · 지도를 그리며 별내림 천문대를 탐험하고, 포탈로 다음 맵까지</p>
       </div>
     </div>
     <span class="phase-chip">PHASE 3 · PORTAL (PROTO)</span>
@@ -300,24 +326,24 @@
     <canvas id="game"></canvas>
     <div class="vignette"></div>
     <div class="hint">
-      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>M</kbd><kbd>지도</kbd><kbd>M M</kbd><kbd>전경도</kbd>
+      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>Space</kbd><kbd>점프</kbd><kbd>M</kbd><kbd>지도</kbd><kbd>M M</kbd><kbd>전경도</kbd>
     </div>
     <div class="toast" id="toast"></div>
     <div class="joystick-zone" id="joyZone" hidden>
       <div class="joystick-stick" id="joyStick"></div>
     </div>
+    <div class="jump-btn" id="jumpBtn" hidden>점프</div>
   </div>
 
   <footer class="hud">
     <div class="hud-field">구역 <b id="zoneLabel">초원</b></div>
     <div class="hud-field">위치 <b id="posDir">출발점</b></div>
     <div class="hud-field">탐험도 <b id="explorePct">0%</b></div>
-    <div class="hud-field">발견 <b id="foundLabel">0/5</b></div>
+    <div class="hud-field">발견 <b id="foundLabel">-</b></div>
     <div class="legend">
       <span><i class="swatch" style="background:#ff8aa0"></i>플레이어</span>
       <span><i class="swatch" style="background:#4fa066"></i>나무</span>
       <span><i class="swatch" style="background:#b9aec2"></i>바위</span>
-      <span><i class="swatch" style="background:#f0b23c"></i>랜드마크</span>
       <span><i class="swatch" style="background:#c79bf0"></i>포탈</span>
     </div>
   </footer>
@@ -337,6 +363,7 @@
   const toastEl = document.getElementById('toast');
   const joyZone = document.getElementById('joyZone');
   const joyStick = document.getElementById('joyStick');
+  const jumpBtn = document.getElementById('jumpBtn');
 
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -364,6 +391,39 @@
   const HORIZON_D = PLANET_R * Math.PI / 2 * 0.985;
   const PLAYER_RADIUS = 15;
   const TILT = 0.62;
+
+  // ── 로드맵 5 작업 A: 높이와 점프 ─────────────────────────────────
+  // player.z는 "화면 연출용" 높이가 아니라 지형 기준 절대 높이다. 평지에서는
+  // groundHeightAt()과 항상 같고, 점프 중에는 그보다 높다. 이 값은 project()/
+  // projectTall()의 거리·지평선 계산에는 전혀 반영하지 않는다 — 구체 투영 수학은
+  // 그대로 두고, 화면에 그릴 때만 순수 스크린-Y 오프셋으로 얹는다(드로우 단계에서 처리).
+  const JUMP_V = 260;      // 점프 시작 수직 속도 (단위/초)
+  const GRAVITY = 900;     // 중력 가속도 (단위/초^2) — 최고 높이 약 37.6, 체공 시간 약 0.58초
+  const STEP_UP = 14;      // 점프 없이도 자연스럽게 올라설 수 있는 높이 차 (계단 한 칸)
+  const JUMP_CLEAR = 34;   // 점프로 넘을 수 있는 턱 높이의 상한 (작업 C 단구 설계 기준)
+
+  function groundHeightAt(zone, x, y) {
+    let top = 0;
+    for (const p of zone.plateaus) {
+      if (p.shape === 'circle') {
+        if (Math.hypot(x - p.x, y - p.y) <= p.r) top = Math.max(top, p.top);
+      } else if (p.shape === 'rect') {
+        const ang = -(p.angle || 0);
+        const dx = x - p.x, dy = y - p.y;
+        const lx = dx * Math.cos(ang) - dy * Math.sin(ang);
+        const ly = dx * Math.sin(ang) + dy * Math.cos(ang);
+        if (Math.abs(lx) <= p.w / 2 && Math.abs(ly) <= p.h / 2) top = Math.max(top, p.top);
+      }
+    }
+    return top;
+  }
+
+  function tryJump() {
+    const ground = groundHeightAt(currentZone, player.x, player.y);
+    if (player.z <= ground + 0.5 && player.vz <= 0) {
+      player.vz = JUMP_V;
+    }
+  }
 
   function project(x, y) {
     const relx = x - player.x, rely = y - player.y;
@@ -600,7 +660,11 @@
       lastExploreX: Infinity, lastExploreY: Infinity,
       terrainPatches, grassTufts, spores, clouds,
       portal: opts.portal || null,
-      useAreas
+      useAreas,
+      // 로드맵 5 작업 A/B/C용 지형 높이 목록. { shape:'circle', x,y,r,top } 또는
+      // { shape:'rect', x,y,w,h,angle,top } 형태. 지금은 비어 있어 groundHeightAt()이
+      // 항상 0(평지)을 돌려준다 — 작업 C(맵 재구성)에서 실제 단구·물·다리를 채운다.
+      plateaus: opts.plateaus || []
     };
   }
 
@@ -611,14 +675,14 @@
       { x: 200, y: -740 }, { x: 90, y: -1020 }
     ],
     spring: { x: 230, y: -110, radius: 50 },
-    landmarkDefs: [
-      { id: 'spring',  name: '샘물 지대',   x: 230,   y: -110,  height: 0,   solid: 0,  tint: '#6ec6e8' },
-      { id: 'tree',    name: '거대 고목',   x: 100,   y: -1150, height: 120, solid: 46, tint: '#3f9a63' },
-      { id: 'rock',    name: '바위산',     x: 1180,  y: -200,  height: 105, solid: 52, tint: '#a99cb8' },
-      { id: 'ruins',   name: '석조 유적',   x: -950,  y: 780,   height: 70,  solid: 48, tint: '#d8c9a8' },
-      { id: 'crystal', name: '빛나는 결정', x: -1250, y: -350,  height: 95,  solid: 34, tint: '#c79bf0' },
-      { id: 'cave',    name: '지붕 없는 동굴', x: -120, y: 972, height: 90,  solid: 50, tint: '#6b6f7d' }
-    ],
+    // [2026-09-20 수정] 기존 6개 랜드마크(샘물·고목·바위산·유적·결정·동굴)를 전부 제거하고
+    // 포탈을 처음부터 열어뒀다 — "발견 X/Y를 채워야 포탈이 열리는" 구조를 그만두고,
+    // 도착하자마자 다음 맵으로 넘어갈 수 있게 한다. isPortalLocked()는 landmarks.length가
+    // 0이면 자동으로 false를 반환하므로 별도 잠금 해제 코드는 필요 없다. 로드맵 5 §14에서
+    // 논의했던 "동굴 이름이 맵8과 겹친다" 같은 랜드마크 이름 충돌 문제도 이 제거로 자연히
+    // 해소된다. 랜드마크 좌표는 로드맵 5의 지형 재구성(작업 C) 참고용으로 남겨둔다:
+    // 샘물(230,-110) 고목(100,-1150) 바위산(1180,-200) 유적(-950,780) 결정(-1250,-350) 동굴(-120,972)
+    landmarkDefs: [],
     portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
   });
 
@@ -635,7 +699,7 @@
     transition = { phase: 'out', t: 0, dur: 0.35, toZoneId, spawn };
   }
 
-  const player = { x: 0, y: 60, facing: { x: 0, y: -1 } };
+  const player = { x: 0, y: 60, facing: { x: 0, y: -1 }, z: 0, vz: 0 };
 
   const keys = new Set();
   // 0 = 닫힘, 1 = 현재 구역 지도, 2 = 에버그린 전경도(월드맵)
@@ -645,6 +709,10 @@
     keys.add(k);
     if (k === 'm' && !transition) { mapView = (mapView + 1) % 3; keys.clear(); e.preventDefault(); }
     else if (k === 'escape' && mapView) { mapView = 0; }
+    else if (k === ' ') {
+      e.preventDefault(); // 스페이스의 기본 동작(페이지 스크롤)을 막는다
+      if (!transition && !mapView) tryJump();
+    }
   });
   window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
@@ -672,6 +740,13 @@
 
   const isTouch = matchMedia('(pointer: coarse)').matches;
   if (isTouch) joyZone.hidden = false;
+  if (isTouch) {
+    jumpBtn.hidden = false;
+    jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!transition && !mapView) tryJump();
+    });
+  }
 
   function setJoyFromEvent(e) {
     const rect = joyZone.getBoundingClientRect();
@@ -709,7 +784,7 @@
   joyZone.addEventListener('pointerup', releaseJoy);
   joyZone.addEventListener('pointercancel', releaseJoy);
 
-  function collides(x, y) {
+  function collides(x, y, atZ = player.z) {
     const z = currentZone;
     if (Math.hypot(x, y) > z.radius - PLAYER_RADIUS - 12) return true;
     for (const o of z.obstacles) {
@@ -719,6 +794,10 @@
     for (const lm of z.landmarks) {
       if (lm.solid && Math.hypot(x - lm.x, y - lm.y) < PLAYER_RADIUS + lm.solid) return true;
     }
+    // 로드맵 5 작업 A: 걸어서 오를 수 없을 만큼 높은 지형 턱은 막는다. 계단 한 칸(STEP_UP)
+    // 정도는 걸어서 자연스럽게 오르고, 그보다 높으면 점프로 현재 높이(atZ)를 올린 뒤에만 지나간다.
+    const top = groundHeightAt(z, x, y);
+    if (top - atZ > STEP_UP) return true;
     return false;
   }
 
@@ -1119,10 +1198,12 @@
     ctx.restore();
   }
 
-  function drawPlayer(t, moving) {
+  function drawPlayer(t, moving, z) {
     const bob = reduceMotion || !moving ? 0 : Math.sin(t * 9) * 1.6;
+    // z(점프 높이)는 project()의 거리 계산과 무관한 순수 스크린-Y 오프셋이다 — 화면 위로
+    // 띄우기만 할 뿐 지평선/거리 연산에는 전혀 관여하지 않는다.
     ctx.save();
-    ctx.translate(0, bob);
+    ctx.translate(0, bob - (z || 0));
 
     ctx.fillStyle = 'rgba(60,40,30,0.22)';
     ctx.beginPath(); ctx.ellipse(0, PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 0.85, PLAYER_RADIUS * 0.32, 0, 0, Math.PI * 2); ctx.fill();
@@ -1848,6 +1929,15 @@
       tryMove(dx, dy, speed * dt);
     }
 
+    // 로드맵 5 작업 A: 중력/점프 적분. player.z는 지형 기준 절대 높이이므로,
+    // 매 프레임 중력을 적용한 뒤 현재 위치의 지면 높이 밑으로 내려가지 않게 바닥에 붙인다.
+    if (!mapView && !transition) {
+      player.vz -= GRAVITY * dt;
+      player.z += player.vz * dt;
+      const ground = groundHeightAt(currentZone, player.x, player.y);
+      if (player.z <= ground) { player.z = ground; player.vz = 0; }
+    }
+
     if (!transition) {
       updateExploration();
       checkDiscovery();
@@ -1936,6 +2026,9 @@
     solids.push({ p: project(player.x, player.y), isPlayer: true });
     solids.sort((a, b) => (a.p ? a.p.sy : 0) - (b.p ? b.p.sy : 0));
 
+    // 점프로 화면상 위로 떠 있는 만큼(playerScreenY)을 가림 판정 기준점으로 쓴다 —
+    // 나무 캐노피보다 높이 뛰어오르면 그만큼 가림 판정에서 벗어나 점선 윤곽이 풀린다.
+    const playerScreenY = -player.z;
     let occluderInfo = null;
     for (const s of solids) {
       if (s.isPlayer || !s.p) continue;
@@ -1944,7 +2037,7 @@
       if (!reach) continue;
       const scale = s.p.scale;
       if (Math.abs(s.p.sx) > reach.w * scale) continue;
-      if (0 >= s.p.sy - reach.upH * scale && 0 <= s.p.sy + reach.downH * scale) {
+      if (playerScreenY >= s.p.sy - reach.upH * scale && playerScreenY <= s.p.sy + reach.downH * scale) {
         occluderInfo = { sx: s.p.sx, sy: s.p.sy, scale, reach };
         break;
       }
@@ -1967,7 +2060,7 @@
       else if (s.portal) {
         drawSinkClipped(s.portal.height, s.p.sink, () => drawPortalBody(t, isPortalLocked(z)));
       }
-      else if (s.isPlayer) { drawPlayer(t, moving); }
+      else if (s.isPlayer) { drawPlayer(t, moving, player.z); }
       ctx.restore();
     }
 
@@ -1990,7 +2083,7 @@
 
     if (occluderInfo) {
       ctx.save();
-      ctx.translate(cx, cy);
+      ctx.translate(cx, cy + playerScreenY);
       drawPlayerOutline(occluderInfo);
       ctx.restore();
     }
