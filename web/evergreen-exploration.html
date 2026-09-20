@@ -607,13 +607,18 @@
     const plateaus = opts.plateaus || [];
     const monsterClearings = opts.monsterClearings || [];
 
-    let pathPts = [], pathTiles = [], pathFences = [], signpost = null;
-    if (opts.pathPts) {
-      pathPts = opts.pathPts;
-      for (let i = 0; i < pathPts.length - 1; i++) {
-        const a = pathPts[i], b = pathPts[i + 1];
+    // 로드맵 5 작업 D: 길이 여러 갈래(간선 2개 + 지선 3개)가 됐으므로 pathPts 하나가
+    // 아니라 opts.paths(각 {pts, sign?}) 목록을 받아 전부 같은 타일/울타리 생성 로직을
+    // 태운다. nearPath()도 모든 경로의 모든 구간을 대상으로 검사한다.
+    const pathTiles = [], pathFences = [], signposts = [];
+    const pathSegments = [];
+    for (const path of (opts.paths || [])) {
+      const pts = path.pts;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
         const dx = b.x - a.x, dy = b.y - a.y;
         const len = Math.hypot(dx, dy);
+        pathSegments.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
         const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
         const tileCount = Math.round(len / 58);
         for (let j = 0; j < tileCount; j++) {
@@ -636,16 +641,18 @@
           }
         }
       }
-      signpost = { x: pathPts[pathPts.length - 1].x, y: pathPts[pathPts.length - 1].y - 30 };
+      if (path.sign) {
+        const last = pts[pts.length - 1];
+        signposts.push({ x: last.x, y: last.y - 30 });
+      }
     }
     function nearPath(x, y, threshold) {
-      for (let i = 0; i < pathPts.length - 1; i++) {
-        const a = pathPts[i], b = pathPts[i + 1];
-        const dx = b.x - a.x, dy = b.y - a.y;
+      for (const seg of pathSegments) {
+        const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
         const lenSq = dx * dx + dy * dy;
-        let t = lenSq > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / lenSq : 0;
+        let t = lenSq > 0 ? ((x - seg.ax) * dx + (y - seg.ay) * dy) / lenSq : 0;
         t = Math.max(0, Math.min(1, t));
-        const cx = a.x + dx * t, cy = a.y + dy * t;
+        const cx = seg.ax + dx * t, cy = seg.ay + dy * t;
         if (Math.hypot(x - cx, y - cy) < threshold) return true;
       }
       return false;
@@ -682,6 +689,28 @@
     }
     scatterObstacles(0, radius - 260, opts.obstacleCore ?? 150);
     scatterObstacles(radius - 260, radius - 20, opts.obstacleEdge ?? 90);
+
+    // 로드맵 5 작업 D: 길 위(66 이내)는 위 scatterObstacles가 이미 비워뒀다. 여기서는
+    // 그 바로 바깥(66~150) 띠에만 덤불·나무를 추가로 더 뿌려 "지나갈 수는 있지만
+    // 성가신" 밀도(기존 대비 약 1.6배)를 만든다 — 덤불이라는 별도 오브젝트 종류는
+    // 아직 없으므로(§7-1은 작업 F) 지금은 같은 tree/stone 풀에서 추가 배치만 한다.
+    function scatterPathEdge(count) {
+      for (let i = 0; i < count; i++) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const p = samplePlanetPoint(0, radius - 20);
+          if (!nearPath(p.x, p.y, 150) || nearPath(p.x, p.y, 66)) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
+          const area = useAreas ? areaAt(p.x, p.y) : null;
+          const treeRatio = area ? area.treeRatio : 0.58;
+          const isTree = rand() < treeRatio;
+          const radius2 = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
+          if (overlapsExisting(p.x, p.y, radius2)) continue;
+          obstacles.push({ type: isTree ? 'tree' : 'stone', radius: radius2, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
+          break;
+        }
+      }
+    }
+    scatterPathEdge(opts.pathEdgeExtra ?? 0);
 
     for (let i = 0; i < (opts.mushroomCount ?? 16); i++) {
       const p = samplePlanetPoint(0, radius - 300);
@@ -743,7 +772,7 @@
     return {
       id: opts.id, name: opts.name, mapNo: opts.mapNo || null, radius,
       rand, samplePlanetPoint,
-      pathPts, pathTiles, pathFences, signpost,
+      pathTiles, pathFences, signposts,
       obstacles, decorations, spring,
       landmarks, foundCount,
       GRID_N, GRID_ORIGIN, explored, exploredCount: 0, totalCells, FOG_SCALE, fogCanvas, fogCtx,
@@ -762,10 +791,39 @@
 
   const zone1 = makeZone({
     id: 'zone1', name: '별내림 천문대', mapNo: 1, seed: 20260913, radius: 1500,
-    pathPts: [
-      { x: 10, y: 10 }, { x: 150, y: -230 }, { x: 30, y: -480 },
-      { x: 200, y: -740 }, { x: 90, y: -1020 }
+    // 로드맵 5 작업 D: 간선 2개(광장의 두 통로 — 다리/돌계단 — 를 그대로 따라 나간다)와
+    // 지선 3개(옛 랜드마크였던 거대 고목·석조 유적·빛나는 결정 자리로 — 랜드마크 자체는
+    // §14 결정에 따라 이미 제거됐지만 좌표는 여전히 §4-1에 남아있는 유일한 목적지라 그대로
+    // 씀). 지선은 전부 간선의 한 지점에서 갈라지는 걸로 좌표를 맞췄다(분기점 공유).
+    // 방위·반경은 bearingOf(x,y)=atan2(x,-y) 규약으로 역산: x=r·sin(방위), y=-r·cos(방위).
+    paths: [
+      { // 간선1 — 광장 → 나무다리(145~155°) → 슬라임 비탈 → 포탈(방위150°) 방향
+        pts: [
+          { x: 10, y: 10 }, { x: 85, y: 147 }, { x: 132, y: 230 }, { x: 175, y: 303 },
+          { x: 329, y: 570 }, { x: 500, y: 866 }, { x: 650, y: 1126 }
+        ]
+      },
+      { // 간선2 — 광장 → 돌계단(10~30°) → 단구 고원 → 북동쪽 바깥(바위산·샘물 방향).
+        // (743,-743) 지점은 §9 별밭 공터(620,-430, r200) 단구를 피해 바깥으로 살짝 돈 것
+        pts: [
+          { x: 10, y: 10 }, { x: 58, y: -160 }, { x: 82, y: -226 }, { x: 171, y: -470 },
+          { x: 325, y: -563 }, { x: 743, y: -743 }, { x: 953, y: -550 }, { x: 1159, y: -311 }
+        ]
+      },
+      { // 지선1 — 간선2의 단구 고원 어귀(82,-226)에서 갈라져 거대 고목 옛 자리(방위5°)로
+        pts: [{ x: 82, y: -226 }, { x: 104, y: -489 }, { x: 104, y: -844 }, { x: 100, y: -1150 }],
+        sign: true
+      },
+      { // 지선2 — 간선1의 다리 끝(175,303)에서 갈라져 석조 유적 옛 자리(방위231°)로
+        pts: [{ x: 175, y: 303 }, { x: -52, y: 597 }, { x: -450, y: 779 }, { x: -778, y: 778 }, { x: -955, y: 774 }],
+        sign: true
+      },
+      { // 지선3 — 간선2의 고원 가장자리(171,-470)에서 갈라져 빛나는 결정 옛 자리(방위286°)로
+        pts: [{ x: 171, y: -470 }, { x: -130, y: -739 }, { x: -643, y: -766 }, { x: -1039, y: -600 }, { x: -1247, y: -357 }],
+        sign: true
+      }
     ],
+    pathEdgeExtra: 45,
     spring: { x: 230, y: -110, radius: 50 },
     // 로드맵 5 작업 C: 착륙 광장 지형 — 전부 좌표를 직접 박은 부채꼴(sector, 원점 기준
     // 방위·반경)이다. 겹치는 곳은 배열에서 나중에 나온 도형이 이긴다(terrainAt 참고):
@@ -789,6 +847,9 @@
       { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 224, rTo: 240, top: 48 },
       // 계단 위 단구 고원 — 계단이 끝나는 곳(240)부터 기존 랜드마크가 있던 바깥 들판 쪽으로
       { shape: 'sector', kind: 'plateau', bearingFrom: 10, bearingTo: 30, rFrom: 240, rTo: 500, top: 48 },
+      // 로드맵 5 작업 D: 간선2가 단구 고원 밖(방위 30~75°)으로 휘어나가므로, 고원 가장자리를
+      // 완만한 내리막으로 둘러 어느 방위로 나가든 48→0 단차가 갑자기 나타나지 않게 함
+      { shape: 'sector', kind: 'slope', bearingFrom: 0, bearingTo: 60, rFrom: 480, rTo: 620, topFrom: 48, topTo: 0 },
       // 다리 건너 비탈 — 완만하게 10(다리 높이)에서 20까지, 슬라임 비탈 공터로 이어짐
       { shape: 'sector', kind: 'slope', bearingFrom: 125, bearingTo: 175, rFrom: 350, rTo: 750, topFrom: 10, topTo: 20 },
       // 별밭 공터 — 독립된 단구 위 평지(§9 공터 2)
@@ -2197,8 +2258,8 @@
       const p = project(d.x, d.y);
       if (p) solids.push({ p, d });
     }
-    if (z.signpost) {
-      const pSign = project(z.signpost.x, z.signpost.y);
+    for (const sp of z.signposts) {
+      const pSign = project(sp.x, sp.y);
       if (pSign) solids.push({ p: pSign, sign: true });
     }
     for (const lm of z.landmarks) {
