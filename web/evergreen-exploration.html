@@ -680,7 +680,8 @@
           if (area && rand() > area.densityMul) continue;
           const treeRatio = area ? area.treeRatio : 0.58;
           const isTree = rand() < treeRatio;
-          const radius = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
+          // 로드맵 5 작업 F-2: 나무 반지름 19~32 → 28~46 (충돌 반지름은 collides()에서 따로 상한)
+          const radius = isTree ? 28 + rand() * 18 : 13 + rand() * 11;
           if (overlapsExisting(p.x, p.y, radius)) continue;
           obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
           break;
@@ -690,33 +691,189 @@
     scatterObstacles(0, radius - 260, opts.obstacleCore ?? 150);
     scatterObstacles(radius - 260, radius - 20, opts.obstacleEdge ?? 90);
 
-    // 로드맵 5 작업 D: 길 위(66 이내)는 위 scatterObstacles가 이미 비워뒀다. 여기서는
-    // 그 바로 바깥(66~150) 띠에만 덤불·나무를 추가로 더 뿌려 "지나갈 수는 있지만
-    // 성가신" 밀도(기존 대비 약 1.6배)를 만든다 — 덤불이라는 별도 오브젝트 종류는
-    // 아직 없으므로(§7-1은 작업 F) 지금은 같은 tree/stone 풀에서 추가 배치만 한다.
-    function scatterPathEdge(count) {
+    // 로드맵 5 작업 F-1: 덤불 — 절반은 길가(66~150 띠, 옛 scatterPathEdge 자리를 대체),
+    // 절반은 절벽/단구 벽 바로 안쪽("단구 아래")에 배치한다. decorations이므로 충돌은 없다.
+    function scatterBushes(count) {
+      const wallShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'cliff' || p.kind === 'plateau'));
       for (let i = 0; i < count; i++) {
-        for (let attempt = 0; attempt < 10; attempt++) {
-          const p = samplePlanetPoint(0, radius - 20);
-          if (!nearPath(p.x, p.y, 150) || nearPath(p.x, p.y, 66)) continue;
-          if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
-          const area = useAreas ? areaAt(p.x, p.y) : null;
-          const treeRatio = area ? area.treeRatio : 0.58;
-          const isTree = rand() < treeRatio;
-          const radius2 = isTree ? 19 + rand() * 13 : 13 + rand() * 11;
-          if (overlapsExisting(p.x, p.y, radius2)) continue;
-          obstacles.push({ type: isTree ? 'tree' : 'stone', radius: radius2, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
-          break;
+        const useWall = (i % 2 === 0) && wallShapes.length;
+        let x, y, ok = false;
+        for (let attempt = 0; attempt < 10 && !ok; attempt++) {
+          if (useWall) {
+            const shape = wallShapes[Math.floor(rand() * wallShapes.length)];
+            let span = shape.bearingTo - shape.bearingFrom; if (span <= 0) span += 360;
+            const bearing = shape.bearingFrom + rand() * span;
+            const r = Math.max(20, shape.rFrom - 4 - rand() * 20);
+            const rad = bearing * Math.PI / 180;
+            x = r * Math.sin(rad); y = -r * Math.cos(rad);
+          } else {
+            const p = samplePlanetPoint(0, radius - 20);
+            if (!nearPath(p.x, p.y, 150) || nearPath(p.x, p.y, 66)) continue;
+            x = p.x; y = p.y;
+          }
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          if (overlapsExisting(x, y, 14)) continue;
+          ok = true;
+        }
+        if (!ok) continue;
+        decorations.push({ type: 'bush', x, y, tone: rand(), sway: rand() * Math.PI * 2 });
+      }
+    }
+    scatterBushes(opts.bushCount ?? 0);
+
+    // 로드맵 5 작업 F-1: 꽃 무리 중심 — 길가(40%)/물가(35%)/광장 가장자리 고리(25%) 편향
+    function clusterCenterFlower() {
+      const roll = rand();
+      if (roll < 0.4 && pathSegments.length) {
+        const seg = pathSegments[Math.floor(rand() * pathSegments.length)];
+        const tt = rand();
+        const px = seg.ax + (seg.bx - seg.ax) * tt, py = seg.ay + (seg.by - seg.ay) * tt;
+        const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const side = rand() < 0.5 ? 1 : -1;
+        const d = 90 + rand() * 55;
+        return { x: px + nx * d * side, y: py + ny * d * side };
+      }
+      if (roll < 0.75) {
+        const waterShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'water-deep' || p.kind === 'water-shallow'));
+        if (waterShapes.length) {
+          const shape = waterShapes[Math.floor(rand() * waterShapes.length)];
+          const pts = shapeBoundaryPoints(shape, 14);
+          const innerPts = pts.slice(0, 15);
+          const bp = innerPts[Math.floor(rand() * innerPts.length)];
+          const r = Math.hypot(bp.x, bp.y) || 1;
+          const pull = 18 + rand() * 30;
+          return { x: bp.x * (1 - pull / r), y: bp.y * (1 - pull / r) };
+        }
+      }
+      const bearing = rand() * 360, r = 175 + rand() * 30;
+      const rad = bearing * Math.PI / 180;
+      return { x: r * Math.sin(rad), y: -r * Math.cos(rad) };
+    }
+    function scatterClusterFlowers(clusterCount) {
+      for (let c = 0; c < clusterCount; c++) {
+        let center = null;
+        for (let attempt = 0; attempt < 6 && !center; attempt++) {
+          const cand = clusterCenterFlower();
+          if (Math.hypot(cand.x, cand.y) > radius - 20) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, cand.x, cand.y)) continue;
+          center = cand;
+        }
+        if (!center) continue;
+        const bloomCount = 6 + Math.floor(rand() * 7);
+        const tone = rand();
+        for (let i = 0; i < bloomCount; i++) {
+          const a = rand() * Math.PI * 2, d = rand() * 45;
+          const x = center.x + Math.cos(a) * d, y = center.y + Math.sin(a) * d;
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          decorations.push({ type: 'flower', x, y, tone, seed: rand() });
         }
       }
     }
-    scatterPathEdge(opts.pathEdgeExtra ?? 0);
+    scatterClusterFlowers(opts.flowerClusters ?? 0);
+
+    // 로드맵 5 작업 F-1: 갈대 무리 — 물가에만(육지 쪽으로 살짝 당김)
+    function clusterCenterWaterEdge() {
+      const waterShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'water-deep' || p.kind === 'water-shallow'));
+      if (!waterShapes.length) return null;
+      const shape = waterShapes[Math.floor(rand() * waterShapes.length)];
+      const pts = shapeBoundaryPoints(shape, 14);
+      const innerPts = pts.slice(0, 15);
+      const bp = innerPts[Math.floor(rand() * innerPts.length)];
+      const r = Math.hypot(bp.x, bp.y) || 1;
+      const pull = 4 + rand() * 14;
+      return { x: bp.x * (1 - pull / r), y: bp.y * (1 - pull / r) };
+    }
+    function scatterClusterReeds(clusterCount) {
+      for (let c = 0; c < clusterCount; c++) {
+        const center = clusterCenterWaterEdge();
+        if (!center || Math.hypot(center.x, center.y) > radius - 20) continue;
+        const bladeCount = 5 + Math.floor(rand() * 5);
+        for (let i = 0; i < bladeCount; i++) {
+          const a = rand() * Math.PI * 2, d = rand() * 22;
+          decorations.push({ type: 'reed', x: center.x + Math.cos(a) * d, y: center.y + Math.sin(a) * d, seed: rand(), sway: rand() * Math.PI * 2 });
+        }
+      }
+    }
+    scatterClusterReeds(opts.reedClusters ?? 0);
+
+    // 로드맵 5 작업 F-1: 붉은 버섯 — 몬스터 공터 언저리 또는 나무 그늘
+    function scatterRedMushrooms(count) {
+      for (let i = 0; i < count; i++) {
+        let x, y, ok = false;
+        for (let attempt = 0; attempt < 10 && !ok; attempt++) {
+          if (rand() < 0.5 && monsterClearings.length) {
+            const c = monsterClearings[Math.floor(rand() * monsterClearings.length)];
+            const a = rand() * Math.PI * 2, d = c.r + 20 + rand() * 80;
+            x = c.x + Math.cos(a) * d; y = c.y + Math.sin(a) * d;
+          } else if (obstacles.length) {
+            const o = obstacles[Math.floor(rand() * obstacles.length)];
+            if (o.type !== 'tree') continue;
+            const a = rand() * Math.PI * 2, d = o.radius * 0.6 + rand() * 24;
+            x = o.x + Math.cos(a) * d; y = o.y + Math.sin(a) * d;
+          } else continue;
+          if (Math.hypot(x, y) > radius - 20) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          ok = true;
+        }
+        if (!ok) continue;
+        decorations.push({ type: 'mushroom', x, y, seed: rand(), red: true });
+      }
+    }
+    scatterRedMushrooms(opts.redMushroomCount ?? 0);
 
     for (let i = 0; i < (opts.mushroomCount ?? 16); i++) {
       const p = samplePlanetPoint(0, radius - 300);
       if (Math.hypot(p.x, p.y) < 130) continue;
       if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
       decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
+    }
+
+    // 로드맵 5 작업 E: 떨어진 별 — starCount개 중 starSeeds(§9 별밭 공터에 직접 심는 자리)를
+    // 먼저 넣고 나머지는 길가/몬스터 공터 안쪽 편향 배치(실패 시 전역 균일 표본)로 채운다.
+    // 서로 140 이상, 기존 오브젝트와 60 이상 떨어지게 한다.
+    const fallenStars = (opts.starSeeds || []).map((s) => ({ x: s.x, y: s.y }));
+    const starTarget = opts.starCount ?? 0;
+    for (let i = fallenStars.length; i < starTarget; i++) {
+      let placed = false;
+      for (let attempt = 0; attempt < 20 && !placed; attempt++) {
+        let x, y;
+        const roll = rand();
+        if (roll < 0.4 && pathSegments.length) {
+          const seg = pathSegments[Math.floor(rand() * pathSegments.length)];
+          const tt = rand();
+          const px = seg.ax + (seg.bx - seg.ax) * tt, py = seg.ay + (seg.by - seg.ay) * tt;
+          const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len, ny = dx / len;
+          const side = rand() < 0.5 ? 1 : -1;
+          const d = 40 + rand() * 90;
+          x = px + nx * d * side; y = py + ny * d * side;
+        } else if (roll < 0.7 && monsterClearings.length) {
+          const c = monsterClearings[Math.floor(rand() * monsterClearings.length)];
+          const a = rand() * Math.PI * 2, d = rand() * c.r * 0.8;
+          x = c.x + Math.cos(a) * d; y = c.y + Math.sin(a) * d;
+        } else {
+          const p = samplePlanetPoint(0, 700);
+          x = p.x; y = p.y;
+        }
+        if (Math.hypot(x, y) > radius - 20) continue;
+        if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+        if (overlapsExisting(x, y, 60)) continue;
+        let farEnough = true;
+        for (const s of fallenStars) { if (Math.hypot(x - s.x, y - s.y) < 140) { farEnough = false; break; } }
+        if (!farEnough) continue;
+        fallenStars.push({ x, y });
+        placed = true;
+      }
+    }
+    for (const s of fallenStars) decorations.push({ type: 'star', x: s.x, y: s.y, seed: rand(), phase: rand() * Math.PI * 2 });
+
+    // 로드맵 5 작업 G: 생활의 흔적 — 좌표는 zone1 호출부에서 직접 넘긴다(§10 원칙대로
+    // 좌표는 난수가 아니라 직접 박는다). 여기서는 seed/phase만 붙여 decorations에 편입한다.
+    for (const d of (opts.lifeTraceDefs || [])) {
+      decorations.push({ ...d, seed: rand(), phase: rand() * Math.PI * 2 });
     }
 
     const spring = opts.spring || null;
@@ -754,7 +911,8 @@
       terrainPatches.push({ x: p.x, y: p.y, w: 140 + rand() * 90, angle: rand() * Math.PI });
     }
     const grassTufts = [];
-    for (let i = 0; i < (opts.grassCount ?? 1400); i++) {
+    // 로드맵 5 작업 F-1: 초목이 꽃/갈대/덤불로 세분화됐으므로 밀도 기본값을 1400→1100으로 낮춤
+    for (let i = 0; i < (opts.grassCount ?? 1100); i++) {
       const p = samplePlanetPoint(0, radius);
       grassTufts.push({ x: p.x, y: p.y, len: 4 + rand() * 6, angle: rand() * Math.PI * 2, phase: rand() * Math.PI * 2, tone: rand() });
     }
@@ -762,6 +920,14 @@
     for (let i = 0; i < (opts.sporeCount ?? 26); i++) {
       const p = samplePlanetPoint(0, HORIZON_D * 0.9);
       spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+    }
+    // 로드맵 5 작업 E: 떨어진 별 주변은 반딧불이(spores) 밀도를 국소적으로 올린다 —
+    // 별마다 반경 70 안에 2개씩 추가로 심어 "근처가 확실히 더 반짝이게" 함
+    for (const s of fallenStars) {
+      for (let i = 0; i < 2; i++) {
+        const a = rand() * Math.PI * 2, d = rand() * 70;
+        spores.push({ x: s.x + Math.cos(a) * d, y: s.y + Math.sin(a) * d, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+      }
     }
 
     const clouds = [];
@@ -870,6 +1036,49 @@
     // 해소된다. 랜드마크 좌표는 로드맵 5의 지형 재구성(작업 C) 참고용으로 남겨둔다:
     // 샘물(230,-110) 고목(100,-1150) 바위산(1180,-200) 유적(-950,780) 결정(-1250,-350) 동굴(-120,972)
     landmarkDefs: [],
+    // 로드맵 5 작업 E: 떨어진 별 14개 — 3개는 §9 별밭 공터(620,-430) 위에 직접 심고
+    // (원 중심에서 반경 170 이내, 단구 위 평지 top30 위), 나머지 11개는 makeZone 안에서
+    // 길가/몬스터 공터 편향 무작위로 채운다.
+    starCount: 14,
+    starSeeds: [
+      { x: 710, y: -470 },
+      { x: 550, y: -370 },
+      { x: 630, y: -320 }
+    ],
+    // 로드맵 5 작업 F-1: 초목 세분화 수량 — §7-1 표 그대로
+    flowerClusters: 34,
+    bushCount: 120,
+    reedClusters: 18,
+    redMushroomCount: 24,
+    // 로드맵 5 작업 G: 생활의 흔적 — 좌표는 전부 직접 박는다(§10 원칙). 소 목장은 광장
+    // 북서쪽 절벽 바깥(방위 340~355°, 반경 400~460, 어떤 기존 길·지형과도 안 겹치는 자리로
+    // Playwright 검증 후 확정)에 울타리 우리를 두르고, 농경지는 광장 서쪽 호수 건너
+    // (-440,10) 부근 — 물 반경(340) 밖으로 충분히 떨어진 자리다.
+    lifeTraceDefs: [
+      { type: 'cow', x: -87, y: -411 },
+      { type: 'cow', x: -40, y: -458 },
+      { type: 'cow', x: -137, y: -376 },
+      { type: 'fence', x: -13, y: -415, angle: Math.PI / 2 },
+      { type: 'fence', x: -27, y: -371, angle: Math.PI / 2 + 0.628 },
+      { type: 'fence', x: -65, y: -344, angle: Math.PI / 2 + 1.257 },
+      { type: 'fence', x: -111, y: -344, angle: Math.PI / 2 + 1.885 },
+      { type: 'fence', x: -149, y: -371, angle: Math.PI / 2 + 2.513 },
+      { type: 'fence', x: -163, y: -415, angle: Math.PI / 2 + 3.142 },
+      { type: 'fence', x: -149, y: -459, angle: Math.PI / 2 + 3.770 },
+      { type: 'fence', x: -65, y: -486, angle: Math.PI / 2 + 5.027 },
+      { type: 'fence', x: -27, y: -459, angle: Math.PI / 2 + 5.655 },
+      { type: 'hay', x: -60, y: -440 },
+      { type: 'hay', x: -110, y: -390 },
+      { type: 'trough', x: -140, y: -415 },
+      { type: 'farmRow', x: -440, y: -38, len: 130 },
+      { type: 'farmRow', x: -440, y: -14, len: 130 },
+      { type: 'farmRow', x: -440, y: 10, len: 130 },
+      { type: 'farmRow', x: -440, y: 34, len: 130 },
+      { type: 'farmRow', x: -440, y: 58, len: 130 },
+      { type: 'cart', x: -500, y: -20 },
+      { type: 'scarecrow', x: -440, y: 10 },
+      { type: 'clothesline', x: -410, y: -70 }
+    ],
     portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
   });
 
@@ -975,7 +1184,9 @@
     const z = currentZone;
     if (Math.hypot(x, y) > z.radius - PLAYER_RADIUS - 12) return true;
     for (const o of z.obstacles) {
-      const solidRadius = o.type === 'tree' ? o.radius * 0.5 : o.radius * 0.82;
+      // 로드맵 5 작업 F: 나무가 28~46까지 커지면서 충돌 반지름도 같이 커지면 길이
+      // 막히므로 상한을 둔다 — 보이는 건 커지고 부딪히는 건 그대로
+      const solidRadius = o.type === 'tree' ? Math.min(o.radius * 0.5, 18) : o.radius * 0.82;
       if (Math.hypot(x - o.x, y - o.y) < PLAYER_RADIUS + solidRadius) return true;
     }
     for (const lm of z.landmarks) {
@@ -1085,9 +1296,9 @@
     ctx.restore();
   }
 
-  function drawMushroom(seed) {
+  function drawMushroom(seed, red) {
     const scale = 0.85 + seed * 0.4;
-    const capColor = seed > 0.5 ? '#ff8aa0' : '#ffb454';
+    const capColor = red ? '#e5433f' : (seed > 0.5 ? '#ff8aa0' : '#ffb454');
     ctx.save();
     ctx.scale(scale, scale);
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
@@ -1105,7 +1316,228 @@
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(3, -8, 1.3, 0, Math.PI * 2); ctx.fill();
+    if (red) {
+      ctx.beginPath(); ctx.arc(0, -3, 1.3, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
+  }
+
+  // 로드맵 5 작업 F-1/G: 새 장식 오브젝트들 — 전부 decorations 배열의 type으로 구분되고
+  // 기존 solids 렌더/정렬/가림 파이프라인(s.d 디스패치)을 그대로 탄다.
+  function drawBush(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.1 + d.sway) * 0.06;
+    const leaf = d.tone > 0.5 ? '#4d9a63' : '#438a57';
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.beginPath(); ctx.ellipse(0, 9, 15, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.fillStyle = leaf;
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = 1;
+    for (const [ox, oy, r] of [[-6, 2, 9], [6, 2, 9], [0, -5, 10], [0, 5, 8]]) {
+      ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.arc(-3, -8, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFlower(d) {
+    const petalColors = ['#ffe066', '#ff9f4a', '#ffffff'];
+    const idx = d.tone < 0.34 ? 0 : d.tone < 0.67 ? 1 : 2;
+    const color = petalColors[idx];
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, 2, 4, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a7d52';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -3); ctx.stroke();
+    ctx.fillStyle = color;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + d.seed * 2;
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * 2.6, -3 + Math.sin(a) * 2.6, 2, 1.3, a, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#e8b34a';
+    ctx.beginPath(); ctx.arc(0, -3, 1.4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawReed(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.4 + d.sway) * 0.12;
+    ctx.strokeStyle = '#6f9c4a';
+    ctx.lineWidth = 1.6;
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.beginPath(); ctx.moveTo(0, 4); ctx.quadraticCurveTo(2, -10, 1, -22); ctx.stroke();
+    ctx.fillStyle = '#8a5a3a';
+    ctx.beginPath(); ctx.ellipse(1, -23, 1.6, 4, 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFallenStar(d, t) {
+    const tw = reduceMotion ? 1 : 0.75 + Math.sin(t * 2.2 + d.phase) * 0.25;
+    // 바닥에 떨어져 박힌 별 — 은은한 광륜 + 위로 뻗는 빛기둥 + 반짝임
+    const glow = ctx.createRadialGradient(0, 4, 2, 0, 4, 30);
+    glow.addColorStop(0, `rgba(255,244,200,${0.55 * tw})`);
+    glow.addColorStop(1, 'rgba(255,244,200,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(0, 4, 30, 12, 0, 0, Math.PI * 2); ctx.fill();
+    if (!reduceMotion) {
+      const beam = ctx.createLinearGradient(0, 2, 0, -70);
+      beam.addColorStop(0, `rgba(255,250,220,${0.35 * tw})`);
+      beam.addColorStop(1, 'rgba(255,250,220,0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(-6, 2); ctx.lineTo(6, 2); ctx.lineTo(2, -70); ctx.lineTo(-2, -70); ctx.closePath();
+      ctx.fill();
+    }
+    ctx.save();
+    ctx.rotate(t * 0.6 + d.phase);
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * tw})`;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const a2 = a + Math.PI / 5;
+      ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9 + 4);
+      ctx.lineTo(Math.cos(a2) * 3.6, Math.sin(a2) * 3.6 + 4);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    if (!reduceMotion) {
+      ctx.fillStyle = `rgba(255,255,255,${0.8 * tw})`;
+      for (let i = 0; i < 3; i++) {
+        const a = t * 1.3 + d.phase + i * 2.1;
+        const r = 14 + Math.sin(t * 2 + i) * 4;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * r, 4 + Math.sin(a) * r * 0.4, 1.3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  function drawCow(d, t) {
+    const bob = reduceMotion ? 0 : Math.sin(t * 1.5 + d.phase) * 1.2;
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 13, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(0, bob);
+    ctx.fillStyle = '#f5efe6';
+    ctx.strokeStyle = '#6b5a4a';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(0, 4, 19, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    for (const [ox, oy, r] of [[-8, 0, 5], [6, 6, 4]]) {
+      ctx.beginPath(); ctx.ellipse(ox, oy, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#f5efe6';
+    ctx.strokeStyle = '#6b5a4a';
+    ctx.beginPath(); ctx.ellipse(20, -2, 8, 6.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    ctx.beginPath(); ctx.arc(24, -3, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9847a';
+    ctx.beginPath(); ctx.ellipse(26, 1, 2.6, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHay(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d8b45c';
+    ctx.strokeStyle = '#a4813a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,100,40,0.5)';
+    ctx.lineWidth = 0.8;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(-11, i * 3); ctx.lineTo(11, i * 3 + 2); ctx.stroke(); }
+  }
+
+  function drawTrough(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 6, 17, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6a48';
+    ctx.strokeStyle = '#5a4530';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-16, -6, 32, 12, 3); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-16, -6, 32, 12); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#7fb4d8';
+    ctx.beginPath(); ctx.ellipse(0, -3, 12, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawFarmRow(d) {
+    const len = d.len || 130;
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.beginPath(); ctx.ellipse(0, 4, len / 2 + 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7a5a3a';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-len / 2, -4, len, 10, 4); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-len / 2, -4, len, 10); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#5a9a52';
+    const sprouts = Math.round(len / 16);
+    for (let i = 0; i < sprouts; i++) {
+      const sx = -len / 2 + (i + 0.5) * (len / sprouts);
+      const jitter = ((d.seed * 97 + i * 13.7) % 1) * 3 - 1.5;
+      ctx.beginPath(); ctx.ellipse(sx, -2 + jitter, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawCart(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 14, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.rect(-20, -6, 40, 16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#6b4a2a';
+    ctx.beginPath(); ctx.arc(-13, 12, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(13, 12, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d8b45c';
+    ctx.strokeStyle = 'rgba(140,100,40,0.5)';
+    ctx.beginPath(); ctx.rect(-17, -14, 34, 9); ctx.fill();
+    for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 5, -14); ctx.lineTo(i * 5 - 2, -6); ctx.stroke(); }
+  }
+
+  function drawScarecrow(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 0.9 + d.phase) * 0.06;
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 20, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(0, -18); ctx.stroke();
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.beginPath(); ctx.moveTo(-16, -8); ctx.lineTo(16, -8); ctx.stroke();
+    ctx.fillStyle = '#c79764';
+    ctx.beginPath(); ctx.rect(-9, -8, 18, 22); ctx.fill();
+    ctx.fillStyle = '#8a6a4a';
+    ctx.beginPath(); ctx.rect(-11, -8, 22, 5); ctx.fill();
+    ctx.fillStyle = '#e7c88f';
+    ctx.beginPath(); ctx.arc(0, -16, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#a4813a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-7, -20); ctx.lineTo(7, -20); ctx.lineTo(9, -16); ctx.lineTo(-9, -16); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#5a3a2a';
+    ctx.beginPath(); ctx.arc(-2.5, -16, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2.5, -16, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawClothesline(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.1 + d.phase) * 3;
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-26, 20); ctx.lineTo(-26, -22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(26, 20); ctx.lineTo(26, -22); ctx.stroke();
+    ctx.strokeStyle = '#9a8a7a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-26, -22); ctx.quadraticCurveTo(0, -14, 26, -22); ctx.stroke();
+    const cloth = ['#e8dcc8', '#c98a6a', '#7fa8c9'];
+    for (let i = 0; i < 3; i++) {
+      const cx = -17 + i * 17;
+      const cy0 = -22 + (cx / 26) * (cx / 26) * 8;
+      ctx.save();
+      ctx.translate(cx, cy0);
+      ctx.rotate(sway * 0.02);
+      ctx.fillStyle = cloth[i];
+      ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.lineTo(4, 14); ctx.lineTo(-4, 14); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
   }
 
   function drawFence(angle) {
@@ -1159,6 +1591,22 @@
     }
   }
 
+  // 로드맵 5 작업 F-2: "여러 겹의 비늘처럼" 겹쳐지는 나무 캐노피 — 잎을 낱장으로 그리는
+  // 대신, 톱니(스캘럽) 진 원형 덩어리를 겹으로 쌓아 저렴하게 근사한다. lobes개의 돌기가
+  // 바깥/안쪽 반지름을 오가며 스캘럽 윤곽을 만든다.
+  function drawLeafLayer(cy, R, lobes, fillColor) {
+    ctx.fillStyle = fillColor;
+    ctx.beginPath();
+    for (let i = 0; i < lobes * 2; i++) {
+      const a = (i / (lobes * 2)) * Math.PI * 2;
+      const r = (i % 2 === 0) ? R : R * 0.82;
+      const x = Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.92;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
   function drawTree(o, t) {
     const sway = reduceMotion ? 0 : Math.sin(t * 1.2 + o.sway) * 0.05;
     const R = o.radius;
@@ -1168,25 +1616,29 @@
     ctx.strokeStyle = '#7a5230';
     ctx.lineWidth = Math.max(1, R * 0.05);
     ctx.beginPath();
-    if (ctx.roundRect) { ctx.roundRect(-R * 0.14, -R * 0.1, R * 0.28, R * 0.75, R * 0.06); }
-    else { ctx.rect(-R * 0.14, -R * 0.1, R * 0.28, R * 0.75); }
+    // 로드맵 5 작업 F-2: 기둥 길이 1.4배(밑동이 눈에 보이게) — 위쪽은 그대로 캐노피에 가려짐
+    const trunkH = R * 0.75 * 1.4;
+    if (ctx.roundRect) { ctx.roundRect(-R * 0.14, -R * 0.1, R * 0.28, trunkH, R * 0.06); }
+    else { ctx.rect(-R * 0.14, -R * 0.1, R * 0.28, trunkH); }
     ctx.fill(); ctx.stroke();
     ctx.save();
     ctx.translate(0, -R * 0.5);
     ctx.rotate(sway);
-    const leaf = o.tone > 0.5 ? '#5aba7c' : '#4fa066';
-    const leafDark = o.tone > 0.5 ? '#3f8f5c' : '#3a7d52';
+    // 로드맵 5 작업 F-2: 새 잎 색(더 짙은 상록수 톤) — 층마다 두 색을 번갈아 4~5겹 쌓는다
+    const leafA = '#4aa86b', leafB = '#3d8f59';
     ctx.strokeStyle = '#2d5f3f';
-    ctx.lineWidth = Math.max(1, R * 0.045);
+    ctx.lineWidth = Math.max(1, R * 0.04);
     ctx.lineJoin = 'round';
-    // 층진 뭉툭한 수관 — 아래(넓게)→가운데→위(좁게) 세 겹, 각 겹에 외곽선
-    ctx.fillStyle = leafDark;
-    ctx.beginPath(); ctx.arc(0, R * 0.22, R * 0.92, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = leaf;
-    ctx.beginPath(); ctx.arc(-R * 0.08, -R * 0.1, R * 0.78, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(R * 0.1, -R * 0.55, R * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.24)';
-    ctx.beginPath(); ctx.arc(-R * 0.28, -R * 0.55, R * 0.3, 0, Math.PI * 2); ctx.fill();
+    const layers = o.tone > 0.5 ? 5 : 4;
+    for (let i = 0; i < layers; i++) {
+      const frac = i / (layers - 1); // 0(아래, 넓게) → 1(위, 좁게)
+      const layerR = R * (1.0 - frac * 0.52);
+      const layerY = R * (0.3 - frac * 0.95);
+      const color = i % 2 === 0 ? leafA : leafB;
+      drawLeafLayer(layerY, layerR, 6, color);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.arc(-R * 0.26, -R * 0.5, R * 0.26, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -1507,6 +1959,22 @@
     crystal: { w: 46, upH: 118, downH: 20 },
     cave:    { w: 58, upH: 96,  downH: 14 },
   };
+  // 로드맵 5 작업 E/F/G: decorations 타입별 가림 범위 — 기본값(버섯 크기)에서 벗어나는
+  // 것만 여기 적는다. 장식이라 낮은 것들(꽃/농경지 이랑/갈대)은 null로 둬 가림 판정에서 제외.
+  const D_REACH = {
+    star:  { w: 20, upH: 60, downH: 6 },
+    bush:  { w: 22, upH: 24, downH: 10 },
+    flower: null,
+    reed:  { w: 6, upH: 20, downH: 4 },
+    cow:   { w: 34, upH: 36, downH: 14 },
+    hay:   { w: 16, upH: 14, downH: 8 },
+    trough: { w: 20, upH: 12, downH: 8 },
+    farmRow: null,
+    cart:  { w: 30, upH: 26, downH: 12 },
+    scarecrow: { w: 20, upH: 40, downH: 10 },
+    clothesline: { w: 26, upH: 30, downH: 8 },
+    fence: null,
+  };
   function objectReach(s) {
     if (s.o) {
       const r = s.o.radius;
@@ -1517,7 +1985,11 @@
     if (s.lm) return LM_REACH[s.lm.id] || { w: 50, upH: 90, downH: 20 };
     if (s.portal) return { w: 34, upH: 100, downH: 12 };
     if (s.sign) return { w: 32, upH: 44, downH: 16 };
-    if (s.d) return { w: 13, upH: 16, downH: 8 };
+    if (s.d) {
+      const type = s.d.type || 'mushroom';
+      if (type in D_REACH) return D_REACH[type];
+      return { w: 13, upH: 16, downH: 8 };
+    }
     return null; // spring, fence — 플레이어를 가릴 만큼 높지 않음
   }
 
@@ -2304,7 +2776,23 @@
       ctx.scale(s.p.scale, s.p.scale);
       ctx.globalAlpha = Math.min(1, s.p.scale / 0.22);
       if (s.o) { s.o.type === 'tree' ? drawTree(s.o, t) : drawStone(s.o); }
-      else if (s.d) { drawMushroom(s.d.seed); }
+      else if (s.d) {
+        switch (s.d.type) {
+          case 'bush': drawBush(s.d, t); break;
+          case 'flower': drawFlower(s.d); break;
+          case 'reed': drawReed(s.d, t); break;
+          case 'star': drawFallenStar(s.d, t); break;
+          case 'cow': drawCow(s.d, t); break;
+          case 'hay': drawHay(s.d); break;
+          case 'trough': drawTrough(s.d); break;
+          case 'farmRow': drawFarmRow(s.d); break;
+          case 'cart': drawCart(s.d); break;
+          case 'scarecrow': drawScarecrow(s.d, t); break;
+          case 'clothesline': drawClothesline(s.d, t); break;
+          case 'fence': drawFence(s.d.angle || 0); break;
+          default: drawMushroom(s.d.seed, s.d.red);
+        }
+      }
       else if (s.sign) { drawSignpost(); }
       else if (s.f) { drawFence(s.f.angle); }
       else if (s.spring) { drawSpring(s.spring); }
