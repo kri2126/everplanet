@@ -103,7 +103,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프·대화 <b>Z</b>공격 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단)·대화 <b>Z</b>공격 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도</div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv" width="150" height="150"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
@@ -140,6 +140,8 @@ const WALK = 4.5;             // 걷기 속도 /s
 const TURN = 10;              // 캐릭터 회전 속도 rad/s
 const G = 32;                 // 중력 (법선 반대 방향)
 const JUMP_V = 8.8;           // 점프 초속 → 최고 1.2, 체공 약 0.55s
+const JUMP2_V = 8.2;          // 2단 점프 초속 (공중에서 한 번 더)
+const COYOTE = 0.12, JUMP_BUF = 0.12;   // 발판을 벗어난 직후·착지 직전 입력도 받아 준다
 // 카메라는 회전하지 않는다. 항상 북쪽을 보며 위 대각선(약 42°)에서 내려다본다.
 // 캐릭터가 화면 세로의 1/7 크기로 작게 보이고, 빌보드 그림이 늘 같은 방향을 향한다.
 const CAM_BACK = 15.0, CAM_UP = 12.6, CAM_LOOK_UP = 0.8, CAM_FOV = 46;   // 약 40°, 위쪽에 하늘이 살짝
@@ -911,6 +913,7 @@ const player = {
   pos: dirFromLonLat(START[0], START[1]).multiplyScalar(R),
   fwd: new THREE.Vector3(0, 1, 0),             // 북쪽
   z: 0, vz: 0, grounded: true, moving: false, walkT: 0, inShallow: false,
+  jumps: 0, coyoteT: 0, jumpBufT: 0,           // 2단 점프: 땅에서 1회 + 공중 1회
   safe: dirFromLonLat(START[0], START[1]), safeFwd: new THREE.Vector3(0, 1, 0),
   safeNext: dirFromLonLat(START[0], START[1]), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
   mesh: makeBillboard(charTex, 1.25, 1.7), view: 0, frame: 0,
@@ -944,9 +947,16 @@ function tryMove(dir, dist) {
   if (Math.abs(r) > 0.2 && attempt(_try.copy(_right).multiplyScalar(Math.sign(r)))) return true;
   return false;
 }
+// 점프: 땅(또는 코요테 시간 안)에서 1단, 공중에서 2단. 착지 직전 입력은 잠시 저장했다가 닿는 순간 뛴다.
+function tryJump() {
+  if (player.grounded || player.coyoteT > 0) { player.vz = JUMP_V; player.grounded = false; player.coyoteT = 0; player.jumps = 1; return true; }
+  if (player.jumps < 2) { player.vz = JUMP2_V; player.jumps = 2; puff(); return true; }
+  player.jumpBufT = JUMP_BUF;
+  return false;
+}
 function respawn() {
   const d = player.safe;
-  player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
+  player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
   player.fwd.copy(player.safeFwd); tangentize(player.fwd, d); tangentize(cam.fwd, d);
   camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
 }
@@ -1568,6 +1578,11 @@ function updateCombat(dt) {
 // 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
 const STARS = [[7.2, -4.6], [10, 40]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));
 const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
+// 2단 점프 발치의 흰 고리
+const puffTex = spriteTex(96, 48, (g, W, H) => { g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 6; g.beginPath(); g.ellipse(W / 2, H / 2, W * 0.42, H * 0.34, 0, 0, Math.PI * 2); g.stroke(); });
+const puffMesh = makeBillboard(puffTex, 1.4, 0.7, { shadow: false }); puffMesh.material.transparent = true; puffMesh.material.alphaTest = 0.1; puffMesh.visible = false; scene.add(puffMesh); let puffT = 0;
+function puff() { puffT = 0.3; puffMesh.visible = true; puffMesh.position.copy(player.pos).addScaledVector(_up, 0.05); orientBillboard(puffMesh, _up); puffMesh.scale.set(1, 1, 1); }
+function updatePuff(dt) { if (puffT <= 0) return; puffT -= dt; const k = 1 - puffT / 0.3; puffMesh.scale.set(1 + k * 0.8, 1 + k * 0.8, 1); puffMesh.material.opacity = 1 - k; if (puffT <= 0) puffMesh.visible = false; }
 function updateStars(dt) {
   for (const st of STARS) {
     if (st.found) continue;
@@ -1659,7 +1674,7 @@ addEventListener('keydown', (e) => {
   if (dialog.open) { if (k === ' ') { e.preventDefault(); advanceDialog(); } return; }
   if (invOpen) return;
   keys.add(k);
-  if (k === ' ') { e.preventDefault(); if (nearNpc) openDialog(nearNpc); else if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } }
+  if (k === ' ') { e.preventDefault(); if (nearNpc) openDialog(nearNpc); else tryJump(); }
   if (k === 'z') attack();
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
@@ -1721,6 +1736,9 @@ function step(dt) {
   if (player.z <= ground) { player.z = ground; player.vz = 0; player.grounded = true; }
   else if (player.grounded && player.vz <= 0 && player.z - ground < 0.5) { player.z = ground; player.vz = 0; }
   else if (player.z - ground > 0.05) player.grounded = false;
+  if (player.grounded) { player.jumps = 0; player.coyoteT = COYOTE; }        // 땅: 점프 횟수 리셋, 코요테 시간 충전
+  else player.coyoteT = Math.max(0, player.coyoteT - dt);                    // 공중: 코요테 시간 소모 (점프로 떠났으면 tryJump가 0으로 만듦)
+  if (player.jumpBufT > 0) { player.jumpBufT -= dt; if (player.grounded && !(cut.on || dialog.open || invOpen)) { player.jumpBufT = 0; tryJump(); } }
   player.pos.copy(_up).multiplyScalar(R + player.z);
   tangentize(player.fwd, _up);
   cam.fwd.set(0, 1, 0); tangentize(cam.fwd, _up);
@@ -1761,7 +1779,7 @@ function step(dt) {
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     for (const b of beams) b.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
-    updateSlimes(dt); updateCombat(dt); updateStars(dt);
+    updateSlimes(dt); updateCombat(dt); updateStars(dt); updatePuff(dt);
     updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
     nearNpc = null; let best = 2.4;
     for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
@@ -2272,7 +2290,7 @@ if (DEBUG) {
     press(k, on) { on ? keys.add(k) : keys.delete(k); },
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
-    jump() { if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } },
+    jump() { return tryJump(); },
     NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
     nearNpc() { return nearNpc; },
   };
