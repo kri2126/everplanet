@@ -221,18 +221,40 @@ function withOutline(mesh, thickness = 0.025, colorHex) {
 }
 
 // ── 손으로 칠한 듯한 질감 (캔버스로 생성) ─────────────────────────────────────
-function makeTex(size, draw, repeat = 1) {
+// ── 외부 에셋 (web/assets/) ──────────────────────────────────────────────────
+// 캔버스로 그린 그림은 전부 이름을 달아 SPRITES에 등록한다. 시작할 때 assets/manifest.json을 읽어
+// 같은 이름의 PNG가 있으면 그 그림으로 바꿔 끼우고, 없으면 캔버스 그림을 그대로 쓴다.
+// 규격은 web/assets/README.md — 그림은 투명 PNG, 발 자리는 아래 가운데, 가로세로 비율은 표의 값.
+const SPRITES = {};
+const ASSET_DIR = 'assets/';
+function registerTex(name, tex, w, h, kind) { if (name) SPRITES[name] = { tex, w, h, kind }; return tex; }
+async function loadAssets() {
+  let manifest;
+  try { const r = await fetch(ASSET_DIR + 'manifest.json', { cache: 'no-cache' }); if (!r.ok) return; manifest = await r.json(); } catch (e) { return; }
+  const files = manifest.files || {};
+  const ver = manifest.version ? '?v=' + manifest.version : '';
+  let n = 0;
+  await Promise.all(Object.entries(files).map(([name, file]) => new Promise((res) => {
+    const s = SPRITES[name]; if (!s || !file) return res();
+    const img = new Image();
+    img.onload = () => { s.tex.image = img; s.tex.needsUpdate = true; s.loaded = file; n++; res(); };
+    img.onerror = () => res();
+    img.src = ASSET_DIR + file + ver;
+  })));
+  if (DEBUG) console.log('assets:', n, 'of', Object.keys(files).length, 'loaded');
+}
+function makeTex(size, draw, repeat = 1, name) {
   const cv = document.createElement('canvas'); cv.width = cv.height = size;
   draw(cv.getContext('2d'), size);
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  return t;
+  return registerTex(name, t, size, size, 'tile');
 }
 let texSeed = 3;
 const trnd = () => (texSeed = (texSeed * 1664525 + 1013904223) >>> 0) / 4294967296;
 // 풀밭: 밝은 바탕에 붓자국 같은 얼룩. 정점색(풀/모래/바위)에 곱해진다.
-const grassTex = makeTex(256, (g, S) => {
+const grassTex = makeTex(256, (g, S) => {   // 에셋 이름 tile_grass
   g.fillStyle = '#f4f4f4'; g.fillRect(0, 0, S, S);
   for (let i = 0; i < 260; i++) {
     const x = trnd() * S, y = trnd() * S, w = 10 + trnd() * 30, h = 4 + trnd() * 9, a = trnd() * Math.PI;
@@ -243,7 +265,7 @@ const grassTex = makeTex(256, (g, S) => {
       g.save(); g.translate(x + ox, y + oy); g.rotate(a); g.beginPath(); g.ellipse(0, 0, w, h, 0, 0, Math.PI * 2); g.fill(); g.restore();
     }
   }
-});
+}, 1, 'tile_grass');
 // 바위: 가로 줄무늬 (절벽면·돌계단)
 const rockTex = makeTex(256, (g, S) => {
   g.fillStyle = '#efe4cf'; g.fillRect(0, 0, S, S);
@@ -257,7 +279,7 @@ const rockTex = makeTex(256, (g, S) => {
     g.fillStyle = `rgba(255,255,255,${0.15 + trnd() * 0.2})`;
     for (const ox of [0, S, -S]) for (const oy of [0, S, -S]) { g.beginPath(); g.ellipse(x + ox, y + oy, w, h, 0, 0, Math.PI * 2); g.fill(); }
   }
-});
+}, 1, 'tile_rock');
 
 // ── 값 노이즈 (지면 얼룩용) ──────────────────────────────────────────────────
 function hash3(x, y, z) {
@@ -722,14 +744,14 @@ scene.add(sun); scene.add(sun.target);
 // 살짝 기울여(원통 빌보드 + 기울기) 한 번 세워두면 된다. 매 프레임 회전 계산이 없다.
 const SPRITE_TILT = 0.38;   // 카메라 내려보는 각(라디안)의 몇 %만큼 판을 눕힐지
 
-function spriteTex(w, h, draw) {
+function spriteTex(w, h, draw, name) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const g = cv.getContext('2d');
   g.lineJoin = 'round'; g.lineCap = 'round';
   draw(g, w, h);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
-  return t;
+  return registerTex(name, t, w, h, 'sprite');
 }
 // 색 채우고 어두운 같은 계열 선으로 테두리
 function blob(g, x, y, rx, ry, fill, line, lw = 3) {
@@ -859,15 +881,15 @@ function drawCharFrame(g, ox, W, H, view, frame) {
 const CHAR_FW = 96, CHAR_FH = 128, CHAR_VIEWS = ['back', 'front', 'side'];
 const charTex = spriteTex(CHAR_FW * 6, CHAR_FH, (g, W, H) => {
   CHAR_VIEWS.forEach((v, vi) => { for (let f = 0; f < 2; f++) drawCharFrame(g, (vi * 2 + f) * CHAR_FW, CHAR_FW, CHAR_FH, v, f); });
-});
+}, 'char_sheet');
 charTex.repeat.set(1 / 6, 1);
 
-const treeTex = [0, 1, 2].map(v => spriteTex(192, 256, (g, W, H) => drawTreeSprite(g, W, H, v)));
-const bushTex = spriteTex(128, 96, (g, W, H) => drawBushSprite(g, W, H));
-const reedTex = spriteTex(128, 128, (g, W, H) => drawReedSprite(g, W, H));
-const stoneTex = spriteTex(128, 96, (g, W, H) => drawStoneSprite(g, W, H));
-const flowerTex = { yellow: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#ffd93b')), white: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#fff6f0')) };
-const mushTex = { red: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#e84a4a')), blue: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#4aa6f5')) };
+const treeTex = [0, 1, 2].map(v => spriteTex(192, 256, (g, W, H) => drawTreeSprite(g, W, H, v), 'tree_' + v));
+const bushTex = spriteTex(128, 96, (g, W, H) => drawBushSprite(g, W, H), 'bush');
+const reedTex = spriteTex(128, 128, (g, W, H) => drawReedSprite(g, W, H), 'reed');
+const stoneTex = spriteTex(128, 96, (g, W, H) => drawStoneSprite(g, W, H), 'stone');
+const flowerTex = { yellow: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#ffd93b'), 'flower_yellow'), white: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#fff6f0'), 'flower_white') };
+const mushTex = { red: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#e84a4a'), 'mushroom_red'), blue: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#4aa6f5'), 'mushroom_blue') };
 
 // 판 하나: 밑변이 발 자리. 그림자도 그림 모양대로 떨어지게 depth 재질에 alphaTest.
 function makeBillboard(tex, w, h, opts = {}) {
@@ -1151,19 +1173,19 @@ function drawChevronTex(g, W, H) {
   g.fillStyle = 'rgba(255,215,60,0.85)'; g.strokeStyle = 'rgba(160,110,10,0.7)'; g.lineWidth = 4;
   g.beginPath(); g.moveTo(W * 0.5, H * 0.08); g.lineTo(W * 0.92, H * 0.6); g.lineTo(W * 0.72, H * 0.6); g.lineTo(W * 0.5, H * 0.34); g.lineTo(W * 0.28, H * 0.6); g.lineTo(W * 0.08, H * 0.6); g.closePath(); g.fill(); g.stroke();
 }
-const airshipTex = spriteTex(256, 192, drawAirshipSprite);
-const tentTex = spriteTex(192, 192, drawTentSprite);
-const cauldronTex = spriteTex(96, 96, drawCauldronSprite);
-const crateTex = spriteTex(80, 80, drawCrateSprite);
-const archTex = spriteTex(256, 224, drawArchSprite);
-const waterfallTex = spriteTex(96, 256, drawWaterfallSprite); waterfallTex.wrapT = THREE.RepeatWrapping;
-const foamTex = spriteTex(192, 64, drawFoamSprite);
-const starTex = spriteTex(128, 128, drawStarSprite);
-const stoneTallTex = spriteTex(96, 160, drawStandingStoneSprite);
-const signTex = spriteTex(96, 128, drawSignSprite);
-const lanternTex = spriteTex(96, 128, drawLanternSprite);
-const fenceTex = spriteTex(48, 96, drawFencePostSprite);
-const chevronTex = spriteTex(96, 96, drawChevronTex);
+const airshipTex = spriteTex(256, 192, drawAirshipSprite, 'airship');
+const tentTex = spriteTex(192, 192, drawTentSprite, 'tent');
+const cauldronTex = spriteTex(96, 96, drawCauldronSprite, 'cauldron');
+const crateTex = spriteTex(80, 80, drawCrateSprite, 'crate');
+const archTex = spriteTex(256, 224, drawArchSprite, 'arch');
+const waterfallTex = spriteTex(96, 256, drawWaterfallSprite, 'waterfall'); waterfallTex.wrapT = THREE.RepeatWrapping;
+const foamTex = spriteTex(192, 64, drawFoamSprite, 'foam');
+const starTex = spriteTex(128, 128, drawStarSprite, 'star');
+const stoneTallTex = spriteTex(96, 160, drawStandingStoneSprite, 'standing_stone');
+const signTex = spriteTex(96, 128, drawSignSprite, 'sign');
+const lanternTex = spriteTex(96, 128, drawLanternSprite, 'lantern');
+const fenceTex = spriteTex(48, 96, drawFencePostSprite, 'fence');
+const chevronTex = spriteTex(96, 96, drawChevronTex, 'chevron');
 
 // 소품 배치 (좌표 직접, §3 표 기준)
 const props = [];
@@ -1384,14 +1406,14 @@ function drawSparkleSprite(g, W, H) {
   }
 }
 const npcTex = {
-  sailor: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'sailor')),
-  keeper: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'keeper')),
-  knight: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'knight')),
+  sailor: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'sailor'), 'npc_sailor'),
+  keeper: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'keeper'), 'npc_keeper'),
+  knight: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'knight'), 'npc_knight'),
 };
-const slimeTex = [0, 1].map(f => spriteTex(96, 80, (g, W, H) => drawSlimeSprite(g, W, H, f)));
-const arrowTex = spriteTex(64, 96, drawArrowSprite);
-const slashTex = spriteTex(128, 96, drawSlashSprite);
-const sparkleTex = spriteTex(96, 96, drawSparkleSprite);
+const slimeTex = [0, 1].map(f => spriteTex(96, 80, (g, W, H) => drawSlimeSprite(g, W, H, f), 'slime_' + f));
+const arrowTex = spriteTex(64, 96, drawArrowSprite, 'arrow');
+const slashTex = spriteTex(128, 96, drawSlashSprite, 'slash');
+const sparkleTex = spriteTex(96, 96, drawSparkleSprite, 'sparkle');
 
 // 이름표·툴팁·데미지 숫자: HTML 라벨을 카메라 투영으로 따라 붙인다
 const labelsEl = document.getElementById('labels');
@@ -1579,7 +1601,7 @@ function updateCombat(dt) {
 const STARS = [[7.2, -4.6], [10, 40]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));
 const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
 // 2단 점프 발치의 흰 고리
-const puffTex = spriteTex(96, 48, (g, W, H) => { g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 6; g.beginPath(); g.ellipse(W / 2, H / 2, W * 0.42, H * 0.34, 0, 0, Math.PI * 2); g.stroke(); });
+const puffTex = spriteTex(96, 48, (g, W, H) => { g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 6; g.beginPath(); g.ellipse(W / 2, H / 2, W * 0.42, H * 0.34, 0, 0, Math.PI * 2); g.stroke(); }, 'puff');
 const puffMesh = makeBillboard(puffTex, 1.4, 0.7, { shadow: false }); puffMesh.material.transparent = true; puffMesh.material.alphaTest = 0.1; puffMesh.visible = false; scene.add(puffMesh); let puffT = 0;
 function puff() { puffT = 0.3; puffMesh.visible = true; puffMesh.position.copy(player.pos).addScaledVector(_up, 0.05); orientBillboard(puffMesh, _up); puffMesh.scale.set(1, 1, 1); }
 function updatePuff(dt) { if (puffT <= 0) return; puffT -= dt; const k = 1 - puffT / 0.3; puffMesh.scale.set(1 + k * 0.8, 1 + k * 0.8, 1); puffMesh.material.opacity = 1 - k; if (puffT <= 0) puffMesh.visible = false; }
@@ -1832,6 +1854,9 @@ addEventListener('resize', resize); resize();
 
 const fpsEl = document.getElementById('fps');
 if (DEBUG) fpsEl.style.display = 'block';
+
+// 외부 PNG 에셋이 있으면 바꿔 끼운다 (없으면 캔버스 그림 그대로)
+loadAssets();
 
 // ── 지도 ─────────────────────────────────────────────────────────────────────
 // 미니맵과 M 지도는 플레이어 위 직교 카메라로 실제 지형을 내려다본 렌더(북쪽 위).
@@ -2293,6 +2318,10 @@ if (DEBUG) {
     jump() { return tryJump(); },
     NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
     nearNpc() { return nearNpc; },
+    SPRITES,
+    exportSprites() {   // 등록된 캔버스 그림을 PNG dataURL로 (에셋 예시 뽑기용)
+      const out = {}; for (const [k, s] of Object.entries(SPRITES)) { const im = s.tex.image; out[k] = { w: s.w, h: s.h, kind: s.kind, png: im.toDataURL ? im.toDataURL('image/png') : null }; } return out;
+    },
   };
 }
 </script>
