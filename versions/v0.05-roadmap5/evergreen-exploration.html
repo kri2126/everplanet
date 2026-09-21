@@ -1,0 +1,3126 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에버그린 탐사</title>
+<style>
+  :root{
+    --bg-page:#fff2e2;
+    --panel:#fffaf2;
+    --panel-2:#fff4e6;
+    --line:#f0d9b8;
+    --text-primary:#5b4632;
+    --text-muted:#a8916f;
+    --accent:#ff8aa0;
+    --accent-soft:rgba(255,138,160,.16);
+    --accent-line:rgba(255,138,160,.4);
+    --mint:#4fb787;
+    --mono-num:#3f8f66;
+    /* 그림책풍 팔레트 — 전경도(월드맵)에서 이미 쓴 양피지·나무 톤과 통일 */
+    --parchment-1:#fdf4de;
+    --parchment-2:#f2e0bb;
+    --wood-1:#e8c48b;
+    --wood-2:#c99354;
+    --wood-line:#c9a877;
+    --wood-dark:#a97a4a;
+    --wood-text:#3a2412;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg-page);
+    color:var(--text-primary);
+    font-family:'Gowun Dodum','Apple SD Gothic Neo',sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:20px 16px 28px;
+    gap:14px;
+  }
+
+  .frame{
+    width:100%;
+    max-width:980px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:14px 20px;
+    background:linear-gradient(180deg, var(--parchment-1) 0%, var(--parchment-2) 100%);
+    border:2px solid var(--wood-line);
+    border-radius:10px 22px 14px 26px;
+    box-shadow:0 2px 0 rgba(255,255,255,.55) inset, 0 10px 22px -16px rgba(120,90,60,.55);
+    position:relative;
+  }
+
+  header.top::before{
+    content:"";
+    position:absolute;
+    inset:4px;
+    border:1px dashed rgba(169,122,74,.4);
+    border-radius:7px 18px 11px 22px;
+    pointer-events:none;
+  }
+
+  .title-block{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:0;
+  }
+
+  .planet-glyph{
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    flex:none;
+    background:
+      radial-gradient(circle at 32% 28%, #d9ffe4 0%, #9fe0a6 46%, #3f8f66 100%);
+    box-shadow:0 4px 0 rgba(63,143,102,.25);
+  }
+
+  h1{
+    font-family:'Black Han Sans','Gowun Dodum',sans-serif;
+    font-weight:400;
+    font-size:1.5rem;
+    letter-spacing:.01em;
+    margin:0;
+    line-height:1.1;
+    text-wrap:balance;
+  }
+
+  .subtitle{
+    margin:2px 0 0;
+    font-size:.8rem;
+    color:var(--text-muted);
+  }
+
+  .phase-chip{
+    flex:none;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.68rem;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:#c65a75;
+    background:var(--accent-soft);
+    border:1px dashed var(--accent-line);
+    border-radius:4px 11px 4px 11px;
+    padding:6px 12px;
+    white-space:nowrap;
+    transform:rotate(-1.4deg);
+    box-shadow:0 2px 4px -1px rgba(120,90,60,.25);
+  }
+
+  .stage{
+    position:relative;
+    width:100%;
+    aspect-ratio:16/10;
+    border-radius:20px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,#5fb6ea 0%,#bfe3ff 60%,#eaf6ff 100%);
+    box-shadow:0 24px 50px -28px rgba(120,90,60,.45);
+    touch-action:none;
+  }
+
+  canvas{
+    display:block;
+    width:100%;
+    height:100%;
+  }
+
+  .vignette{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    box-shadow:inset 0 0 90px 20px rgba(255,255,255,.10), inset 0 0 130px 46px rgba(40,50,30,.14);
+  }
+
+  .hint{
+    position:absolute;
+    top:14px;
+    left:14px;
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    max-width:calc(100% - 28px);
+  }
+
+  kbd{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.68rem;
+    font-weight:600;
+    background:linear-gradient(180deg, var(--wood-1), var(--wood-2));
+    border:1px solid var(--wood-dark);
+    color:var(--wood-text);
+    padding:4px 9px;
+    border-radius:5px 8px 5px 8px;
+    box-shadow:0 2px 0 rgba(120,80,40,.4), 0 3px 7px -2px rgba(60,40,20,.4);
+    display:inline-block;
+  }
+  .hint kbd:nth-child(odd){transform:rotate(-2deg);}
+  .hint kbd:nth-child(even){transform:rotate(1.6deg);}
+
+  .joystick-zone{
+    position:absolute;
+    left:22px;
+    bottom:22px;
+    width:104px;
+    height:104px;
+    border-radius:50%;
+    background:rgba(255,250,242,.45);
+    border:1px solid rgba(91,70,50,.22);
+    touch-action:none;
+  }
+
+  .joystick-zone[hidden]{display:none!important;}
+
+  .joystick-stick{
+    position:absolute;
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 35% 30%, #ffd0da, var(--accent));
+    box-shadow:0 4px 10px rgba(198,90,117,.35);
+  }
+
+  .jump-btn{
+    /* 조이스틱 바로 오른쪽, 같은 아래쪽 줄에 배치한다. 오른쪽 위에는 미니맵이 있어서
+       화면 비율이 짧은 기기(16:10 stage)에서는 오른쪽 어디든 미니맵과 겹치기 쉽지만,
+       조이스틱 옆(왼쪽 아래 묶음)은 항상 미니맵과 다른 좌우 영역이라 안전하다 */
+    position:absolute;
+    left:138px;
+    bottom:22px;
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff6da, var(--wood-2));
+    border:1px solid rgba(91,70,50,.3);
+    box-shadow:0 4px 10px rgba(120,80,40,.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'Gowun Dodum',sans-serif;
+    font-size:.72rem;
+    font-weight:700;
+    color:var(--wood-text);
+    touch-action:none;
+    user-select:none;
+  }
+  .jump-btn[hidden]{display:none!important;}
+  .jump-btn:active{background:radial-gradient(circle at 35% 30%, #ffe9b0, var(--wood-2));}
+
+  footer.hud{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:10px 20px;
+    background:linear-gradient(180deg, var(--wood-1) 0%, var(--wood-2) 100%);
+    border:2px solid var(--wood-dark);
+    border-radius:22px 10px 26px 14px;
+    font-family:'Gowun Dodum',sans-serif;
+    font-size:.78rem;
+    color:var(--wood-text);
+    box-shadow:0 2px 0 rgba(255,255,255,.2) inset, 0 10px 22px -16px rgba(90,60,30,.55);
+  }
+
+  .hud-field{display:flex;gap:6px;align-items:baseline;}
+  .hud-field b{
+    color:#5b3a1c;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    font-family:'JetBrains Mono',monospace;
+    background:rgba(255,250,242,.92);
+    padding:1px 7px;
+    border-radius:5px;
+    border:1px solid rgba(169,122,74,.5);
+  }
+
+  .legend{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    color:rgba(58,36,18,.8);
+    font-size:.72rem;
+  }
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .swatch{width:9px;height:9px;border-radius:3px;flex:none;box-shadow:0 0 0 1px rgba(58,36,18,.35);}
+
+  /* 터치 기기에서는 키보드 안내가 의미 없다 (조이스틱 + 미니맵 탭으로 안내) */
+  @media (pointer: coarse){
+    .hint{display:none;}
+  }
+
+  .toast{
+    position:absolute;
+    left:50%;
+    top:64px;
+    transform:translate(-50%,-6px) rotate(-1.2deg);
+    padding:9px 20px;
+    border-radius:3px 14px 3px 14px;
+    background:linear-gradient(180deg, var(--parchment-1), var(--parchment-2));
+    border:1px solid var(--wood-line);
+    color:var(--text-primary);
+    font-size:.82rem;
+    font-weight:600;
+    letter-spacing:.01em;
+    white-space:nowrap;
+    box-shadow:0 10px 24px -12px rgba(120,90,60,.5), 0 1px 0 rgba(255,255,255,.6) inset;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .28s ease, transform .28s ease;
+  }
+  .toast::before{
+    content:"";
+    position:absolute;
+    top:-5px;
+    left:50%;
+    transform:translateX(-50%);
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ffd0da, #c65a75);
+    box-shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0) rotate(-1.2deg);}
+  .toast.final{background:linear-gradient(180deg,#fff0e8,#ffe0e8);border-color:var(--accent);}
+
+  @media (max-width:600px){
+    h1{font-size:1.25rem;}
+    .phase-chip{display:none;}
+    .toast{font-size:.74rem;top:52px;padding:7px 14px;}
+    .legend{display:none;}
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<div class="frame">
+  <header class="top">
+    <div class="title-block">
+      <div class="planet-glyph" aria-hidden="true"></div>
+      <div>
+        <h1>에버그린 탐사</h1>
+        <p class="subtitle">에버플래닛 프로토타입 · 지도를 그리며 별내림 천문대를 탐험하고, 포탈로 다음 맵까지</p>
+      </div>
+    </div>
+    <span class="phase-chip">PHASE 3 · PORTAL (PROTO)</span>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="game"></canvas>
+    <div class="vignette"></div>
+    <div class="hint">
+      <kbd>W A S D</kbd><kbd>방향키</kbd><kbd>이동</kbd><kbd>Space</kbd><kbd>점프</kbd><kbd>M</kbd><kbd>지도</kbd><kbd>M M</kbd><kbd>전경도</kbd>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="joystick-zone" id="joyZone" hidden>
+      <div class="joystick-stick" id="joyStick"></div>
+    </div>
+    <div class="jump-btn" id="jumpBtn" hidden>점프</div>
+  </div>
+
+  <footer class="hud">
+    <div class="hud-field">구역 <b id="zoneLabel">초원</b></div>
+    <div class="hud-field">위치 <b id="posDir">출발점</b></div>
+    <div class="hud-field">탐험도 <b id="explorePct">0%</b></div>
+    <div class="hud-field">발견 <b id="foundLabel">-</b></div>
+    <div class="legend">
+      <span><i class="swatch" style="background:#ff8aa0"></i>플레이어</span>
+      <span><i class="swatch" style="background:#4fa066"></i>나무</span>
+      <span><i class="swatch" style="background:#b9aec2"></i>바위</span>
+      <span><i class="swatch" style="background:#c79bf0"></i>포탈</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const posDirEl = document.getElementById('posDir');
+  const explorePctEl = document.getElementById('explorePct');
+  const foundLabelEl = document.getElementById('foundLabel');
+  const zoneLabelEl = document.getElementById('zoneLabel');
+  const toastEl = document.getElementById('toast');
+  const joyZone = document.getElementById('joyZone');
+  const joyStick = document.getElementById('joyStick');
+  const jumpBtn = document.getElementById('jumpBtn');
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- 시드 고정 의사난수 ----------
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // 균등 분포로 원형 필드 안에 점 뿌리기 (구역별 rand()에 바인딩해서 만들어 쓴다)
+  function makeSamplePlanetPoint(rand) {
+    return function(minR, maxR) {
+      const r = Math.sqrt(rand()) * (maxR - minR) + minR;
+      const a = rand() * Math.PI * 2;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r };
+    };
+  }
+
+  // ---------- 작은 행성 투영 ----------
+  const PLANET_R = 520;
+  const HORIZON_D = PLANET_R * Math.PI / 2 * 0.985;
+  const PLAYER_RADIUS = 15;
+  const TILT = 0.62;
+
+  // ── 로드맵 5 작업 A: 높이와 점프 ─────────────────────────────────
+  // player.z는 "화면 연출용" 높이가 아니라 지형 기준 절대 높이다. 평지에서는
+  // groundHeightAt()과 항상 같고, 점프 중에는 그보다 높다. 이 값은 project()/
+  // projectTall()의 거리·지평선 계산에는 전혀 반영하지 않는다 — 구체 투영 수학은
+  // 그대로 두고, 화면에 그릴 때만 순수 스크린-Y 오프셋으로 얹는다(드로우 단계에서 처리).
+  const JUMP_V = 260;      // 점프 시작 수직 속도 (단위/초)
+  const GRAVITY = 900;     // 중력 가속도 (단위/초^2) — 최고 높이 약 37.6, 체공 시간 약 0.58초
+  const STEP_UP = 14;      // 점프 없이도 자연스럽게 올라설 수 있는 높이 차 (계단 한 칸)
+  const JUMP_CLEAR = 34;   // 점프로 넘을 수 있는 턱 높이의 상한 (작업 C 단구 설계 기준)
+
+  // ── 로드맵 5 작업 B: 물 ───────────────────────────────────────────
+  // 물도 plateaus와 같은 도형 목록에 음수 top으로 얹는다(§3). 도형마다
+  // blocked(깊은 물처럼 무조건 막힘)·speedMul(여울처럼 느려짐)을 더 둘 수 있고,
+  // 겹치는 도형이 있으면 "나중에 선언된 도형이 이긴다" 규칙으로 하나를 고른다
+  // (다리·돌계단이 그 아래 물/절벽보다 뒤에 선언되어 우선하는 식) — 최고 높이가
+  // 아니라 선언 순서로 고르는 이유는, 물처럼 top이 0보다 낮은 도형도 있어서
+  // "높이가 가장 큰 도형이 이긴다"로는 물이 항상 진다.
+  function terrainAt(zone, x, y) {
+    let result = { top: 0, blocked: false, speedMul: 1 };
+    for (const p of zone.plateaus) {
+      if (!shapeContains(p, x, y)) continue;
+      result = { top: shapeTopAt(p, x, y), blocked: !!p.blocked, speedMul: p.speedMul != null ? p.speedMul : 1 };
+    }
+    return result;
+  }
+
+  function groundHeightAt(zone, x, y) {
+    return terrainAt(zone, x, y).top;
+  }
+
+  function tryJump() {
+    const ground = groundHeightAt(currentZone, player.x, player.y);
+    if (player.z <= ground + 0.5 && player.vz <= 0) {
+      player.vz = JUMP_V;
+    }
+  }
+
+  function project(x, y) {
+    const relx = x - player.x, rely = y - player.y;
+    const d = Math.hypot(relx, rely);
+    if (d > HORIZON_D) return null;
+    const angle = Math.atan2(rely, relx);
+    const screenDist = PLANET_R * Math.sin(d / PLANET_R);
+    const scale = Math.max(0.001, Math.cos(d / PLANET_R));
+    return { sx: Math.cos(angle) * screenDist, sy: Math.sin(angle) * screenDist * TILT, scale, d };
+  }
+
+  const LM_MIN_SCALE = 0.32;
+  const LM_MAX_SINK = 0.65;
+  function projectTall(x, y, height) {
+    const relx = x - player.x, rely = y - player.y;
+    const d = Math.hypot(relx, rely);
+    const extra = height * 4;
+    const maxD = HORIZON_D + extra;
+    if (d > maxD) return null;
+    const angle = Math.atan2(rely, relx);
+    const dd = Math.min(d, HORIZON_D);
+    const screenDist = PLANET_R * Math.sin(dd / PLANET_R);
+    const scale = Math.max(LM_MIN_SCALE, Math.cos(dd / PLANET_R));
+    const raw = extra > 0 ? Math.max(0, d - HORIZON_D) / extra : 0;
+    const sink = Math.min(LM_MAX_SINK, Math.pow(raw, 1.3));
+    return {
+      sx: Math.cos(angle) * screenDist,
+      sy: Math.sin(angle) * screenDist * TILT,
+      scale, d, sink
+    };
+  }
+
+  function drawSinkClipped(height, sink, drawFn) {
+    if (sink > 0) {
+      const top = -height * 1.25, bottom = 16;
+      const visible = (1 - sink) * (bottom - top);
+      ctx.beginPath();
+      ctx.rect(-220, top, 440, Math.max(0, visible));
+      ctx.clip();
+      ctx.globalAlpha *= 1 - sink * 0.38;
+    }
+    drawFn();
+  }
+
+  const DISCOVER_R = 120;
+  const EXPLORE_R = 500;
+  const CELL = 50;
+  const FOG_SIZE = 600;
+
+  function withObjParticle(name) {
+    const code = name.charCodeAt(name.length - 1);
+    if (code < 0xAC00 || code > 0xD7A3) return name + '를';
+    return name + ((code - 0xAC00) % 28 === 0 ? '를' : '을');
+  }
+
+  // ── 지역 분화 (로드맵 4 작업 D) ──────────────────────────────────
+  // 씬을 통째로 나누는 게 아니라, 기존 makeZone()이 만든 오브젝트 하나하나에
+  // "어느 지역 소속인지"를 방위(각도)로 태깅하는 레이어. 기존 랜드마크 좌표·
+  // 포탈 로직은 전혀 건드리지 않는다 (1구역 = 에버그린, zone1에만 적용).
+  function bearingOf(x, y) {
+    let a = Math.atan2(x, -y) * 180 / Math.PI; // bearingLabel()과 동일 기준
+    if (a < 0) a += 360;
+    return a;
+  }
+
+  const AREAS = [
+    { id: 'temple',  name: '겸손한 사원',    from: 200, to: 260, treeRatio: 0.30, densityMul: 0.8, groundTint: '#a99570' },
+    { id: 'camp',    name: '붙박이 야영지',  from: 260, to: 320, treeRatio: 0.45, densityMul: 0.5, groundTint: '#8fbf6a' },
+    { id: 'river',   name: '늘 푸른 강가',   from: 320, to: 40,  treeRatio: 0.75, densityMul: 1.0, groundTint: '#5fbf9a' },
+    { id: 'marsh',   name: '뮤렌 습지대',    from: 40,  to: 72,  treeRatio: 0.60, densityMul: 1.3, groundTint: '#4a7d6b' },
+    { id: 'logging', name: '해안 벌목지',    from: 72,  to: 115, treeRatio: 0.35, densityMul: 0.9, groundTint: '#b09a62' },
+    { id: 'harbor',  name: '에버그린 항구',  from: 115, to: 175, treeRatio: 0.30, densityMul: 0.5, groundTint: '#7faec4' },
+    { id: 'cave',    name: '지붕 없는 동굴', from: 175, to: 200, treeRatio: 0.20, densityMul: 1.1, groundTint: '#6b6f7d' }
+  ];
+
+  const OBSERVATORY_R = 300; // ① 별내림 천문대 = 중심(스폰), 기본 톤 유지
+
+  function areaAt(x, y) {
+    if (Math.hypot(x, y) < OBSERVATORY_R) return null;
+    const b = bearingOf(x, y);
+    return AREAS.find(a => a.from < a.to ? (b >= a.from && b < a.to)
+                                         : (b >= a.from || b < a.to)) || null;
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // ── 로드맵 5 작업 B/C: 지형 도형(plateaus) 공용 헬퍼 ───────────────────
+  // 광장·물·다리·돌계단을 전부 같은 도형 목록(zone.plateaus)으로 표현한다.
+  // circle/rect는 로컬 좌표계, sector는 원점(0,0) 기준 방위·반경 부채꼴이라
+  // bearingOf()/hypot으로 바로 판정한다 — 지형은 난수가 아니라 좌표를 직접
+  // 박아야 하므로(로드맵 5 §10) 부채꼴이 좌표를 쓰기에 가장 자연스럽다.
+  function inBearingRange(bearing, from, to) {
+    return from <= to ? (bearing >= from && bearing <= to) : (bearing >= from || bearing <= to);
+  }
+
+  function shapeContains(p, x, y) {
+    if (p.shape === 'circle') {
+      return Math.hypot(x - p.x, y - p.y) <= p.r;
+    } else if (p.shape === 'rect') {
+      const ang = -(p.angle || 0);
+      const dx = x - p.x, dy = y - p.y;
+      const lx = dx * Math.cos(ang) - dy * Math.sin(ang);
+      const ly = dx * Math.sin(ang) + dy * Math.cos(ang);
+      return Math.abs(lx) <= p.w / 2 && Math.abs(ly) <= p.h / 2;
+    } else if (p.shape === 'sector') {
+      const r = Math.hypot(x, y);
+      return r >= p.rFrom && r <= p.rTo && inBearingRange(bearingOf(x, y), p.bearingFrom, p.bearingTo);
+    }
+    return false;
+  }
+
+  // sector에 topFrom/topTo가 있으면 반경에 따라 선형 보간(완만한 비탈용) —
+  // 없으면 평평한 top 그대로.
+  function shapeTopAt(p, x, y) {
+    if (p.shape === 'sector' && p.topFrom != null && p.topTo != null) {
+      const r = Math.hypot(x, y);
+      const frac = Math.max(0, Math.min(1, (r - p.rFrom) / (p.rTo - p.rFrom)));
+      return p.topFrom + (p.topTo - p.topFrom) * frac;
+    }
+    return p.top;
+  }
+
+  // 도형 경계를 화면/미니맵에 그릴 수 있도록 월드 좌표 폴리곤으로 잘게 썬다.
+  function shapeBoundaryPoints(p, steps = 14) {
+    const pts = [];
+    if (p.shape === 'circle') {
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        pts.push({ x: p.x + Math.cos(a) * p.r, y: p.y + Math.sin(a) * p.r });
+      }
+    } else if (p.shape === 'rect') {
+      const ang = p.angle || 0;
+      const corners = [[-p.w / 2, -p.h / 2], [p.w / 2, -p.h / 2], [p.w / 2, p.h / 2], [-p.w / 2, p.h / 2]];
+      for (const [lx, ly] of corners) {
+        pts.push({ x: p.x + lx * Math.cos(ang) - ly * Math.sin(ang), y: p.y + lx * Math.sin(ang) + ly * Math.cos(ang) });
+      }
+    } else if (p.shape === 'sector') {
+      let span = p.bearingTo - p.bearingFrom;
+      if (span <= 0) span += 360;
+      const addArc = (r, reverse) => {
+        for (let i = 0; i <= steps; i++) {
+          const k = reverse ? steps - i : i;
+          const bearing = p.bearingFrom + span * (k / steps);
+          const rad = bearing * Math.PI / 180;
+          pts.push({ x: r * Math.sin(rad), y: -r * Math.cos(rad) });
+        }
+      };
+      addArc(p.rFrom, false);
+      addArc(p.rTo, true);
+    }
+    return pts;
+  }
+
+  // 나무/바위 등 산개 오브젝트가 물·다리·돌계단·몬스터 공터 위에 놓이지 않도록
+  // 하는 제외 판정. plateaus 배열 자체는 건드리지 않고 별도 목록에서만 쓴다.
+  const SCATTER_EXCLUDE_KINDS = new Set(['water-deep', 'water-shallow', 'bridge', 'stairs']);
+  function isScatterExcluded(plateaus, monsterClearings, x, y) {
+    for (const c of monsterClearings) {
+      if (Math.hypot(x - c.x, y - c.y) <= c.r) return true;
+    }
+    for (const p of plateaus) {
+      if (SCATTER_EXCLUDE_KINDS.has(p.kind) && shapeContains(p, x, y)) return true;
+    }
+    return false;
+  }
+
+  function makeZone(opts) {
+    const rand = mulberry32(opts.seed);
+    const radius = opts.radius;
+    const samplePlanetPoint = makeSamplePlanetPoint(rand);
+    const useAreas = opts.id === 'zone1';
+    // 로드맵 5 작업 B/C: 지형(물·단구·다리·돌계단)과 몬스터 공터는 좌표를 직접
+    // 박아서 opts로 받는다 — 난수 시드는 건드리지 않는다(§10)
+    const plateaus = opts.plateaus || [];
+    const monsterClearings = opts.monsterClearings || [];
+
+    // 로드맵 5 작업 D: 길이 여러 갈래(간선 2개 + 지선 3개)가 됐으므로 pathPts 하나가
+    // 아니라 opts.paths(각 {pts, sign?}) 목록을 받아 전부 같은 타일/울타리 생성 로직을
+    // 태운다. nearPath()도 모든 경로의 모든 구간을 대상으로 검사한다.
+    const pathTiles = [], pathFences = [], signposts = [];
+    const pathSegments = [];
+    for (const path of (opts.paths || [])) {
+      const pts = path.pts;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        pathSegments.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+        const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+        const tileCount = Math.round(len / 58);
+        for (let j = 0; j < tileCount; j++) {
+          const t = (j + 0.5) / tileCount;
+          pathTiles.push({
+            x: a.x + dx * t, y: a.y + dy * t,
+            angle: Math.atan2(dy, dx),
+            tone: (i + j) % 2
+          });
+        }
+        const fenceCount = Math.round(len / 150);
+        for (let j = 0; j < fenceCount; j++) {
+          const t = (j + 0.5) / fenceCount;
+          for (const side of [1, -1]) {
+            pathFences.push({
+              x: a.x + dx * t + nx * 78 * side,
+              y: a.y + dy * t + ny * 78 * side,
+              angle: Math.atan2(dy, dx)
+            });
+          }
+        }
+      }
+      if (path.sign) {
+        const last = pts[pts.length - 1];
+        signposts.push({ x: last.x, y: last.y - 30 });
+      }
+    }
+    function nearPath(x, y, threshold) {
+      for (const seg of pathSegments) {
+        const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+        const lenSq = dx * dx + dy * dy;
+        let t = lenSq > 0 ? ((x - seg.ax) * dx + (y - seg.ay) * dy) / lenSq : 0;
+        t = Math.max(0, Math.min(1, t));
+        const cx = seg.ax + dx * t, cy = seg.ay + dy * t;
+        if (Math.hypot(x - cx, y - cy) < threshold) return true;
+      }
+      return false;
+    }
+
+    const obstacles = [];
+    const decorations = [];
+
+    function overlapsExisting(x, y, radius) {
+      for (const o of obstacles) {
+        if (Math.hypot(x - o.x, y - o.y) < radius + o.radius + 16) return true;
+      }
+      return false;
+    }
+
+    function scatterObstacles(minR, maxR, count) {
+      for (let i = 0; i < count; i++) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const p = samplePlanetPoint(minR, maxR);
+          if (Math.hypot(p.x, p.y) < 170) continue;
+          if (nearPath(p.x, p.y, 66)) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
+          const area = useAreas ? areaAt(p.x, p.y) : null;
+          // 지역별 밀도 배수로 재분배 — 전체 총합은 유지하고 지역마다 빽빽함만 다르게 (로드맵 4 작업 D)
+          if (area && rand() > area.densityMul) continue;
+          const treeRatio = area ? area.treeRatio : 0.58;
+          const isTree = rand() < treeRatio;
+          // 로드맵 5 작업 F-2: 나무 반지름 19~32 → 28~46 (충돌 반지름은 collides()에서 따로 상한)
+          const radius = isTree ? 28 + rand() * 18 : 13 + rand() * 11;
+          if (overlapsExisting(p.x, p.y, radius)) continue;
+          obstacles.push({ type: isTree ? 'tree' : 'stone', radius, x: p.x, y: p.y, tone: rand(), sway: rand() * Math.PI * 2 });
+          break;
+        }
+      }
+    }
+    scatterObstacles(0, radius - 260, opts.obstacleCore ?? 150);
+    scatterObstacles(radius - 260, radius - 20, opts.obstacleEdge ?? 90);
+
+    // 로드맵 5 작업 F-1: 덤불 — 절반은 길가(66~150 띠, 옛 scatterPathEdge 자리를 대체),
+    // 절반은 절벽/단구 벽 바로 안쪽("단구 아래")에 배치한다. decorations이므로 충돌은 없다.
+    function scatterBushes(count) {
+      const wallShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'cliff' || p.kind === 'plateau'));
+      for (let i = 0; i < count; i++) {
+        const useWall = (i % 2 === 0) && wallShapes.length;
+        let x, y, ok = false;
+        for (let attempt = 0; attempt < 10 && !ok; attempt++) {
+          if (useWall) {
+            const shape = wallShapes[Math.floor(rand() * wallShapes.length)];
+            let span = shape.bearingTo - shape.bearingFrom; if (span <= 0) span += 360;
+            const bearing = shape.bearingFrom + rand() * span;
+            const r = Math.max(20, shape.rFrom - 4 - rand() * 20);
+            const rad = bearing * Math.PI / 180;
+            x = r * Math.sin(rad); y = -r * Math.cos(rad);
+          } else {
+            const p = samplePlanetPoint(0, radius - 20);
+            if (!nearPath(p.x, p.y, 150) || nearPath(p.x, p.y, 66)) continue;
+            x = p.x; y = p.y;
+          }
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          if (overlapsExisting(x, y, 14)) continue;
+          ok = true;
+        }
+        if (!ok) continue;
+        decorations.push({ type: 'bush', x, y, tone: rand(), sway: rand() * Math.PI * 2 });
+      }
+    }
+    scatterBushes(opts.bushCount ?? 0);
+
+    // 로드맵 5 작업 F-1: 꽃 무리 중심 — 길가(40%)/물가(35%)/광장 가장자리 고리(25%) 편향
+    function clusterCenterFlower() {
+      const roll = rand();
+      if (roll < 0.4 && pathSegments.length) {
+        const seg = pathSegments[Math.floor(rand() * pathSegments.length)];
+        const tt = rand();
+        const px = seg.ax + (seg.bx - seg.ax) * tt, py = seg.ay + (seg.by - seg.ay) * tt;
+        const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const side = rand() < 0.5 ? 1 : -1;
+        const d = 90 + rand() * 55;
+        return { x: px + nx * d * side, y: py + ny * d * side };
+      }
+      if (roll < 0.75) {
+        const waterShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'water-deep' || p.kind === 'water-shallow'));
+        if (waterShapes.length) {
+          const shape = waterShapes[Math.floor(rand() * waterShapes.length)];
+          const pts = shapeBoundaryPoints(shape, 14);
+          const innerPts = pts.slice(0, 15);
+          const bp = innerPts[Math.floor(rand() * innerPts.length)];
+          const r = Math.hypot(bp.x, bp.y) || 1;
+          const pull = 18 + rand() * 30;
+          return { x: bp.x * (1 - pull / r), y: bp.y * (1 - pull / r) };
+        }
+      }
+      const bearing = rand() * 360, r = 175 + rand() * 30;
+      const rad = bearing * Math.PI / 180;
+      return { x: r * Math.sin(rad), y: -r * Math.cos(rad) };
+    }
+    function scatterClusterFlowers(clusterCount) {
+      for (let c = 0; c < clusterCount; c++) {
+        let center = null;
+        for (let attempt = 0; attempt < 6 && !center; attempt++) {
+          const cand = clusterCenterFlower();
+          if (Math.hypot(cand.x, cand.y) > radius - 20) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, cand.x, cand.y)) continue;
+          center = cand;
+        }
+        if (!center) continue;
+        const bloomCount = 6 + Math.floor(rand() * 7);
+        const tone = rand();
+        for (let i = 0; i < bloomCount; i++) {
+          const a = rand() * Math.PI * 2, d = rand() * 45;
+          const x = center.x + Math.cos(a) * d, y = center.y + Math.sin(a) * d;
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          decorations.push({ type: 'flower', x, y, tone, seed: rand() });
+        }
+      }
+    }
+    scatterClusterFlowers(opts.flowerClusters ?? 0);
+
+    // 로드맵 5 작업 F-1: 갈대 무리 — 물가에만(육지 쪽으로 살짝 당김)
+    function clusterCenterWaterEdge() {
+      const waterShapes = plateaus.filter((p) => p.shape === 'sector' && (p.kind === 'water-deep' || p.kind === 'water-shallow'));
+      if (!waterShapes.length) return null;
+      const shape = waterShapes[Math.floor(rand() * waterShapes.length)];
+      const pts = shapeBoundaryPoints(shape, 14);
+      const innerPts = pts.slice(0, 15);
+      const bp = innerPts[Math.floor(rand() * innerPts.length)];
+      const r = Math.hypot(bp.x, bp.y) || 1;
+      const pull = 4 + rand() * 14;
+      return { x: bp.x * (1 - pull / r), y: bp.y * (1 - pull / r) };
+    }
+    function scatterClusterReeds(clusterCount) {
+      for (let c = 0; c < clusterCount; c++) {
+        const center = clusterCenterWaterEdge();
+        if (!center || Math.hypot(center.x, center.y) > radius - 20) continue;
+        const bladeCount = 5 + Math.floor(rand() * 5);
+        for (let i = 0; i < bladeCount; i++) {
+          const a = rand() * Math.PI * 2, d = rand() * 22;
+          decorations.push({ type: 'reed', x: center.x + Math.cos(a) * d, y: center.y + Math.sin(a) * d, seed: rand(), sway: rand() * Math.PI * 2 });
+        }
+      }
+    }
+    scatterClusterReeds(opts.reedClusters ?? 0);
+
+    // 로드맵 5 작업 F-1: 붉은 버섯 — 몬스터 공터 언저리 또는 나무 그늘
+    function scatterRedMushrooms(count) {
+      for (let i = 0; i < count; i++) {
+        let x, y, ok = false;
+        for (let attempt = 0; attempt < 10 && !ok; attempt++) {
+          if (rand() < 0.5 && monsterClearings.length) {
+            const c = monsterClearings[Math.floor(rand() * monsterClearings.length)];
+            const a = rand() * Math.PI * 2, d = c.r + 20 + rand() * 80;
+            x = c.x + Math.cos(a) * d; y = c.y + Math.sin(a) * d;
+          } else if (obstacles.length) {
+            const o = obstacles[Math.floor(rand() * obstacles.length)];
+            if (o.type !== 'tree') continue;
+            const a = rand() * Math.PI * 2, d = o.radius * 0.6 + rand() * 24;
+            x = o.x + Math.cos(a) * d; y = o.y + Math.sin(a) * d;
+          } else continue;
+          if (Math.hypot(x, y) > radius - 20) continue;
+          if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+          ok = true;
+        }
+        if (!ok) continue;
+        decorations.push({ type: 'mushroom', x, y, seed: rand(), red: true });
+      }
+    }
+    scatterRedMushrooms(opts.redMushroomCount ?? 0);
+
+    for (let i = 0; i < (opts.mushroomCount ?? 16); i++) {
+      const p = samplePlanetPoint(0, radius - 300);
+      if (Math.hypot(p.x, p.y) < 130) continue;
+      if (isScatterExcluded(plateaus, monsterClearings, p.x, p.y)) continue;
+      decorations.push({ type: 'mushroom', x: p.x, y: p.y, seed: rand() });
+    }
+
+    // 로드맵 5 작업 E: 떨어진 별 — starCount개 중 starSeeds(§9 별밭 공터에 직접 심는 자리)를
+    // 먼저 넣고 나머지는 길가/몬스터 공터 안쪽 편향 배치(실패 시 전역 균일 표본)로 채운다.
+    // 서로 140 이상, 기존 오브젝트와 60 이상 떨어지게 한다.
+    const fallenStars = (opts.starSeeds || []).map((s) => ({ x: s.x, y: s.y }));
+    const starTarget = opts.starCount ?? 0;
+    for (let i = fallenStars.length; i < starTarget; i++) {
+      let placed = false;
+      for (let attempt = 0; attempt < 20 && !placed; attempt++) {
+        let x, y;
+        const roll = rand();
+        if (roll < 0.4 && pathSegments.length) {
+          const seg = pathSegments[Math.floor(rand() * pathSegments.length)];
+          const tt = rand();
+          const px = seg.ax + (seg.bx - seg.ax) * tt, py = seg.ay + (seg.by - seg.ay) * tt;
+          const dx = seg.bx - seg.ax, dy = seg.by - seg.ay;
+          const len = Math.hypot(dx, dy) || 1;
+          const nx = -dy / len, ny = dx / len;
+          const side = rand() < 0.5 ? 1 : -1;
+          const d = 40 + rand() * 90;
+          x = px + nx * d * side; y = py + ny * d * side;
+        } else if (roll < 0.7 && monsterClearings.length) {
+          const c = monsterClearings[Math.floor(rand() * monsterClearings.length)];
+          const a = rand() * Math.PI * 2, d = rand() * c.r * 0.8;
+          x = c.x + Math.cos(a) * d; y = c.y + Math.sin(a) * d;
+        } else {
+          const p = samplePlanetPoint(0, 700);
+          x = p.x; y = p.y;
+        }
+        if (Math.hypot(x, y) > radius - 20) continue;
+        if (isScatterExcluded(plateaus, monsterClearings, x, y)) continue;
+        if (overlapsExisting(x, y, 60)) continue;
+        let farEnough = true;
+        for (const s of fallenStars) { if (Math.hypot(x - s.x, y - s.y) < 140) { farEnough = false; break; } }
+        if (!farEnough) continue;
+        fallenStars.push({ x, y });
+        placed = true;
+      }
+    }
+    for (const s of fallenStars) decorations.push({ type: 'star', x: s.x, y: s.y, seed: rand(), phase: rand() * Math.PI * 2 });
+
+    // 로드맵 5 작업 G: 생활의 흔적 — 좌표는 zone1 호출부에서 직접 넘긴다(§10 원칙대로
+    // 좌표는 난수가 아니라 직접 박는다). 여기서는 seed/phase만 붙여 decorations에 편입한다.
+    for (const d of (opts.lifeTraceDefs || [])) {
+      decorations.push({ ...d, seed: rand(), phase: rand() * Math.PI * 2 });
+    }
+
+    // 로드맵 5 §4-2/폭포 장식: 마지막까지 미뤄뒀던 광장 소품(착륙 데크·비행정·깃발·등불·
+    // 상자·가마솥·부서진 석재·선돌)과 폭포 — G와 같은 패턴으로 좌표를 직접 넘긴다.
+    for (const d of (opts.plazaProps || [])) {
+      decorations.push({ ...d, seed: rand(), phase: rand() * Math.PI * 2 });
+    }
+
+    const spring = opts.spring || null;
+
+    const landmarks = (opts.landmarkDefs || []).map((l) => ({ ...l }));
+    let foundCount = 0;
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      for (const lm of landmarks) {
+        if (Math.hypot(obstacles[i].x - lm.x, obstacles[i].y - lm.y) < 150) { obstacles.splice(i, 1); break; }
+      }
+    }
+
+    const GRID_N = Math.ceil((radius * 2) / CELL);
+    const GRID_ORIGIN = -radius;
+    const explored = new Uint8Array(GRID_N * GRID_N);
+    let totalCells = 0;
+    for (let gy = 0; gy < GRID_N; gy++) {
+      for (let gx = 0; gx < GRID_N; gx++) {
+        const wx = GRID_ORIGIN + (gx + 0.5) * CELL;
+        const wy = GRID_ORIGIN + (gy + 0.5) * CELL;
+        if (Math.hypot(wx, wy) <= radius) totalCells++;
+      }
+    }
+
+    const FOG_SCALE = FOG_SIZE / (radius * 2);
+    const fogCanvas = document.createElement('canvas');
+    fogCanvas.width = FOG_SIZE; fogCanvas.height = FOG_SIZE;
+    const fogCtx = fogCanvas.getContext('2d');
+    fogCtx.fillStyle = '#6fbf72';
+
+    const terrainPatches = [];
+    for (let i = 0; i < (opts.terrainCount ?? 20); i++) {
+      const p = samplePlanetPoint(0, radius);
+      terrainPatches.push({ x: p.x, y: p.y, w: 140 + rand() * 90, angle: rand() * Math.PI });
+    }
+    const grassTufts = [];
+    // 로드맵 5 작업 F-1: 초목이 꽃/갈대/덤불로 세분화됐으므로 밀도 기본값을 1400→1100으로 낮춤
+    for (let i = 0; i < (opts.grassCount ?? 1100); i++) {
+      const p = samplePlanetPoint(0, radius);
+      grassTufts.push({ x: p.x, y: p.y, len: 4 + rand() * 6, angle: rand() * Math.PI * 2, phase: rand() * Math.PI * 2, tone: rand() });
+    }
+    const spores = [];
+    for (let i = 0; i < (opts.sporeCount ?? 26); i++) {
+      const p = samplePlanetPoint(0, HORIZON_D * 0.9);
+      spores.push({ x: p.x, y: p.y, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+    }
+    // 로드맵 5 작업 E: 떨어진 별 주변은 반딧불이(spores) 밀도를 국소적으로 올린다 —
+    // 별마다 반경 70 안에 2개씩 추가로 심어 "근처가 확실히 더 반짝이게" 함
+    for (const s of fallenStars) {
+      for (let i = 0; i < 2; i++) {
+        const a = rand() * Math.PI * 2, d = rand() * 70;
+        spores.push({ x: s.x + Math.cos(a) * d, y: s.y + Math.sin(a) * d, speed: 5 + rand() * 8, size: 1.6 + rand() * 2.2, phase: rand() * Math.PI * 2 });
+      }
+    }
+
+    const clouds = [];
+    for (let i = 0; i < (opts.cloudCount ?? 9); i++) {
+      clouds.push({ x: rand() * 1.4 - 0.2, y: 0.05 + rand() * 0.32, w: 60 + rand() * 90, speed: 4 + rand() * 6, tone: rand() });
+    }
+
+    return {
+      id: opts.id, name: opts.name, mapNo: opts.mapNo || null, radius,
+      rand, samplePlanetPoint,
+      pathTiles, pathFences, signposts,
+      obstacles, decorations, spring,
+      landmarks, foundCount,
+      GRID_N, GRID_ORIGIN, explored, exploredCount: 0, totalCells, FOG_SCALE, fogCanvas, fogCtx,
+      lastExploreX: Infinity, lastExploreY: Infinity,
+      terrainPatches, grassTufts, spores, clouds,
+      portal: opts.portal || null,
+      useAreas,
+      // 로드맵 5 작업 A/B/C: 지형 높이·물 목록 — { shape:'circle'|'rect'|'sector', ..., top,
+      // blocked?, speedMul?, kind? }. sector는 원점 기준 방위·반경 부채꼴(광장·물·다리·돌계단용).
+      plateaus,
+      // 로드맵 5 §9: 몬스터 자리만 비워둔 공터. { x, y, r } — 지금은 오브젝트 스캐터
+      // 제외에만 쓰고, 실제 몬스터 배치는 전투 로드맵에서 다룬다.
+      monsterClearings
+    };
+  }
+
+  const zone1 = makeZone({
+    id: 'zone1', name: '별내림 천문대', mapNo: 1, seed: 20260913, radius: 1500,
+    // 로드맵 5 작업 D: 간선 2개(광장의 두 통로 — 다리/돌계단 — 를 그대로 따라 나간다)와
+    // 지선 3개(옛 랜드마크였던 거대 고목·석조 유적·빛나는 결정 자리로 — 랜드마크 자체는
+    // §14 결정에 따라 이미 제거됐지만 좌표는 여전히 §4-1에 남아있는 유일한 목적지라 그대로
+    // 씀). 지선은 전부 간선의 한 지점에서 갈라지는 걸로 좌표를 맞췄다(분기점 공유).
+    // 방위·반경은 bearingOf(x,y)=atan2(x,-y) 규약으로 역산: x=r·sin(방위), y=-r·cos(방위).
+    paths: [
+      { // 간선1 — 광장 → 나무다리(145~155°) → 슬라임 비탈 → 포탈(방위150°) 방향
+        pts: [
+          { x: 10, y: 10 }, { x: 85, y: 147 }, { x: 132, y: 230 }, { x: 175, y: 303 },
+          { x: 329, y: 570 }, { x: 500, y: 866 }, { x: 650, y: 1126 }
+        ]
+      },
+      { // 간선2 — 광장 → 돌계단(10~30°) → 단구 고원 → 북동쪽 바깥(바위산·샘물 방향).
+        // (743,-743) 지점은 §9 별밭 공터(620,-430, r200) 단구를 피해 바깥으로 살짝 돈 것
+        pts: [
+          { x: 10, y: 10 }, { x: 58, y: -160 }, { x: 82, y: -226 }, { x: 171, y: -470 },
+          { x: 325, y: -563 }, { x: 743, y: -743 }, { x: 953, y: -550 }, { x: 1159, y: -311 }
+        ]
+      },
+      { // 지선1 — 간선2의 단구 고원 어귀(82,-226)에서 갈라져 거대 고목 옛 자리(방위5°)로
+        pts: [{ x: 82, y: -226 }, { x: 104, y: -489 }, { x: 104, y: -844 }, { x: 100, y: -1150 }],
+        sign: true
+      },
+      { // 지선2 — 간선1의 다리 끝(175,303)에서 갈라져 석조 유적 옛 자리(방위231°)로
+        pts: [{ x: 175, y: 303 }, { x: -52, y: 597 }, { x: -450, y: 779 }, { x: -778, y: 778 }, { x: -955, y: 774 }],
+        sign: true
+      },
+      { // 지선3 — 간선2의 고원 가장자리(171,-470)에서 갈라져 빛나는 결정 옛 자리(방위286°)로
+        pts: [{ x: 171, y: -470 }, { x: -130, y: -739 }, { x: -643, y: -766 }, { x: -1039, y: -600 }, { x: -1247, y: -357 }],
+        sign: true
+      }
+    ],
+    pathEdgeExtra: 45,
+    spring: { x: 230, y: -110, radius: 50 },
+    // 로드맵 5 작업 C: 착륙 광장 지형 — 전부 좌표를 직접 박은 부채꼴(sector, 원점 기준
+    // 방위·반경)이다. 겹치는 곳은 배열에서 나중에 나온 도형이 이긴다(terrainAt 참고):
+    // 절벽·물 반달보다 다리·돌계단을 뒤에 둬서, 물/절벽을 가로지르는 통로가 실제로 뚫리게 한다.
+    // 정확한 좌표 출처는 roadmap/ROADMAP_5.md §4-1 표. 절벽의 반경(170~260)만 표에 없어
+    // 광장 바닥(170)과 물 반달 시작(185) 사이 폭에 맞춰 직접 정함.
+    plateaus: [
+      // 절벽 — 광장을 감싸는 벽, 높이 70이라 점프 최고 높이(약 37.6)로도 못 넘음
+      { shape: 'sector', kind: 'cliff', bearingFrom: 300, bearingTo: 10, rFrom: 170, rTo: 260, top: 70 },
+      { shape: 'sector', kind: 'cliff', bearingFrom: 30,  bearingTo: 55, rFrom: 170, rTo: 260, top: 70 },
+      // 물 반달 — 깊은 물, 무조건 막힘(다리로만 건넘)
+      { shape: 'sector', kind: 'water-deep', bearingFrom: 75, bearingTo: 300, rFrom: 185, rTo: 340, top: -30, blocked: true },
+      // 개울(여울) — 샘물 지대(230,-110, 방위64.4°·거리255)가 이 구간 한가운데. 느려지지만 통과 가능
+      { shape: 'sector', kind: 'water-shallow', bearingFrom: 55, bearingTo: 75, rFrom: 185, rTo: 340, top: -6, speedMul: 0.55 },
+      // 나무다리 — 통로 1. 물 반달 위를 가로지르므로 물보다 뒤에 선언해 우선시킴
+      { shape: 'sector', kind: 'bridge', bearingFrom: 145, bearingTo: 155, rFrom: 180, rTo: 350, top: 10 },
+      // 돌계단 — 통로 2. 12씩 4칸이라 한 칸씩은 STEP_UP(14) 이내라 점프 없이 올라가짐
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 170, rTo: 188, top: 12 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 188, rTo: 206, top: 24 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 206, rTo: 224, top: 36 },
+      { shape: 'sector', kind: 'stairs', bearingFrom: 10, bearingTo: 30, rFrom: 224, rTo: 240, top: 48 },
+      // 계단 위 단구 고원 — 계단이 끝나는 곳(240)부터 기존 랜드마크가 있던 바깥 들판 쪽으로
+      { shape: 'sector', kind: 'plateau', bearingFrom: 10, bearingTo: 30, rFrom: 240, rTo: 500, top: 48 },
+      // 로드맵 5 작업 D: 간선2가 단구 고원 밖(방위 30~75°)으로 휘어나가므로, 고원 가장자리를
+      // 완만한 내리막으로 둘러 어느 방위로 나가든 48→0 단차가 갑자기 나타나지 않게 함
+      { shape: 'sector', kind: 'slope', bearingFrom: 0, bearingTo: 60, rFrom: 480, rTo: 620, topFrom: 48, topTo: 0 },
+      // 다리 건너 비탈 — 완만하게 10(다리 높이)에서 20까지, 슬라임 비탈 공터로 이어짐
+      { shape: 'sector', kind: 'slope', bearingFrom: 125, bearingTo: 175, rFrom: 350, rTo: 750, topFrom: 10, topTo: 20 },
+      // 별밭 공터 — 독립된 단구 위 평지(§9 공터 2)
+      { shape: 'circle', kind: 'plateau', x: 620, y: -430, r: 200, top: 30 }
+    ],
+    // 로드맵 5 §9: 몬스터 공터 3곳 — 지형만 미리 잡아두고 오브젝트 스캐터에서 제외.
+    // 실제 몬스터는 전투 로드맵에서 배치한다.
+    monsterClearings: [
+      { id: 'slime-slope', name: '슬라임 비탈', x: 330, y: 570, r: 190 },
+      { id: 'starfield',   name: '별밭 공터',   x: 620, y: -430, r: 170 },
+      { id: 'old-well',    name: '옛 우물터',   x: -720, y: 180, r: 160 }
+    ],
+    // [2026-09-20 수정] 기존 6개 랜드마크(샘물·고목·바위산·유적·결정·동굴)를 전부 제거하고
+    // 포탈을 처음부터 열어뒀다 — "발견 X/Y를 채워야 포탈이 열리는" 구조를 그만두고,
+    // 도착하자마자 다음 맵으로 넘어갈 수 있게 한다. isPortalLocked()는 landmarks.length가
+    // 0이면 자동으로 false를 반환하므로 별도 잠금 해제 코드는 필요 없다. 로드맵 5 §14에서
+    // 논의했던 "동굴 이름이 맵8과 겹친다" 같은 랜드마크 이름 충돌 문제도 이 제거로 자연히
+    // 해소된다. 랜드마크 좌표는 로드맵 5의 지형 재구성(작업 C) 참고용으로 남겨둔다:
+    // 샘물(230,-110) 고목(100,-1150) 바위산(1180,-200) 유적(-950,780) 결정(-1250,-350) 동굴(-120,972)
+    landmarkDefs: [],
+    // 로드맵 5 작업 E: 떨어진 별 14개 — 3개는 §9 별밭 공터(620,-430) 위에 직접 심고
+    // (원 중심에서 반경 170 이내, 단구 위 평지 top30 위), 나머지 11개는 makeZone 안에서
+    // 길가/몬스터 공터 편향 무작위로 채운다.
+    starCount: 14,
+    starSeeds: [
+      { x: 710, y: -470 },
+      { x: 550, y: -370 },
+      { x: 630, y: -320 }
+    ],
+    // 로드맵 5 작업 F-1: 초목 세분화 수량 — §7-1 표 그대로
+    flowerClusters: 34,
+    bushCount: 120,
+    reedClusters: 18,
+    redMushroomCount: 24,
+    // 로드맵 5 작업 G: 생활의 흔적 — 좌표는 전부 직접 박는다(§10 원칙). 소 목장은 광장
+    // 북서쪽 절벽 바깥(방위 340~355°, 반경 400~460, 어떤 기존 길·지형과도 안 겹치는 자리로
+    // Playwright 검증 후 확정)에 울타리 우리를 두르고, 농경지는 광장 서쪽 호수 건너
+    // (-440,10) 부근 — 물 반경(340) 밖으로 충분히 떨어진 자리다.
+    lifeTraceDefs: [
+      { type: 'cow', x: -87, y: -411 },
+      { type: 'cow', x: -40, y: -458 },
+      { type: 'cow', x: -137, y: -376 },
+      { type: 'fence', x: -13, y: -415, angle: Math.PI / 2 },
+      { type: 'fence', x: -27, y: -371, angle: Math.PI / 2 + 0.628 },
+      { type: 'fence', x: -65, y: -344, angle: Math.PI / 2 + 1.257 },
+      { type: 'fence', x: -111, y: -344, angle: Math.PI / 2 + 1.885 },
+      { type: 'fence', x: -149, y: -371, angle: Math.PI / 2 + 2.513 },
+      { type: 'fence', x: -163, y: -415, angle: Math.PI / 2 + 3.142 },
+      { type: 'fence', x: -149, y: -459, angle: Math.PI / 2 + 3.770 },
+      { type: 'fence', x: -65, y: -486, angle: Math.PI / 2 + 5.027 },
+      { type: 'fence', x: -27, y: -459, angle: Math.PI / 2 + 5.655 },
+      { type: 'hay', x: -60, y: -440 },
+      { type: 'hay', x: -110, y: -390 },
+      { type: 'trough', x: -140, y: -415 },
+      { type: 'farmRow', x: -440, y: -38, len: 130 },
+      { type: 'farmRow', x: -440, y: -14, len: 130 },
+      { type: 'farmRow', x: -440, y: 10, len: 130 },
+      { type: 'farmRow', x: -440, y: 34, len: 130 },
+      { type: 'farmRow', x: -440, y: 58, len: 130 },
+      { type: 'cart', x: -500, y: -20 },
+      { type: 'scarecrow', x: -440, y: 10 },
+      { type: 'clothesline', x: -410, y: -70 }
+    ],
+    // 로드맵 5 §4-2/폭포 장식: 마지막까지 미뤄뒀던 광장 소품 + 폭포. 전부 순수 장식(충돌
+    // 없음)이며, §4-2 원문이 준 구체적인 자리를 그대로 따랐다 — 착륙 데크는 원문 좌표
+    // (-90,-90) 그대로(방위315°, 반경127), 비행정은 그 뒤(반경165, 데크 "위"), 깃발은
+    // 옆(반경132). 등불 2개는 정확히 "데크 입구"(반경59)와 "다리 어귀"(방위150°, 반경165,
+    // 다리 시작 직전 바닥). 상자 무더기 3곳은 데크 주변에 모았다. 가마솥은 광장 중앙
+    // 부근(반경35, 두 통로 방위를 피한 250°)에, 부서진 석재 4개는 "계단 아래"(방위8~29°,
+    // 반경145~165 — 돌계단이 시작되는 바닥)에, 선돌 3개는 "계단 위 단구 가장자리"(방위
+    // 12~28°, 반경250~260, 단구 top48 위)에 흩었다. 폭포는 §4-1 표대로 방위330° 절벽면
+    // (cliff, 방위300~10°)에 뒀다 — 그쪽엔 실제 물 도형이 없어(물 반달은 방위75~300°뿐)
+    // drawWaterfall 자체가 그리는 포말 웅덩이가 "아래쪽 못"을 대신한다(물리 판정 없음).
+    plazaProps: [
+      { type: 'landingDeck', x: -90, y: -90 },
+      { type: 'airship', x: -117, y: -117 },
+      { type: 'flag', x: -65, y: -115 },
+      { type: 'lantern', x: -42, y: -42 },
+      { type: 'lantern', x: 83, y: 143 },
+      { type: 'crate', x: -75, y: -70 },
+      { type: 'crate', x: -110, y: -95 },
+      { type: 'crate', x: -60, y: -115 },
+      { type: 'cauldron', x: -33, y: 12 },
+      { type: 'rubble', x: 22, y: -154, tone: 0.7 },
+      { type: 'rubble', x: 51, y: -157, tone: 0.4 },
+      { type: 'rubble', x: 68, y: -134, tone: 0.6 },
+      { type: 'rubble', x: 70, y: -127, tone: 0.3 },
+      { type: 'standingStone', x: 53, y: -250 },
+      { type: 'standingStone', x: 89, y: -244 },
+      { type: 'standingStone', x: 117, y: -221 },
+      { type: 'waterfall', x: -89, y: -154 }
+    ],
+    portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
+  });
+
+  const zone2 = makeZone({
+    id: 'zone2', name: '맵2', mapNo: 2, seed: 20260915, radius: 1500,
+    portal: { x: 0, y: 250, height: 100, toZone: 'zone1', spawn: { x: 650, y: 950 }, triggerR: 50 }
+  });
+
+  const zones = { zone1, zone2 };
+  let currentZone = zone1;
+
+  let transition = null;
+  function startTransition(toZoneId, spawn) {
+    transition = { phase: 'out', t: 0, dur: 0.35, toZoneId, spawn };
+  }
+
+  const player = { x: 0, y: 60, facing: { x: 0, y: -1 }, z: 0, vz: 0 };
+
+  const keys = new Set();
+  // 0 = 닫힘, 1 = 현재 구역 지도, 2 = 에버그린 전경도(월드맵)
+  let mapView = 0;
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (k === 'm' && !transition) { mapView = (mapView + 1) % 3; keys.clear(); e.preventDefault(); }
+    else if (k === 'escape' && mapView) { mapView = 0; }
+    else if (k === ' ') {
+      e.preventDefault(); // 스페이스의 기본 동작(페이지 스크롤)을 막는다
+      if (!transition && !mapView) tryJump();
+    }
+  });
+  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+
+  let minimapHit = { cx: 0, cy: 0, r: 0 };
+  let fullmapHit = { cx: 0, cy: 0, r: 0 };
+  canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    if (mapView === 2) {
+      const h = worldMapHit;
+      const inside = h && px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h;
+      if (!inside) mapView = 0;
+    } else if (mapView === 1) {
+      // 지도 안을 탭하면 전경도로, 밖을 탭하면 닫힘
+      if (Math.hypot(px - fullmapHit.cx, py - fullmapHit.cy) > fullmapHit.r) mapView = 0;
+      else mapView = 2;
+    } else if (!transition && Math.hypot(px - minimapHit.cx, py - minimapHit.cy) <= minimapHit.r) {
+      mapView = 1;
+    }
+  });
+
+  let joyVector = { x: 0, y: 0 };
+  let joyActive = false;
+  let joyPointerId = null;
+
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+  if (isTouch) joyZone.hidden = false;
+  if (isTouch) {
+    jumpBtn.hidden = false;
+    jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!transition && !mapView) tryJump();
+    });
+  }
+
+  function setJoyFromEvent(e) {
+    const rect = joyZone.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
+    const max = rect.width / 2;
+    const dist = Math.min(Math.hypot(dx, dy), max);
+    const angle = Math.atan2(dy, dx);
+    dx = Math.cos(angle) * dist;
+    dy = Math.sin(angle) * dist;
+    joyStick.style.left = `calc(50% + ${dx}px)`;
+    joyStick.style.top = `calc(50% + ${dy}px)`;
+    joyVector = { x: dx / max, y: dy / max };
+  }
+
+  joyZone.addEventListener('pointerdown', (e) => {
+    joyActive = true;
+    joyPointerId = e.pointerId;
+    joyZone.setPointerCapture(e.pointerId);
+    setJoyFromEvent(e);
+  });
+  joyZone.addEventListener('pointermove', (e) => {
+    if (!joyActive || e.pointerId !== joyPointerId) return;
+    setJoyFromEvent(e);
+  });
+  function releaseJoy(e) {
+    if (e.pointerId !== joyPointerId) return;
+    joyActive = false;
+    joyVector = { x: 0, y: 0 };
+    joyStick.style.left = '50%';
+    joyStick.style.top = '50%';
+  }
+  joyZone.addEventListener('pointerup', releaseJoy);
+  joyZone.addEventListener('pointercancel', releaseJoy);
+
+  function collides(x, y, atZ = player.z) {
+    const z = currentZone;
+    if (Math.hypot(x, y) > z.radius - PLAYER_RADIUS - 12) return true;
+    for (const o of z.obstacles) {
+      // 로드맵 5 작업 F: 나무가 28~46까지 커지면서 충돌 반지름도 같이 커지면 길이
+      // 막히므로 상한을 둔다 — 보이는 건 커지고 부딪히는 건 그대로
+      const solidRadius = o.type === 'tree' ? Math.min(o.radius * 0.5, 18) : o.radius * 0.82;
+      if (Math.hypot(x - o.x, y - o.y) < PLAYER_RADIUS + solidRadius) return true;
+    }
+    for (const lm of z.landmarks) {
+      if (lm.solid && Math.hypot(x - lm.x, y - lm.y) < PLAYER_RADIUS + lm.solid) return true;
+    }
+    // 로드맵 5 작업 A/B: 걸어서 오를 수 없을 만큼 높은 지형 턱은 막는다. 계단 한 칸(STEP_UP)
+    // 정도는 걸어서 자연스럽게 오르고, 그보다 높으면 점프로 현재 높이(atZ)를 올린 뒤에만 지나간다.
+    // 깊은 물처럼 높이차와 무관하게 무조건 막히는 지형은 terrainAt().blocked로 따로 처리한다
+    // (물은 땅보다 낮아서 "너무 높다" 판정만으로는 못 막기 때문 — §3).
+    const terr = terrainAt(z, x, y);
+    if (terr.blocked) return true;
+    if (terr.top - atZ > STEP_UP) return true;
+    return false;
+  }
+
+  function tryMove(dx, dy, dist) {
+    const nx = player.x + dx * dist, ny = player.y + dy * dist;
+    if (!collides(nx, ny)) { player.x = nx; player.y = ny; return; }
+    if (dx && !collides(player.x + dx * dist, player.y)) { player.x += dx * dist; return; }
+    if (dy && !collides(player.x, player.y + dy * dist)) { player.y += dy * dist; return; }
+    const px = -dy, py = dx;
+    for (const blend of [0.7, 1]) {
+      for (const sign of [1, -1]) {
+        const sx = dx * 0.35 + px * sign * blend;
+        const sy = dy * 0.35 + py * sign * blend;
+        const len = Math.hypot(sx, sy) || 1;
+        const cx = player.x + (sx / len) * dist;
+        const cy = player.y + (sy / len) * dist;
+        if (!collides(cx, cy)) { player.x = cx; player.y = cy; return; }
+      }
+    }
+  }
+
+  function updateExploration() {
+    const z = currentZone;
+    if (Math.hypot(player.x - z.lastExploreX, player.y - z.lastExploreY) < 25) return;
+    z.lastExploreX = player.x; z.lastExploreY = player.y;
+
+    z.fogCtx.beginPath();
+    z.fogCtx.arc((player.x - z.GRID_ORIGIN) * z.FOG_SCALE, (player.y - z.GRID_ORIGIN) * z.FOG_SCALE, EXPLORE_R * z.FOG_SCALE, 0, Math.PI * 2);
+    z.fogCtx.fill();
+
+    const gx0 = Math.max(0, Math.floor((player.x - EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gx1 = Math.min(z.GRID_N - 1, Math.floor((player.x + EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gy0 = Math.max(0, Math.floor((player.y - EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    const gy1 = Math.min(z.GRID_N - 1, Math.floor((player.y + EXPLORE_R - z.GRID_ORIGIN) / CELL));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = gy * z.GRID_N + gx;
+        if (z.explored[idx]) continue;
+        const wx = z.GRID_ORIGIN + (gx + 0.5) * CELL;
+        const wy = z.GRID_ORIGIN + (gy + 0.5) * CELL;
+        if (Math.hypot(wx, wy) > z.radius) continue;
+        if (Math.hypot(wx - player.x, wy - player.y) > EXPLORE_R) continue;
+        z.explored[idx] = 1;
+        z.exploredCount++;
+      }
+    }
+  }
+
+  function resize() {
+    const rect = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.viewW = rect.width;
+    canvas.viewH = rect.height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function drawSky(viewW, viewH, t) {
+    const grad = ctx.createLinearGradient(0, 0, 0, viewH);
+    grad.addColorStop(0, '#5fb6ea');
+    grad.addColorStop(0.6, '#bfe3ff');
+    grad.addColorStop(1, '#eaf6ff');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    for (const c of currentZone.clouds) {
+      const drift = reduceMotion ? 0 : (t * c.speed) % (viewW + c.w * 3);
+      const cx = ((c.x * viewW + drift) % (viewW + c.w * 3)) - c.w * 1.5;
+      const cy = c.y * viewH;
+      ctx.fillStyle = c.tone > 0.5 ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.8)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, c.w, c.w * 0.4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - c.w * 0.5, cy + c.w * 0.08, c.w * 0.55, c.w * 0.28, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + c.w * 0.5, cy + c.w * 0.1, c.w * 0.5, c.w * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawPlanetDome(cx, cy) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, TILT);
+    const grad = ctx.createRadialGradient(0, -PLANET_R * 0.1, PLANET_R * 0.08, 0, 0, PLANET_R);
+    grad.addColorStop(0, '#7fd48a');
+    grad.addColorStop(0.55, '#5fbf5a');
+    grad.addColorStop(0.86, '#4aa14f');
+    grad.addColorStop(1, '#bfe3ff');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, PLANET_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMushroom(seed, red) {
+    const scale = 0.85 + seed * 0.4;
+    const capColor = red ? '#e5433f' : (seed > 0.5 ? '#ff8aa0' : '#ffb454');
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 3, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff4e6';
+    ctx.fillRect(-3, -6, 6, 9);
+    ctx.strokeStyle = '#8a6a4a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-3, -6, 6, 9);
+    ctx.beginPath(); ctx.arc(0, -6, 9, Math.PI, 0);
+    ctx.fillStyle = capColor; ctx.fill();
+    ctx.strokeStyle = '#7a3a2a';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(-4, -9, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(3, -8, 1.3, 0, Math.PI * 2); ctx.fill();
+    if (red) {
+      ctx.beginPath(); ctx.arc(0, -3, 1.3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 로드맵 5 작업 F-1/G: 새 장식 오브젝트들 — 전부 decorations 배열의 type으로 구분되고
+  // 기존 solids 렌더/정렬/가림 파이프라인(s.d 디스패치)을 그대로 탄다.
+  function drawBush(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.1 + d.sway) * 0.06;
+    const leaf = d.tone > 0.5 ? '#4d9a63' : '#438a57';
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.beginPath(); ctx.ellipse(0, 9, 15, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.fillStyle = leaf;
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = 1;
+    for (const [ox, oy, r] of [[-6, 2, 9], [6, 2, 9], [0, -5, 10], [0, 5, 8]]) {
+      ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.arc(-3, -8, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFlower(d) {
+    const petalColors = ['#ffe066', '#ff9f4a', '#ffffff'];
+    const idx = d.tone < 0.34 ? 0 : d.tone < 0.67 ? 1 : 2;
+    const color = petalColors[idx];
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, 2, 4, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a7d52';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -3); ctx.stroke();
+    ctx.fillStyle = color;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + d.seed * 2;
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * 2.6, -3 + Math.sin(a) * 2.6, 2, 1.3, a, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#e8b34a';
+    ctx.beginPath(); ctx.arc(0, -3, 1.4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawReed(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.4 + d.sway) * 0.12;
+    ctx.strokeStyle = '#6f9c4a';
+    ctx.lineWidth = 1.6;
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.beginPath(); ctx.moveTo(0, 4); ctx.quadraticCurveTo(2, -10, 1, -22); ctx.stroke();
+    ctx.fillStyle = '#8a5a3a';
+    ctx.beginPath(); ctx.ellipse(1, -23, 1.6, 4, 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFallenStar(d, t) {
+    const tw = reduceMotion ? 1 : 0.75 + Math.sin(t * 2.2 + d.phase) * 0.25;
+    // 바닥에 떨어져 박힌 별 — 은은한 광륜 + 위로 뻗는 빛기둥 + 반짝임
+    const glow = ctx.createRadialGradient(0, 4, 2, 0, 4, 30);
+    glow.addColorStop(0, `rgba(255,244,200,${0.55 * tw})`);
+    glow.addColorStop(1, 'rgba(255,244,200,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(0, 4, 30, 12, 0, 0, Math.PI * 2); ctx.fill();
+    if (!reduceMotion) {
+      const beam = ctx.createLinearGradient(0, 2, 0, -70);
+      beam.addColorStop(0, `rgba(255,250,220,${0.35 * tw})`);
+      beam.addColorStop(1, 'rgba(255,250,220,0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(-6, 2); ctx.lineTo(6, 2); ctx.lineTo(2, -70); ctx.lineTo(-2, -70); ctx.closePath();
+      ctx.fill();
+    }
+    ctx.save();
+    ctx.rotate(t * 0.6 + d.phase);
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * tw})`;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const a2 = a + Math.PI / 5;
+      ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9 + 4);
+      ctx.lineTo(Math.cos(a2) * 3.6, Math.sin(a2) * 3.6 + 4);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    if (!reduceMotion) {
+      ctx.fillStyle = `rgba(255,255,255,${0.8 * tw})`;
+      for (let i = 0; i < 3; i++) {
+        const a = t * 1.3 + d.phase + i * 2.1;
+        const r = 14 + Math.sin(t * 2 + i) * 4;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * r, 4 + Math.sin(a) * r * 0.4, 1.3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  function drawCow(d, t) {
+    const bob = reduceMotion ? 0 : Math.sin(t * 1.5 + d.phase) * 1.2;
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 13, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(0, bob);
+    ctx.fillStyle = '#f5efe6';
+    ctx.strokeStyle = '#6b5a4a';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(0, 4, 19, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    for (const [ox, oy, r] of [[-8, 0, 5], [6, 6, 4]]) {
+      ctx.beginPath(); ctx.ellipse(ox, oy, r, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#f5efe6';
+    ctx.strokeStyle = '#6b5a4a';
+    ctx.beginPath(); ctx.ellipse(20, -2, 8, 6.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    ctx.beginPath(); ctx.arc(24, -3, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9847a';
+    ctx.beginPath(); ctx.ellipse(26, 1, 2.6, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHay(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d8b45c';
+    ctx.strokeStyle = '#a4813a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,100,40,0.5)';
+    ctx.lineWidth = 0.8;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(-11, i * 3); ctx.lineTo(11, i * 3 + 2); ctx.stroke(); }
+  }
+
+  function drawTrough(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 6, 17, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6a48';
+    ctx.strokeStyle = '#5a4530';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-16, -6, 32, 12, 3); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-16, -6, 32, 12); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#7fb4d8';
+    ctx.beginPath(); ctx.ellipse(0, -3, 12, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawFarmRow(d) {
+    const len = d.len || 130;
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.beginPath(); ctx.ellipse(0, 4, len / 2 + 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7a5a3a';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-len / 2, -4, len, 10, 4); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-len / 2, -4, len, 10); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#5a9a52';
+    const sprouts = Math.round(len / 16);
+    for (let i = 0; i < sprouts; i++) {
+      const sx = -len / 2 + (i + 0.5) * (len / sprouts);
+      const jitter = ((d.seed * 97 + i * 13.7) % 1) * 3 - 1.5;
+      ctx.beginPath(); ctx.ellipse(sx, -2 + jitter, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawCart(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 14, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.rect(-20, -6, 40, 16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#6b4a2a';
+    ctx.beginPath(); ctx.arc(-13, 12, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(13, 12, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d8b45c';
+    ctx.strokeStyle = 'rgba(140,100,40,0.5)';
+    ctx.beginPath(); ctx.rect(-17, -14, 34, 9); ctx.fill();
+    for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 5, -14); ctx.lineTo(i * 5 - 2, -6); ctx.stroke(); }
+  }
+
+  function drawScarecrow(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 0.9 + d.phase) * 0.06;
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 20, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(0, -18); ctx.stroke();
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.beginPath(); ctx.moveTo(-16, -8); ctx.lineTo(16, -8); ctx.stroke();
+    ctx.fillStyle = '#c79764';
+    ctx.beginPath(); ctx.rect(-9, -8, 18, 22); ctx.fill();
+    ctx.fillStyle = '#8a6a4a';
+    ctx.beginPath(); ctx.rect(-11, -8, 22, 5); ctx.fill();
+    ctx.fillStyle = '#e7c88f';
+    ctx.beginPath(); ctx.arc(0, -16, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#a4813a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-7, -20); ctx.lineTo(7, -20); ctx.lineTo(9, -16); ctx.lineTo(-9, -16); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#5a3a2a';
+    ctx.beginPath(); ctx.arc(-2.5, -16, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2.5, -16, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawClothesline(d, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.1 + d.phase) * 3;
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-26, 20); ctx.lineTo(-26, -22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(26, 20); ctx.lineTo(26, -22); ctx.stroke();
+    ctx.strokeStyle = '#9a8a7a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-26, -22); ctx.quadraticCurveTo(0, -14, 26, -22); ctx.stroke();
+    const cloth = ['#e8dcc8', '#c98a6a', '#7fa8c9'];
+    for (let i = 0; i < 3; i++) {
+      const cx = -17 + i * 17;
+      const cy0 = -22 + (cx / 26) * (cx / 26) * 8;
+      ctx.save();
+      ctx.translate(cx, cy0);
+      ctx.rotate(sway * 0.02);
+      ctx.fillStyle = cloth[i];
+      ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.lineTo(4, 14); ctx.lineTo(-4, 14); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // 로드맵 5 §4-2/폭포 장식: 마지막으로 미뤄뒀던 광장 소품(착륙 데크·비행정·깃발·등불·
+  // 상자·가마솥·부서진 석재·선돌)과 폭포. G와 같은 패턴 — decorations에 type만 붙여 편입.
+  function drawLandingDeck(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 10, 58, 20, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b9895a';
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-56, -18, 112, 36, 6); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-56, -18, 112, 36); ctx.fill(); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(122,82,48,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i * 12, -18); ctx.lineTo(i * 12, 18); ctx.stroke(); }
+    ctx.fillStyle = '#8a6438';
+    ctx.beginPath(); ctx.rect(-58, -20, 6, 40); ctx.fill();
+    ctx.beginPath(); ctx.rect(52, -20, 6, 40); ctx.fill();
+  }
+
+  function drawAirship(d, t) {
+    const bob = reduceMotion ? 0 : Math.sin(t * 0.9 + d.phase) * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 40, 46, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(0, bob);
+    // 곤돌라
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-26, 10, 52, 20, 6); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-26, 10, 52, 20); ctx.fill(); ctx.stroke(); }
+    // 계류 로프
+    ctx.strokeStyle = '#9a8a7a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-18, 22); ctx.lineTo(-30, -12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(18, 22); ctx.lineTo(30, -12); ctx.stroke();
+    // 기구(풍선)
+    ctx.fillStyle = '#d8635a';
+    ctx.strokeStyle = '#8a3a34';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(0, -18, 34, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.ellipse(-10, -26, 12, 8, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(138,58,52,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.ellipse(0, -18, 34, 26, 0, 0, Math.PI * 2); ctx.moveTo(i * 12, -44); ctx.lineTo(i * 12, 8); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawFlag(d, t) {
+    const wave = reduceMotion ? 0 : Math.sin(t * 2 + d.phase) * 0.18;
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 30, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(0, -40); ctx.stroke();
+    ctx.save();
+    ctx.translate(0, -38);
+    ctx.fillStyle = '#ff8aa0';
+    ctx.strokeStyle = '#c65a72';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -8);
+    ctx.quadraticCurveTo(16, -8 + wave * 10, 30, -4);
+    ctx.quadraticCurveTo(20, 2, 30, 10);
+    ctx.quadraticCurveTo(14, 6 + wave * 10, 0, 10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLantern(d, t) {
+    const flick = reduceMotion ? 0.85 : 0.7 + Math.sin(t * 5 + d.phase) * 0.15 + Math.sin(t * 11 + d.phase) * 0.08;
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.beginPath(); ctx.ellipse(0, 20, 10, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(0, -6); ctx.stroke();
+    const glow = ctx.createRadialGradient(0, -14, 2, 0, -14, 20);
+    glow.addColorStop(0, `rgba(255,210,120,${0.5 * flick})`);
+    glow.addColorStop(1, 'rgba(255,210,120,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, -14, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-3, -6); ctx.lineTo(3, -6); ctx.lineTo(5, -22); ctx.lineTo(-5, -22); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = `rgba(255,214,140,${flick})`;
+    ctx.beginPath(); ctx.ellipse(0, -14, 5, 6.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a6438';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(0, -26); ctx.stroke();
+  }
+
+  function drawCrate(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 12, 15, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b9895a';
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.rect(-13, -12, 26, 24); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-13, -12); ctx.lineTo(13, 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13, -12); ctx.lineTo(-13, 12); ctx.stroke();
+  }
+
+  function drawCauldron(d, t) {
+    const flick = reduceMotion ? 0.8 : 0.65 + Math.sin(t * 6 + d.phase) * 0.2;
+    ctx.fillStyle = `rgba(255,150,60,${flick * 0.5})`;
+    ctx.beginPath(); ctx.moveTo(-8, 8); ctx.quadraticCurveTo(-10, -4, -2, -14); ctx.quadraticCurveTo(2, -6, 0, 0);
+    ctx.quadraticCurveTo(6, -8, 8, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 15, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a332e';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(-11, 9); ctx.lineTo(-15, 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(11, 9); ctx.lineTo(15, 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 11); ctx.lineTo(0, 16); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    ctx.beginPath(); ctx.ellipse(0, 4, 13, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2a231e';
+    ctx.beginPath(); ctx.ellipse(0, 1, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawRubble(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, 6, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+    const stones = [[-10, 2, 9, 0.2], [6, 4, 11, -0.15], [-2, -4, 7, 0.4]];
+    for (const [ox, oy, r, rot] of stones) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(rot);
+      ctx.fillStyle = d.tone > 0.5 ? '#a89a88' : '#948578';
+      ctx.strokeStyle = '#6b5f52';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-r, r * 0.4); ctx.lineTo(-r * 0.3, -r * 0.7); ctx.lineTo(r * 0.6, -r * 0.4); ctx.lineTo(r, r * 0.5); ctx.lineTo(0, r); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawStandingStone(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 26, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8f8698';
+    ctx.strokeStyle = '#5f5768';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-11, 24); ctx.lineTo(-9, -30); ctx.lineTo(-3, -42); ctx.lineTo(3, -42); ctx.lineTo(9, -30); ctx.lineTo(11, 24);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.beginPath(); ctx.moveTo(-7, 18); ctx.lineTo(-6, -26); ctx.lineTo(-2, -34); ctx.lineTo(-4, -20); ctx.lineTo(-5, 18); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(95,87,104,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(8, -8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9, 8); ctx.lineTo(7, 5); ctx.stroke();
+  }
+
+  function drawWaterfall(d, t) {
+    const flow = reduceMotion ? 0 : t;
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 26, 9, 0, 0, Math.PI * 2); ctx.fill();
+    const grad = ctx.createLinearGradient(0, -70, 0, 6);
+    grad.addColorStop(0, 'rgba(180,225,245,0.05)');
+    grad.addColorStop(0.5, 'rgba(200,235,250,0.5)');
+    grad.addColorStop(1, 'rgba(230,248,255,0.75)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-16, -70); ctx.lineTo(16, -70); ctx.lineTo(20, 6); ctx.lineTo(-20, 6); ctx.closePath();
+    ctx.fill();
+    if (!reduceMotion) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 4; i++) {
+        const ox = -12 + i * 8;
+        const off = ((flow * 60 + i * 17) % 76);
+        ctx.beginPath(); ctx.moveTo(ox, -70 + off - 20); ctx.lineTo(ox + 2, -70 + off); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI + (reduceMotion ? 0 : t * 0.7);
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * 16, 6 + Math.sin(a) * 3, 4, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawFence(angle) {
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.2;
+    ctx.fillStyle = '#a97a4a';
+    ctx.beginPath(); ctx.rect(-16, -10, 5, 20); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(11, -10, 5, 20); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c79764';
+    ctx.beginPath(); ctx.rect(-18, -6, 36, 5); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(-18, 2, 36, 5); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawSignpost() {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 10, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#a97a4a';
+    ctx.fillRect(-4, -34, 8, 44);
+    ctx.fillStyle = '#e7c88f';
+    ctx.beginPath();
+    ctx.moveTo(-30, -40); ctx.lineTo(30, -40); ctx.lineTo(30, -14); ctx.lineTo(-30, -14); ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#7a5230';
+    ctx.font = '18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, -27);
+  }
+
+  function drawSpring(spring) {
+    ctx.fillStyle = '#c9a86a';
+    ctx.beginPath(); ctx.ellipse(0, 6, spring.radius * 1.1, spring.radius * 0.76, 0, 0, Math.PI * 2); ctx.fill();
+    const waterGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, spring.radius);
+    waterGrad.addColorStop(0, '#dff7ff'); waterGrad.addColorStop(1, '#6ec6e8');
+    ctx.fillStyle = waterGrad;
+    ctx.beginPath(); ctx.ellipse(0, 0, spring.radius * 0.9, spring.radius * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c7c1d6';
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * spring.radius * 0.95, Math.sin(a) * spring.radius * 0.66, 8, 6, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 로드맵 5 작업 F-2: "여러 겹의 비늘처럼" 겹쳐지는 나무 캐노피 — 잎을 낱장으로 그리는
+  // 대신, 톱니(스캘럽) 진 원형 덩어리를 겹으로 쌓아 저렴하게 근사한다. lobes개의 돌기가
+  // 바깥/안쪽 반지름을 오가며 스캘럽 윤곽을 만든다.
+  function drawLeafLayer(cy, R, lobes, fillColor) {
+    ctx.fillStyle = fillColor;
+    ctx.beginPath();
+    for (let i = 0; i < lobes * 2; i++) {
+      const a = (i / (lobes * 2)) * Math.PI * 2;
+      const r = (i % 2 === 0) ? R : R * 0.82;
+      const x = Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.92;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  function drawTree(o, t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 1.2 + o.sway) * 0.05;
+    const R = o.radius;
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, R * 0.55, R * 0.9, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b98452';
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = Math.max(1, R * 0.05);
+    ctx.beginPath();
+    // 로드맵 5 작업 F-2: 기둥 길이 1.4배(밑동이 눈에 보이게) — 위쪽은 그대로 캐노피에 가려짐
+    const trunkH = R * 0.75 * 1.4;
+    if (ctx.roundRect) { ctx.roundRect(-R * 0.14, -R * 0.1, R * 0.28, trunkH, R * 0.06); }
+    else { ctx.rect(-R * 0.14, -R * 0.1, R * 0.28, trunkH); }
+    ctx.fill(); ctx.stroke();
+    ctx.save();
+    ctx.translate(0, -R * 0.5);
+    ctx.rotate(sway);
+    // 로드맵 5 작업 F-2: 새 잎 색(더 짙은 상록수 톤) — 층마다 두 색을 번갈아 4~5겹 쌓는다
+    const leafA = '#4aa86b', leafB = '#3d8f59';
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = Math.max(1, R * 0.04);
+    ctx.lineJoin = 'round';
+    const layers = o.tone > 0.5 ? 5 : 4;
+    for (let i = 0; i < layers; i++) {
+      const frac = i / (layers - 1); // 0(아래, 넓게) → 1(위, 좁게)
+      const layerR = R * (1.0 - frac * 0.52);
+      const layerY = R * (0.3 - frac * 0.95);
+      const color = i % 2 === 0 ? leafA : leafB;
+      drawLeafLayer(layerY, layerR, 6, color);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.arc(-R * 0.26, -R * 0.5, R * 0.26, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawStone(o) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, o.radius * 0.5, o.radius * 0.9, o.radius * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = o.tone > 0.5 ? '#cdc6dd' : '#b9aec2';
+    ctx.strokeStyle = '#7d7488';
+    ctx.lineWidth = Math.max(1, o.radius * 0.08);
+    ctx.beginPath(); ctx.ellipse(0, 0, o.radius, o.radius * 0.82, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.ellipse(-o.radius * 0.32, -o.radius * 0.3, o.radius * 0.32, o.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawGroundShadow(rx) {
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 6, rx, rx * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawBigTree(t) {
+    const sway = reduceMotion ? 0 : Math.sin(t * 0.8) * 0.03;
+    drawGroundShadow(62);
+    ctx.strokeStyle = '#6b4423';
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#a9743f';
+    ctx.beginPath();
+    ctx.moveTo(-17, 8); ctx.lineTo(-10, -58); ctx.lineTo(10, -58); ctx.lineTo(17, 8);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(4, -58, 8, 66);
+    ctx.save();
+    ctx.translate(0, -62);
+    ctx.rotate(sway);
+    ctx.strokeStyle = '#2d5f3f';
+    ctx.lineWidth = 2.2;
+    ctx.fillStyle = '#3f9a63';
+    ctx.beginPath(); ctx.ellipse(0, 0, 66, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-34, -22, 38, 27, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(32, -20, 34, 25, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#56b87a';
+    ctx.beginPath(); ctx.ellipse(-6, -34, 40, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.26)';
+    ctx.beginPath(); ctx.ellipse(-24, -44, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRockPeak() {
+    drawGroundShadow(64);
+    ctx.strokeStyle = '#6d6478';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#9c90ad';
+    ctx.beginPath();
+    ctx.moveTo(-58, 8); ctx.lineTo(-22, -68); ctx.lineTo(6, -34); ctx.lineTo(26, -96);
+    ctx.lineTo(60, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#b9aec2';
+    ctx.beginPath();
+    ctx.moveTo(26, -96); ctx.lineTo(60, 8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(26, -96); ctx.lineTo(38, -62); ctx.lineTo(14, -62); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-22, -68); ctx.lineTo(-10, -44); ctx.lineTo(-33, -44); ctx.closePath(); ctx.fill();
+  }
+
+  function drawRuins() {
+    drawGroundShadow(58);
+    ctx.fillStyle = '#c7b795';
+    ctx.beginPath(); ctx.ellipse(0, 4, 54, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8f8262';
+    ctx.lineWidth = 2;
+    const cols = [[-38, 52], [-12, 74], [16, 38], [40, 62]];
+    for (const [x, h] of cols) {
+      ctx.fillStyle = '#e0d2b2';
+      ctx.beginPath(); ctx.rect(x - 9, -h, 18, h); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,0.13)';
+      ctx.fillRect(x + 3, -h, 6, h);
+      ctx.fillStyle = '#d8c9a8';
+      ctx.beginPath(); ctx.ellipse(x, -h, 13, 5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = '#d8c9a8';
+    ctx.beginPath(); ctx.rect(-46, -80, 46, 9); ctx.fill(); ctx.stroke();
+  }
+
+  function drawCrystal(t) {
+    const pulse = reduceMotion ? 0.5 : (Math.sin(t * 1.5) + 1) / 2;
+    drawGroundShadow(40);
+    ctx.save();
+    ctx.globalAlpha *= 0.28 + pulse * 0.3;
+    const glow = ctx.createRadialGradient(0, -52, 4, 0, -52, 62);
+    glow.addColorStop(0, '#f0ddff'); glow.addColorStop(1, 'rgba(199,155,240,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, -52, 62, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#8452b8';
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    const shards = [[0, -104, 17], [-24, -62, 12], [22, -70, 13]];
+    for (const [x, top, w] of shards) {
+      ctx.fillStyle = '#b87fe6';
+      ctx.beginPath();
+      ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, 8); ctx.lineTo(x - w, top * 0.36);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.42)';
+      ctx.beginPath();
+      ctx.moveTo(x, top); ctx.lineTo(x + w, top * 0.36); ctx.lineTo(x, top * 0.36);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  function drawCaveEntrance(t) {
+    drawGroundShadow(60);
+    ctx.strokeStyle = '#4a4552';
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.fillStyle = '#7d7488';
+    ctx.beginPath();
+    ctx.moveTo(-52, 10); ctx.lineTo(-46, -50); ctx.quadraticCurveTo(-40, -92, 0, -96);
+    ctx.quadraticCurveTo(40, -92, 46, -50); ctx.lineTo(52, 10); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    const glow = reduceMotion ? 0.5 : (Math.sin(t * 1.2) + 1) / 2;
+    const mouth = ctx.createRadialGradient(0, -20, 4, 0, -20, 46);
+    mouth.addColorStop(0, `rgba(60,40,80,${0.5 + glow * 0.15})`);
+    mouth.addColorStop(1, '#0d0a14');
+    ctx.fillStyle = mouth;
+    ctx.beginPath();
+    ctx.moveTo(-30, 10); ctx.lineTo(-26, -40); ctx.quadraticCurveTo(-22, -68, 0, -70);
+    ctx.quadraticCurveTo(22, -68, 26, -40); ctx.lineTo(30, 10); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.ellipse(-30, -60, 10, 20, 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawLandmarkBody(lm, t) {
+    if (lm.id === 'tree') drawBigTree(t);
+    else if (lm.id === 'rock') drawRockPeak();
+    else if (lm.id === 'ruins') drawRuins();
+    else if (lm.id === 'crystal') drawCrystal(t);
+    else if (lm.id === 'cave') drawCaveEntrance(t);
+  }
+
+  function drawPortalBody(t, locked) {
+    drawGroundShadow(46);
+    ctx.fillStyle = locked ? '#7a7178' : '#8f8296';
+    ctx.beginPath();
+    ctx.moveTo(-30, 8); ctx.lineTo(-30, -70);
+    ctx.quadraticCurveTo(-30, -96, 0, -96);
+    ctx.quadraticCurveTo(30, -96, 30, -70); ctx.lineTo(30, 8);
+    ctx.lineTo(18, 8); ctx.lineTo(18, -68);
+    ctx.quadraticCurveTo(18, -84, 0, -84);
+    ctx.quadraticCurveTo(-18, -84, -18, -68); ctx.lineTo(-18, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath();
+    ctx.moveTo(-30, -70); ctx.quadraticCurveTo(-30, -96, 0, -96);
+    ctx.lineTo(0, -84); ctx.quadraticCurveTo(-18, -84, -18, -68); ctx.closePath(); ctx.fill();
+
+    const spin = reduceMotion || locked ? 0 : t * 1.4;
+    const pulse = reduceMotion ? 0.6 : (Math.sin(t * 2) + 1) / 2;
+    ctx.save();
+    ctx.translate(0, -46);
+    ctx.rotate(spin);
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 32);
+    if (locked) {
+      grad.addColorStop(0, '#cfc9cf');
+      grad.addColorStop(0.5, '#8b8590');
+      grad.addColorStop(1, 'rgba(139,133,144,0)');
+      ctx.globalAlpha *= 0.4;
+    } else {
+      grad.addColorStop(0, '#fff2ff');
+      grad.addColorStop(0.5, '#c79bf0');
+      grad.addColorStop(1, 'rgba(199,155,240,0)');
+      ctx.globalAlpha *= 0.65 + pulse * 0.3;
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, 0, 30, 32, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    if (locked) {
+      ctx.save();
+      ctx.translate(0, -46);
+      ctx.font = '600 15px "Gowun Dodum", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(40,34,30,0.55)';
+      ctx.fillText('🔒', 0, 2);
+      ctx.restore();
+    }
+  }
+
+  function drawPathTile(tone, angle) {
+    ctx.save();
+    ctx.rotate(angle);
+    ctx.fillStyle = tone === 0 ? '#cbb98f' : '#bfa97c';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(-30, -68, 60, 70, 8) : ctx.rect(-30, -68, 60, 70);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── 로드맵 5 작업 B/C: 물·단구 도형 그리기 ─────────────────────────
+  // 색만으로 종류를 구분한다(절벽 옆면 줄무늬·폭포 등 세부 장식은 다음 단계 과제).
+  function terrainShapeStyle(kind) {
+    switch (kind) {
+      case 'water-deep':    return { fill: 'rgba(28,66,126,0.82)',  stroke: 'rgba(255,255,255,0.32)', strokeW: 2 };
+      case 'water-shallow': return { fill: 'rgba(140,205,225,0.55)', stroke: 'rgba(255,255,255,0.4)',  strokeW: 1.4 };
+      case 'cliff':         return { fill: 'rgba(184,141,84,0.5)',  stroke: 'rgba(122,88,48,0.65)',   strokeW: 2.4 };
+      case 'bridge':        return { fill: 'rgba(196,158,110,0.85)', stroke: 'rgba(120,86,48,0.8)',   strokeW: 2 };
+      case 'stairs':        return { fill: 'rgba(210,196,168,0.75)', stroke: 'rgba(150,130,95,0.7)',  strokeW: 1.6 };
+      case 'slope':         return { fill: 'rgba(150,190,120,0.2)',  stroke: null };
+      default:               return { fill: 'rgba(150,190,120,0.32)', stroke: 'rgba(110,150,85,0.45)', strokeW: 1.4 };
+    }
+  }
+
+  // 도형의 월드 경계를 전부 투영해서 화면 폴리곤으로 채운다. 경계점 중 하나라도
+  // 지평선 밖(투영 실패)이면 이번 프레임은 건너뛴다 — 일그러진 폴리곤보다 낫다.
+  function drawTerrainShape(p, cx, cy) {
+    const worldPts = shapeBoundaryPoints(p, p.shape === 'circle' ? 20 : 12);
+    const screenPts = [];
+    for (const wp of worldPts) {
+      const sp = project(wp.x, wp.y);
+      if (!sp) return;
+      screenPts.push(sp);
+    }
+    if (screenPts.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(cx + screenPts[0].sx, cy + screenPts[0].sy);
+    for (let i = 1; i < screenPts.length; i++) ctx.lineTo(cx + screenPts[i].sx, cy + screenPts[i].sy);
+    ctx.closePath();
+    const style = terrainShapeStyle(p.kind);
+    ctx.fillStyle = style.fill;
+    ctx.fill();
+    if (style.stroke) {
+      ctx.strokeStyle = style.stroke;
+      ctx.lineWidth = style.strokeW || 2;
+      ctx.stroke();
+    }
+  }
+
+  function drawPlayer(t, moving, z) {
+    const bob = reduceMotion || !moving ? 0 : Math.sin(t * 9) * 1.6;
+    // z(점프 높이)는 project()의 거리 계산과 무관한 순수 스크린-Y 오프셋이다 — 화면 위로
+    // 띄우기만 할 뿐 지평선/거리 연산에는 전혀 관여하지 않는다.
+    ctx.save();
+    ctx.translate(0, bob - (z || 0));
+
+    ctx.fillStyle = 'rgba(60,40,30,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 0.85, PLAYER_RADIUS * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#4fb787';
+    ctx.beginPath(); ctx.ellipse(0, PLAYER_RADIUS * 0.55, PLAYER_RADIUS * 0.62, PLAYER_RADIUS * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#3f8f66';
+    ctx.beginPath(); ctx.ellipse(-PLAYER_RADIUS * 0.28, PLAYER_RADIUS * 0.98, 5, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(PLAYER_RADIUS * 0.28, PLAYER_RADIUS * 0.98, 5, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+
+    const headGrad = ctx.createRadialGradient(-5, -8, 3, 0, -2, PLAYER_RADIUS + 4);
+    headGrad.addColorStop(0, '#ffe9d2'); headGrad.addColorStop(1, '#ffd9b8');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.35, PLAYER_RADIUS, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,100,60,0.35)'; ctx.lineWidth = 1.4; ctx.stroke();
+
+    ctx.fillStyle = '#8a5a3a';
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 0.92, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+
+    const eyeOffX = player.facing.x * 1.6, eyeOffY = player.facing.y * 1.2;
+    ctx.fillStyle = '#4a3324';
+    ctx.beginPath(); ctx.arc(-4 + eyeOffX, -PLAYER_RADIUS * 0.38 + eyeOffY, 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4 + eyeOffX, -PLAYER_RADIUS * 0.38 + eyeOffY, 1.7, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,140,150,0.55)';
+    ctx.beginPath(); ctx.ellipse(-PLAYER_RADIUS * 0.55, -PLAYER_RADIUS * 0.18, 2.6, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(PLAYER_RADIUS * 0.55, -PLAYER_RADIUS * 0.18, 2.6, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = '#8a5a3a'; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.28, 3.2, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 나무/랜드마크처럼 큰 오브젝트에 가려졌을 때, 플레이어가 대략 어디 있는지 보여주는
+  // 점선 테두리. 실제 스프라이트 대신 단순한 캡슐 윤곽만 그려서 "숨겨졌다"는 게 분명히 읽히게 한다.
+  // occluder가 주어지면 그 오브젝트의 대략적인 화면 범위(reach 박스)로 클립해서,
+  // 실제로 가려진 부분에만 점선이 그려지고 캐릭터가 튀어나온 부분은 점선이 안 보이게 한다.
+  function drawPlayerOutline(occluder) {
+    ctx.save();
+    if (occluder) {
+      const { sx, sy, scale, reach } = occluder;
+      const rx = Math.max(reach.w * scale, 1);
+      const ry = Math.max((reach.upH + reach.downH) / 2 * scale, 1);
+      const ccy = sy + (reach.downH - reach.upH) / 2 * scale;
+      ctx.beginPath();
+      ctx.ellipse(sx, ccy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+    }
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(255,138,160,0.18)';
+    ctx.strokeStyle = 'rgba(255,138,160,0.95)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.ellipse(0, PLAYER_RADIUS * 0.45, PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 1.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,138,160,0.95)';
+    ctx.beginPath(); ctx.arc(0, -PLAYER_RADIUS * 0.45, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // 오브젝트별로 플레이어를 가릴 수 있는 대략적인 화면상 폭/위쪽/아래쪽 범위(로컬, 미스케일).
+  // 각 draw*Body 함수가 실제로 그리는 모양을 대략 감싸는 값으로, 픽셀 단위로 정확할 필요는 없다.
+  const LM_REACH = {
+    tree:    { w: 72, upH: 115, downH: 30 },
+    rock:    { w: 64, upH: 100, downH: 14 },
+    ruins:   { w: 56, upH: 88,  downH: 24 },
+    crystal: { w: 46, upH: 118, downH: 20 },
+    cave:    { w: 58, upH: 96,  downH: 14 },
+  };
+  // 로드맵 5 작업 E/F/G: decorations 타입별 가림 범위 — 기본값(버섯 크기)에서 벗어나는
+  // 것만 여기 적는다. 장식이라 낮은 것들(꽃/농경지 이랑/갈대)은 null로 둬 가림 판정에서 제외.
+  const D_REACH = {
+    star:  { w: 20, upH: 60, downH: 6 },
+    bush:  { w: 22, upH: 24, downH: 10 },
+    flower: null,
+    reed:  { w: 6, upH: 20, downH: 4 },
+    cow:   { w: 34, upH: 36, downH: 14 },
+    hay:   { w: 16, upH: 14, downH: 8 },
+    trough: { w: 20, upH: 12, downH: 8 },
+    farmRow: null,
+    cart:  { w: 30, upH: 26, downH: 12 },
+    scarecrow: { w: 20, upH: 40, downH: 10 },
+    clothesline: { w: 26, upH: 30, downH: 8 },
+    fence: null,
+    landingDeck: null,
+    airship: { w: 40, upH: 60, downH: 16 },
+    flag: { w: 12, upH: 48, downH: 16 },
+    lantern: { w: 12, upH: 30, downH: 10 },
+    crate: { w: 16, upH: 20, downH: 8 },
+    cauldron: { w: 18, upH: 20, downH: 10 },
+    rubble: null,
+    standingStone: { w: 14, upH: 46, downH: 12 },
+    waterfall: { w: 24, upH: 70, downH: 6 },
+  };
+  function objectReach(s) {
+    if (s.o) {
+      const r = s.o.radius;
+      return s.o.type === 'tree'
+        ? { w: r * 1.15, upH: r * 1.6, downH: r * 0.9 }
+        : { w: r * 1.0,  upH: r * 0.9, downH: r * 0.85 };
+    }
+    if (s.lm) return LM_REACH[s.lm.id] || { w: 50, upH: 90, downH: 20 };
+    if (s.portal) return { w: 34, upH: 100, downH: 12 };
+    if (s.sign) return { w: 32, upH: 44, downH: 16 };
+    if (s.d) {
+      const type = s.d.type || 'mushroom';
+      if (type in D_REACH) return D_REACH[type];
+      return { w: 13, upH: 16, downH: 8 };
+    }
+    return null; // spring, fence — 플레이어를 가릴 만큼 높지 않음
+  }
+
+  function drawProjected(cx, cy, x, y, drawFn) {
+    const p = project(x, y);
+    if (!p) return null;
+    const fade = Math.min(1, p.scale / 0.22);
+    ctx.save();
+    ctx.translate(cx + p.sx, cy + p.sy);
+    ctx.scale(p.scale, p.scale);
+    ctx.globalAlpha = fade;
+    drawFn();
+    ctx.restore();
+    return p;
+  }
+
+  function mapMarker(mx, my, tint, size) {
+    ctx.fillStyle = tint;
+    ctx.strokeStyle = 'rgba(255,250,242,0.95)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(mx, my - size); ctx.lineTo(mx + size, my);
+    ctx.lineTo(mx, my + size); ctx.lineTo(mx - size, my);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  // 로드맵 5 작업 B: 미니맵/구역 지도용 물·단구 실루엣. toMapX/toMapY는 원점 기준
+  // 단순 축척이라(플레이어 위치와 무관) 지평선 컬링 없이 항상 그릴 수 있다.
+  function drawMapTerrainSilhouette(p, toMapX, toMapY) {
+    const worldPts = shapeBoundaryPoints(p, p.shape === 'circle' ? 16 : 10);
+    if (worldPts.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(toMapX(worldPts[0].x), toMapY(worldPts[0].y));
+    for (let i = 1; i < worldPts.length; i++) ctx.lineTo(toMapX(worldPts[i].x), toMapY(worldPts[i].y));
+    ctx.closePath();
+    ctx.fillStyle = p.kind === 'water-deep' ? 'rgba(40,90,150,0.9)'
+      : p.kind === 'water-shallow' ? 'rgba(120,190,215,0.85)'
+      : 'rgba(196,158,110,0.75)'; // 절벽·다리·돌계단·단구·비탈은 전부 황토 계열 한 색
+    ctx.fill();
+  }
+
+  function drawMapCircle(cx, cy, R, isFull, t) {
+    const z = currentZone;
+    const toMapX = (wx) => cx + (wx / z.radius) * R;
+    const toMapY = (wy) => cy + (wy / z.radius) * R;
+
+    ctx.save();
+
+    // 나무 테 바탕 — 그림자 + 살짝 큰 원으로 액자 느낌
+    ctx.save();
+    ctx.shadowColor = 'rgba(50,34,18,0.45)';
+    ctx.shadowBlur = isFull ? 18 : 9;
+    ctx.shadowOffsetY = isFull ? 6 : 3;
+    ctx.beginPath(); ctx.arc(cx, cy, R + (isFull ? 5 : 3.5), 0, Math.PI * 2);
+    ctx.fillStyle = '#c99354';
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(64,46,32,0.92)';
+    ctx.fill();
+
+    ctx.save();
+    ctx.clip();
+    ctx.drawImage(z.fogCanvas, cx - R, cy - R, R * 2, R * 2);
+    // 로드맵 5 작업 B: 물/단구 실루엣을 fog 위에, 단 이미 탐험한 자리에만 보이게
+    // source-atop으로 합성한다 — "걸어서 드러난 만큼만 보인다"는 원칙은 그대로 둔다
+    ctx.globalCompositeOperation = 'source-atop';
+    for (const p of z.plateaus) drawMapTerrainSilhouette(p, toMapX, toMapY);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+
+    // 나무 테 — 이중 링 (전경도 명판과 같은 톤)
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = '#e8c48b';
+    ctx.lineWidth = isFull ? 4.5 : 3;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R - (isFull ? 3 : 2), 0, Math.PI * 2);
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = isFull ? 2 : 1.4;
+    ctx.stroke();
+
+    for (const lm of z.landmarks) {
+      if (!lm.found) continue;
+      const mx = toMapX(lm.x), my = toMapY(lm.y);
+      mapMarker(mx, my, lm.tint, isFull ? 7 : 4.5);
+      if (isFull) {
+        ctx.font = '600 13px "Gowun Dodum", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(40,34,30,0.85)';
+        ctx.strokeText(lm.name, mx, my - 14);
+        ctx.fillStyle = '#fffaf2';
+        ctx.fillText(lm.name, mx, my - 14);
+      }
+    }
+
+    if (z.portal) {
+      const locked = isPortalLocked(z);
+      const mx = toMapX(z.portal.x), my = toMapY(z.portal.y);
+      mapMarker(mx, my, locked ? '#9c94a0' : '#c79bf0', isFull ? 8 : 5);
+      if (isFull) {
+        ctx.font = '600 13px "Gowun Dodum", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(40,34,30,0.85)';
+        const label = locked ? '포탈 🔒' : '포탈';
+        ctx.strokeText(label, mx, my - 15);
+        ctx.fillStyle = locked ? '#d8d2db' : '#fffaf2';
+        ctx.fillText(label, mx, my - 15);
+      }
+    }
+
+    const px = toMapX(player.x), py = toMapY(player.y);
+    const fa = Math.atan2(player.facing.y, player.facing.x);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(fa);
+    ctx.fillStyle = '#ff8aa0';
+    ctx.beginPath();
+    const s = isFull ? 11 : 7;
+    ctx.moveTo(s, 0); ctx.lineTo(-s * 0.7, s * 0.62); ctx.lineTo(-s * 0.7, -s * 0.62);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,250,242,0.95)'; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawMinimap(viewW, viewH, t) {
+    const size = viewW < 620 ? 96 : 138;
+    const margin = viewW < 620 ? 12 : 16;
+    const R = size / 2;
+    const cx = viewW - margin - R;
+    const cy = margin + R;
+    minimapHit = { cx, cy, r: R + 8 };
+    drawMapCircle(cx, cy, R, false, t);
+
+    // 현재 위치한 맵 이름 — "맵N · 이름" (지금은 전부 맵1 별내림 천문대)
+    const mapLabel = !currentZone.mapNo ? currentZone.name
+      : currentZone.name === `맵${currentZone.mapNo}` ? currentZone.name
+      : `맵${currentZone.mapNo} · ${currentZone.name}`;
+    ctx.font = '700 11px "Gowun Dodum", sans-serif';
+    const nameW = ctx.measureText(mapLabel).width + 16;
+    const nameY = cy + R + 5;
+    roundRectPath(cx - nameW / 2, nameY, nameW, 18, 9);
+    const ng = ctx.createLinearGradient(0, nameY, 0, nameY + 18);
+    ng.addColorStop(0, '#fdf4de'); ng.addColorStop(1, '#f2e0bb');
+    ctx.fillStyle = ng; ctx.fill();
+    ctx.strokeStyle = '#c9a877'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#3a2412';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(mapLabel, cx, nameY + 9.5);
+
+    // "M 지도" 안내 — 조작 칩과 같은 작은 나무 팻말
+    const mLabel = isTouch ? '탭 · 지도' : 'M  지도';
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    const mw = ctx.measureText(mLabel).width + 14;
+    const mY = nameY + 18 + 4;
+    roundRectPath(cx - mw / 2, mY, mw, 16, 6);
+    const mg = ctx.createLinearGradient(0, mY, 0, mY + 16);
+    mg.addColorStop(0, '#e8c48b'); mg.addColorStop(1, '#c99354');
+    ctx.fillStyle = mg; ctx.fill();
+    ctx.strokeStyle = '#a97a4a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#3a2412';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(mLabel, cx, mY + 8.5);
+
+    const z = currentZone;
+    if (z.landmarks.length > 0) {
+      const locked = isPortalLocked(z);
+      const questY = mY + 16 + 5;
+      const label = `★ 랜드마크 ${z.foundCount}/${z.landmarks.length}`;
+      ctx.font = '700 11px "Gowun Dodum", sans-serif';
+      const w = ctx.measureText(label).width + 16;
+      roundRectPath(cx - w / 2, questY, w, 18, 9);
+      const qg = ctx.createLinearGradient(0, questY, 0, questY + 18);
+      qg.addColorStop(0, '#fdf4de'); qg.addColorStop(1, '#f2e0bb');
+      ctx.fillStyle = qg; ctx.fill();
+      ctx.strokeStyle = '#c9a877'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = z.foundCount === z.landmarks.length ? '#2f8f52' : '#b8720f';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, cx, questY + 9.5);
+      if (z.portal) {
+        const ptxt = locked ? '포탈 잠김 🔒' : '포탈 열림';
+        ctx.font = '600 9px "JetBrains Mono", monospace';
+        const pw = ctx.measureText(ptxt).width + 12;
+        const pY = questY + 18 + 3;
+        roundRectPath(cx - pw / 2, pY, pw, 15, 7);
+        ctx.fillStyle = locked ? 'rgba(205,196,184,0.9)' : 'rgba(222,248,230,0.94)';
+        ctx.fill();
+        ctx.strokeStyle = locked ? 'rgba(120,105,90,0.6)' : '#8fd6a6';
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = locked ? '#6b5c4a' : '#237a46';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ptxt, cx, pY + 7.5);
+      }
+    }
+  }
+
+  // ── 월드맵 (M 두 번) ──────────────────────────────────────────────
+  // 원작 에버그린 월드맵을 참고한 그림책풍 전경도.
+  // 8개 지역을 원작 진행 순서대로 잇고, 각 지역의 구현 상태를 함께 보여준다.
+  // status: 'current'(지금 여기) | 'done'(구현 완료) | 'planned'(예정)
+  const WORLD_AREAS = [
+    { n: 1, name: '별내림 천문대', x: 0.17, y: 0.76, status: 'current', desc: '시작 지점' },
+    { n: 2, name: '겸손한 사원',   x: 0.12, y: 0.52, status: 'planned', desc: '옛 유적지' },
+    { n: 3, name: '붙박이 야영지', x: 0.25, y: 0.30, status: 'planned', desc: '첫 마을' },
+    { n: 4, name: '늘 푸른 강가',  x: 0.46, y: 0.19, status: 'planned', desc: '강가 들판' },
+    { n: 5, name: '뮤렌 습지대',   x: 0.66, y: 0.24, status: 'planned', desc: '세계수 습지' },
+    { n: 6, name: '해안 벌목지',   x: 0.83, y: 0.42, status: 'planned', desc: '간척지' },
+    { n: 7, name: '에버그린 항구', x: 0.78, y: 0.64, status: 'planned', desc: '거점 · 포탈' },
+    { n: 8, name: '지붕 없는 동굴', x: 0.50, y: 0.74, status: 'planned', desc: '던전' }
+  ];
+
+  let worldMapHit = null;
+
+  function roundRectPath(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 결정적 잡음 — 섬 윤곽이 매 프레임 흔들리지 않도록
+  function wob(i) {
+    const s = Math.sin(i * 127.1) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  function drawCloudPuff(cx, cy, r, alpha) {
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - r * 0.62, cy + r * 0.12, r * 0.60, r * 0.44, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + r * 0.64, cy + r * 0.14, r * 0.56, r * 0.40, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawIslandBlob(ix, iy, iw, ih) {
+    const cx = ix + iw / 2, cy = iy + ih / 2;
+    const N = 22;
+    const pts = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const rr = 0.90 + wob(i) * 0.12;
+      pts.push({ x: cx + Math.cos(a) * iw * 0.50 * rr, y: cy + Math.sin(a) * ih * 0.50 * rr });
+    }
+    const mid = (p, q) => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+    const path = () => {
+      ctx.beginPath();
+      const m0 = mid(pts[N - 1], pts[0]);
+      ctx.moveTo(m0.x, m0.y);
+      for (let i = 0; i < N; i++) {
+        const cur = pts[i], nxt = pts[(i + 1) % N];
+        const m = mid(cur, nxt);
+        ctx.quadraticCurveTo(cur.x, cur.y, m.x, m.y);
+      }
+      ctx.closePath();
+    };
+
+    // 얕은 바다 테두리
+    ctx.save();
+    ctx.translate(0, ih * 0.03);
+    path();
+    ctx.fillStyle = 'rgba(126,178,208,0.42)';
+    ctx.fill();
+    ctx.restore();
+
+    // 섬 본체
+    path();
+    const g = ctx.createLinearGradient(cx, cy - ih * 0.5, cx, cy + ih * 0.5);
+    g.addColorStop(0, '#93dc8d');
+    g.addColorStop(0.55, '#70c375');
+    g.addColorStop(1, '#4f9d5c');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(66,126,78,0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 중앙 산괴 — 노드와 겹치지 않도록 위쪽 가운데에 낮게
+    ctx.save();
+    ctx.translate(cx + iw * 0.03, cy - ih * 0.30);
+    ctx.fillStyle = 'rgba(88,168,99,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(-iw * 0.13, ih * 0.07);
+    ctx.lineTo(-iw * 0.045, -ih * 0.10);
+    ctx.lineTo(iw * 0.025, ih * 0.015);
+    ctx.lineTo(iw * 0.085, -ih * 0.075);
+    ctx.lineTo(iw * 0.155, ih * 0.07);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.beginPath();
+    ctx.moveTo(-iw * 0.045, -ih * 0.10);
+    ctx.lineTo(-iw * 0.008, -ih * 0.028);
+    ctx.lineTo(-iw * 0.085, -ih * 0.005);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWorldMap(viewW, viewH, t) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,26,22,0.62)';
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    const small = viewW < 620;
+    const pad = small ? 8 : 18;
+    const PW = Math.min(viewW - pad * 2, 760);
+    const PH = Math.min(viewH - pad * 2, 520);
+    const px = (viewW - PW) / 2, py = (viewH - PH) / 2;
+    worldMapHit = { x: px, y: py, w: PW, h: PH };
+
+    // 양피지 패널
+    ctx.save();
+    ctx.shadowColor = 'rgba(40,30,20,0.45)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    roundRectPath(px, py, PW, PH, small ? 12 : 18);
+    const pg = ctx.createLinearGradient(px, py, px, py + PH);
+    pg.addColorStop(0, '#fdf4de');
+    pg.addColorStop(1, '#f2e0bb');
+    ctx.fillStyle = pg;
+    ctx.fill();
+    ctx.restore();
+
+    roundRectPath(px, py, PW, PH, small ? 12 : 18);
+    ctx.strokeStyle = '#c9a877';
+    ctx.lineWidth = small ? 2 : 3;
+    ctx.stroke();
+
+    // 패널 안쪽을 클립하고 하늘빛을 깐다
+    ctx.save();
+    roundRectPath(px + 4, py + 4, PW - 8, PH - 8, small ? 9 : 15);
+    ctx.clip();
+    const sg = ctx.createLinearGradient(px, py, px, py + PH);
+    sg.addColorStop(0, 'rgba(150,205,240,0.45)');
+    sg.addColorStop(1, 'rgba(198,230,245,0.30)');
+    ctx.fillStyle = sg;
+    ctx.fillRect(px, py, PW, PH);
+
+    // 섬 영역 (아래쪽은 명판 자리로 비워둔다)
+    const ix = px + PW * 0.13;
+    const iy = py + PH * (small ? 0.12 : 0.13);
+    const iw = PW * 0.74;
+    const ih = PH * (small ? 0.46 : 0.64);
+
+    drawIslandBlob(ix, iy, iw, ih);
+
+    // 경로 — 원작 진행 순서대로 잇는다
+    const pt = (a) => ({ x: ix + a.x * iw, y: iy + a.y * ih });
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 0; i < WORLD_AREAS.length - 1; i++) {
+      const A = pt(WORLD_AREAS[i]), B = pt(WORLD_AREAS[i + 1]);
+      const open = WORLD_AREAS[i].status !== 'planned' && WORLD_AREAS[i + 1].status !== 'planned';
+      ctx.save();
+      ctx.setLineDash(open ? [] : [5, 7]);
+      ctx.strokeStyle = open ? 'rgba(232,206,150,0.95)' : 'rgba(120,110,90,0.38)';
+      ctx.lineWidth = open ? (small ? 5 : 7) : (small ? 2 : 3);
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y);
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+      const nx = -(B.y - A.y), ny = (B.x - A.x);
+      const nl = Math.hypot(nx, ny) || 1;
+      const bend = (i % 2 ? 1 : -1) * Math.min(26, nl * 0.16);
+      ctx.quadraticCurveTo(mx + (nx / nl) * bend, my + (ny / nl) * bend, B.x, B.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 구름 테두리 — 패널 네 변을 따라 둘러 액자처럼
+    const nC = small ? 16 : 22;
+    const perim = 2 * (PW + PH);
+    for (let i = 0; i < nC; i++) {
+      const d = ((i + wob(i) * 0.6) / nC) * perim;
+      let cxp, cyp;
+      if (d < PW)                    { cxp = px + d;                 cyp = py; }
+      else if (d < PW + PH)          { cxp = px + PW;                cyp = py + (d - PW); }
+      else if (d < 2 * PW + PH)      { cxp = px + PW - (d - PW - PH); cyp = py + PH; }
+      else                           { cxp = px;                     cyp = py + PH - (d - 2 * PW - PH); }
+      const inward = (small ? 8 : 14) + wob(i + 5) * (small ? 10 : 18);
+      cxp += (px + PW / 2 - cxp) * (inward / Math.max(PW, PH));
+      cyp += (py + PH / 2 - cyp) * (inward / Math.max(PW, PH));
+      drawCloudPuff(cxp, cyp, (small ? 15 : 24) * (0.72 + wob(i + 3) * 0.55), 0.92);
+    }
+
+    // 지역 노드
+    ctx.textAlign = 'center';
+    for (const a of WORLD_AREAS) {
+      const p = pt(a);
+      const cur = a.status === 'current';
+      const planned = a.status === 'planned';
+      const r = small ? 9 : 12;
+
+      // 그림자
+      ctx.fillStyle = 'rgba(60,70,50,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y + r * 0.72, r * 0.95, r * 0.40, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 표식
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = planned ? '#cbbfa6' : (cur ? '#ff8aa0' : '#ffd166');
+      ctx.fill();
+      ctx.strokeStyle = planned ? 'rgba(110,100,85,0.5)' : 'rgba(120,80,60,0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 현재 위치는 맥동하는 고리로 강조
+      if (cur) {
+        const pulse = 1 + Math.sin(t * 3) * 0.16;
+        ctx.strokeStyle = 'rgba(255,138,160,0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 1.75 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // 번호
+      ctx.fillStyle = planned ? 'rgba(90,80,65,0.75)' : '#5b4632';
+      ctx.font = `700 ${small ? 9 : 11}px "JetBrains Mono", monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(a.n), p.x, p.y + 0.5);
+
+      // 이름표 — 좁은 화면에서는 아래 범례가 이름을 대신한다
+      if (small) continue;
+      const label = planned ? `${a.name} 🔒` : a.name;
+      ctx.font = `600 ${small ? 9 : 11}px "Gowun Dodum", sans-serif`;
+      ctx.textBaseline = 'top';
+      const lw = ctx.measureText(label).width + (small ? 8 : 12);
+      const ly = p.y + r + (small ? 3 : 5);
+      roundRectPath(p.x - lw / 2, ly, lw, small ? 14 : 17, 5);
+      ctx.fillStyle = planned ? 'rgba(255,250,240,0.72)' : 'rgba(255,250,240,0.95)';
+      ctx.fill();
+      ctx.strokeStyle = planned ? 'rgba(150,140,120,0.35)' : 'rgba(180,140,100,0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = planned ? '#8b8067' : '#5b4632';
+      ctx.fillText(label, p.x, ly + (small ? 2 : 3));
+    }
+    ctx.restore();
+
+    // 좁은 화면 범례 — 번호 ↔ 지역 이름 (2열)
+    if (small) {
+      const lx = px + PW * 0.06;
+      const lyTop = iy + ih + 4;
+      const colW = (PW * 0.88) / 2;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 9px "Gowun Dodum", sans-serif';
+      WORLD_AREAS.forEach((a, i) => {
+        const col = i % 2, row = (i / 2) | 0;
+        const ex = lx + col * colW;
+        const ey = lyTop + row * 12 + 5;
+        const planned = a.status === 'planned';
+        ctx.beginPath();
+        ctx.arc(ex + 5, ey, 5, 0, Math.PI * 2);
+        ctx.fillStyle = planned ? '#cbbfa6' : (a.status === 'current' ? '#ff8aa0' : '#ffd166');
+        ctx.fill();
+        ctx.fillStyle = '#5b4632';
+        ctx.font = '700 7px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(a.n), ex + 5, ey + 0.5);
+        ctx.textAlign = 'left';
+        ctx.font = '600 9px "Gowun Dodum", sans-serif';
+        ctx.fillStyle = planned ? 'rgba(110,100,82,0.85)' : '#5b4632';
+        ctx.fillText(planned ? `${a.name} 🔒` : a.name, ex + 13, ey);
+      });
+      ctx.textAlign = 'center';
+    }
+
+    // 나무 명판 — "에버그린" (좁은 화면에서는 아래 한 줄이 대신한다)
+    if (!small) {
+    const plateW = 168;
+    const plateH = 34;
+    const plx = px + PW / 2 - plateW / 2;
+    const ply = py + PH - plateH - 30;
+    ctx.save();
+    ctx.shadowColor = 'rgba(60,40,20,0.35)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    roundRectPath(plx, ply, plateW, plateH, 8);
+    const wg = ctx.createLinearGradient(plx, ply, plx, ply + plateH);
+    wg.addColorStop(0, '#e2b877');
+    wg.addColorStop(1, '#c99354');
+    ctx.fillStyle = wg;
+    ctx.fill();
+    ctx.restore();
+    roundRectPath(plx, ply, plateW, plateH, 8);
+    ctx.strokeStyle = '#a97a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#5b3a1c';
+    ctx.font = `700 ${small ? 12 : 18}px "Black Han Sans", "Gowun Dodum", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('에버그린', px + PW / 2, ply + plateH / 2 + 1);
+    }
+
+    // 상단 제목 · 하단 안내
+    // 한 줄 캡션 — 제목·진행도·안내를 모아 패널 맨 아래에 둔다.
+    // (상단에 두면 HUD 조작 칩과, 명판 옆에 두면 명판과 겹치는 창 비율이 있다)
+    const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
+    const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}`;
+    const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
+    const lockTxt = small ? '🔒 미구현' : '🔒 표시는 아직 만들지 않은 지역';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = `600 ${small ? 8 : 11}px "JetBrains Mono", monospace`;
+    ctx.fillStyle = 'rgba(91,70,50,0.85)';
+    ctx.fillText(`${titleTxt}  ·  ${lockTxt}  ·  ${hint}`, px + PW / 2, py + PH - (small ? 5 : 9));
+    ctx.restore();
+  }
+
+  function drawFullMap(viewW, viewH, t) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(52,38,26,0.58)';
+    ctx.fillRect(0, 0, viewW, viewH);
+
+    const small = viewW < 620;
+    const R = small ? Math.min(viewW * 0.32, viewH * 0.30) : Math.min(viewW, viewH) * 0.35;
+    const cx = viewW / 2, cy = viewH / 2 + (small ? 2 : 6);
+    fullmapHit = { cx, cy, r: R + (small ? 16 : 30) };
+    drawMapCircle(cx, cy, R, true, t);
+
+    const z = currentZone;
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    if (!small) {
+      ctx.font = '700 15px "Gowun Dodum", sans-serif';
+      ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(45,30,15,0.7)';
+      ctx.strokeText(`${z.name} 전도`, cx, cy - R - 16);
+      ctx.fillStyle = '#fdf4de';
+      ctx.fillText(`${z.name} 전도`, cx, cy - R - 16);
+    }
+
+    ctx.font = small ? '600 10px "JetBrains Mono", monospace' : '600 12px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'top';
+    const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
+    const closeHint = isTouch ? '지도를 탭하면 전경도' : 'M 한 번 더 → 전경도';
+    const gap = small ? '  ·  ' : '   ·   ';
+    let foundText = z.landmarks.length ? `발견 ${z.foundCount}/${z.landmarks.length}${gap}` : '';
+    if (z.landmarks.length && z.portal) {
+      foundText += (isPortalLocked(z) ? '포탈 잠김' : '포탈 열림') + gap;
+    }
+    const captionTxt = `탐험도 ${pct}%${gap}${foundText}${closeHint}`;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(45,30,15,0.7)';
+    ctx.strokeText(captionTxt, cx, cy + R + (small ? 10 : 14));
+    ctx.fillStyle = '#fdf4de';
+    ctx.fillText(captionTxt, cx, cy + R + (small ? 10 : 14));
+    ctx.restore();
+  }
+
+  const DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+  function bearingLabel(x, y) {
+    const dist = Math.hypot(x, y);
+    if (dist < 90) return '출발점';
+    let a = Math.atan2(x, -y);
+    if (a < 0) a += Math.PI * 2;
+    return `${DIRS[Math.round(a / (Math.PI / 4)) % 8]} ${Math.round(dist)}m`;
+  }
+
+  let toastTimer = 0;
+  function showToast(msg, final) {
+    toastEl.textContent = msg;
+    toastEl.classList.toggle('final', !!final);
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), final ? 4200 : 2800);
+  }
+
+  function isPortalLocked(z) {
+    return z.landmarks.length > 0 && z.foundCount < z.landmarks.length;
+  }
+
+  function checkDiscovery() {
+    const z = currentZone;
+    for (const lm of z.landmarks) {
+      if (lm.found) continue;
+      if (Math.hypot(player.x - lm.x, player.y - lm.y) > DISCOVER_R) continue;
+      lm.found = true;
+      z.foundCount++;
+      if (z.foundCount === z.landmarks.length) {
+        const portalMsg = z.portal ? ` 포탈이 열렸습니다!` : '';
+        showToast(`${z.name}의 랜드마크를 모두 발견했습니다!${portalMsg}`, true);
+      } else {
+        showToast(`${withObjParticle(lm.name)} 발견했습니다`);
+      }
+    }
+  }
+
+  let lastLockToast = -99;
+  function checkPortal() {
+    const z = currentZone;
+    if (!z.portal || transition) return;
+    if (Math.hypot(player.x - z.portal.x, player.y - z.portal.y) < z.portal.triggerR) {
+      if (isPortalLocked(z)) {
+        const now = performance.now() / 1000;
+        if (now - lastLockToast > 3) {
+          lastLockToast = now;
+          showToast(`포탈이 잠겨 있습니다 — 랜드마크 ${z.foundCount}/${z.landmarks.length}를 모두 찾아야 열립니다`);
+        }
+        return;
+      }
+      startTransition(z.portal.toZone, z.portal.spawn);
+    }
+  }
+
+  let lastTime = performance.now();
+  const hudCache = { dir: null, pct: -1, found: -1, zone: null };
+
+  function step(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    const t = now / 1000;
+
+    if (transition) {
+      transition.t += dt;
+      if (transition.phase === 'out' && transition.t >= transition.dur) {
+        currentZone = zones[transition.toZoneId];
+        player.x = transition.spawn.x;
+        player.y = transition.spawn.y;
+        transition.phase = 'in';
+        transition.t = 0;
+      } else if (transition.phase === 'in' && transition.t >= transition.dur) {
+        transition = null;
+      }
+    }
+
+    let dx = 0, dy = 0;
+    if (!mapView && !transition) {
+      if (keys.has('w') || keys.has('arrowup')) dy -= 1;
+      if (keys.has('s') || keys.has('arrowdown')) dy += 1;
+      if (keys.has('a') || keys.has('arrowleft')) dx -= 1;
+      if (keys.has('d') || keys.has('arrowright')) dx += 1;
+      if (joyActive) { dx += joyVector.x; dy += joyVector.y; }
+    }
+
+    const len = Math.hypot(dx, dy);
+    if (len > 1) { dx /= len; dy /= len; }
+
+    // 로드맵 5 작업 B: 여울(shallow water)에 서 있으면 느려진다. 목적지가 아니라
+    // "지금 서 있는 자리" 기준으로 재는 게 자연스럽다(물에 들어가는 순간부터 느려짐).
+    const speed = 200 * terrainAt(currentZone, player.x, player.y).speedMul;
+    const moving = dx !== 0 || dy !== 0;
+    if (moving) {
+      player.facing = { x: dx / (len || 1), y: dy / (len || 1) };
+      tryMove(dx, dy, speed * dt);
+    }
+
+    // 로드맵 5 작업 A: 중력/점프 적분. player.z는 지형 기준 절대 높이이므로,
+    // 매 프레임 중력을 적용한 뒤 현재 위치의 지면 높이 밑으로 내려가지 않게 바닥에 붙인다.
+    if (!mapView && !transition) {
+      player.vz -= GRAVITY * dt;
+      player.z += player.vz * dt;
+      const ground = groundHeightAt(currentZone, player.x, player.y);
+      if (player.z <= ground) { player.z = ground; player.vz = 0; }
+    }
+
+    if (!transition) {
+      updateExploration();
+      checkDiscovery();
+      checkPortal();
+      // 지역 이름(사원/야영지/강가 등)은 향후 별도 맵으로 분리될 예정이라,
+      // 여기서는 지면 톤·밀도 차이(areaAt 기반)만 남기고 "OO에 들어섰습니다"
+      // 같은 지역명 토스트는 내지 않는다 — 지금 여기는 전부 맵1(별내림 천문대)이다.
+    }
+
+    const z = currentZone;
+    const viewW = canvas.viewW || stage.clientWidth;
+    const viewH = canvas.viewH || stage.clientHeight;
+    const lookahead = viewH * 0.14;
+    const cx = viewW / 2, cy = viewH / 2 + lookahead;
+
+    ctx.clearRect(0, 0, viewW, viewH);
+    drawSky(viewW, viewH, t);
+    drawPlanetDome(cx, cy);
+
+    const drawList = [];
+    for (const pt of z.terrainPatches) {
+      const p = project(pt.x, pt.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => {
+        const area = z.useAreas ? areaAt(pt.x, pt.y) : null;
+        ctx.fillStyle = area ? hexA(area.groundTint, 0.16) : 'rgba(255,255,255,0.10)';
+        ctx.beginPath(); ctx.ellipse(0, 0, pt.w, pt.w * 0.55, pt.angle, 0, Math.PI * 2); ctx.fill();
+      }});
+    }
+    for (const g of z.grassTufts) {
+      const p = project(g.x, g.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => {
+        const sway = reduceMotion ? 0 : Math.sin(t * 1.6 + g.phase) * 0.18;
+        ctx.strokeStyle = g.tone > 0.5 ? '#4aa85f' : '#e9f7d8';
+        ctx.globalAlpha *= g.tone > 0.5 ? 1 : 0.75;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(g.angle + sway) * g.len, -g.len * 1.4 + Math.sin(g.angle + sway) * 2);
+        ctx.stroke();
+      }});
+    }
+    for (const tile of z.pathTiles) {
+      const p = project(tile.x, tile.y);
+      if (p) drawList.push({ p, layer: 0, draw: () => drawPathTile(tile.tone, tile.angle) });
+    }
+
+    drawList.sort((a, b) => a.p.sy - b.p.sy);
+    for (const item of drawList) {
+      ctx.save();
+      ctx.translate(cx + item.p.sx, cy + item.p.sy);
+      ctx.scale(item.p.scale, item.p.scale);
+      ctx.globalAlpha = Math.min(1, item.p.scale / 0.22);
+      item.draw();
+      ctx.restore();
+    }
+
+    // 로드맵 5 작업 B/C: 물·단구는 오브젝트보다 아래, 바닥 장식보다 위 레이어에 그린다
+    for (const p of z.plateaus) drawTerrainShape(p, cx, cy);
+
+    const solids = [];
+    if (z.spring) { const p = project(z.spring.x, z.spring.y); if (p) solids.push({ p, spring: z.spring }); }
+    for (const o of z.obstacles) {
+      const p = project(o.x, o.y);
+      if (p) solids.push({ p, o });
+    }
+    for (const d of z.decorations) {
+      const p = project(d.x, d.y);
+      if (p) solids.push({ p, d });
+    }
+    for (const sp of z.signposts) {
+      const pSign = project(sp.x, sp.y);
+      if (pSign) solids.push({ p: pSign, sign: true });
+    }
+    for (const lm of z.landmarks) {
+      if (!lm.height) continue;
+      const p = projectTall(lm.x, lm.y, lm.height);
+      if (p) solids.push({ p, lm });
+    }
+    if (z.portal) {
+      const p = projectTall(z.portal.x, z.portal.y, z.portal.height);
+      if (p) solids.push({ p, portal: z.portal });
+    }
+    for (const f of z.pathFences) {
+      const p = project(f.x, f.y);
+      if (p) solids.push({ p, f });
+    }
+    // 플레이어도 다른 오브젝트와 같은 화면-Y 기준으로 정렬한다 — 그래야 플레이어보다
+    // 화면 아래쪽(카메라에 더 가까운)에 있는 나무/랜드마크가 플레이어를 실제로 가릴 수 있다.
+    solids.push({ p: project(player.x, player.y), isPlayer: true });
+    solids.sort((a, b) => (a.p ? a.p.sy : 0) - (b.p ? b.p.sy : 0));
+
+    // 점프로 화면상 위로 떠 있는 만큼(playerScreenY)을 가림 판정 기준점으로 쓴다 —
+    // 나무 캐노피보다 높이 뛰어오르면 그만큼 가림 판정에서 벗어나 점선 윤곽이 풀린다.
+    const playerScreenY = -player.z;
+    let occluderInfo = null;
+    for (const s of solids) {
+      if (s.isPlayer || !s.p) continue;
+      if (s.p.sy <= 0) continue; // 플레이어보다 화면 위(더 먼 쪽)에 있는 것은 가릴 수 없다
+      const reach = objectReach(s);
+      if (!reach) continue;
+      const scale = s.p.scale;
+      if (Math.abs(s.p.sx) > reach.w * scale) continue;
+      if (playerScreenY >= s.p.sy - reach.upH * scale && playerScreenY <= s.p.sy + reach.downH * scale) {
+        occluderInfo = { sx: s.p.sx, sy: s.p.sy, scale, reach };
+        break;
+      }
+    }
+
+    for (const s of solids) {
+      if (!s || !s.p) continue;
+      ctx.save();
+      ctx.translate(cx + s.p.sx, cy + s.p.sy);
+      ctx.scale(s.p.scale, s.p.scale);
+      ctx.globalAlpha = Math.min(1, s.p.scale / 0.22);
+      if (s.o) { s.o.type === 'tree' ? drawTree(s.o, t) : drawStone(s.o); }
+      else if (s.d) {
+        switch (s.d.type) {
+          case 'bush': drawBush(s.d, t); break;
+          case 'flower': drawFlower(s.d); break;
+          case 'reed': drawReed(s.d, t); break;
+          case 'star': drawFallenStar(s.d, t); break;
+          case 'cow': drawCow(s.d, t); break;
+          case 'hay': drawHay(s.d); break;
+          case 'trough': drawTrough(s.d); break;
+          case 'farmRow': drawFarmRow(s.d); break;
+          case 'cart': drawCart(s.d); break;
+          case 'scarecrow': drawScarecrow(s.d, t); break;
+          case 'clothesline': drawClothesline(s.d, t); break;
+          case 'fence': drawFence(s.d.angle || 0); break;
+          case 'landingDeck': drawLandingDeck(s.d); break;
+          case 'airship': drawAirship(s.d, t); break;
+          case 'flag': drawFlag(s.d, t); break;
+          case 'lantern': drawLantern(s.d, t); break;
+          case 'crate': drawCrate(s.d); break;
+          case 'cauldron': drawCauldron(s.d, t); break;
+          case 'rubble': drawRubble(s.d); break;
+          case 'standingStone': drawStandingStone(s.d); break;
+          case 'waterfall': drawWaterfall(s.d, t); break;
+          default: drawMushroom(s.d.seed, s.d.red);
+        }
+      }
+      else if (s.sign) { drawSignpost(); }
+      else if (s.f) { drawFence(s.f.angle); }
+      else if (s.spring) { drawSpring(s.spring); }
+      else if (s.lm) {
+        drawSinkClipped(s.lm.height, s.p.sink, () => drawLandmarkBody(s.lm, t));
+      }
+      else if (s.portal) {
+        drawSinkClipped(s.portal.height, s.p.sink, () => drawPortalBody(t, isPortalLocked(z)));
+      }
+      else if (s.isPlayer) { drawPlayer(t, moving, player.z); }
+      ctx.restore();
+    }
+
+    for (const spore of z.spores) {
+      if (!reduceMotion) {
+        spore.y -= spore.speed * dt;
+        spore.x += Math.sin(t * 0.6 + spore.phase) * 4 * dt;
+        if (Math.hypot(spore.x, spore.y) > HORIZON_D * 0.9) {
+          const p = z.samplePlanetPoint(0, HORIZON_D * 0.3);
+          spore.x = p.x; spore.y = p.y;
+        }
+      }
+      drawProjected(cx, cy, spore.x, spore.y, () => {
+        const twinkle = reduceMotion ? 0.6 : (Math.sin(t * 2 + spore.phase) + 1) / 2;
+        ctx.globalAlpha *= 0.35 + twinkle * 0.5;
+        ctx.fillStyle = '#fff7e0';
+        ctx.beginPath(); ctx.arc(0, 0, spore.size, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+
+    if (occluderInfo) {
+      ctx.save();
+      ctx.translate(cx, cy + playerScreenY);
+      drawPlayerOutline(occluderInfo);
+      ctx.restore();
+    }
+
+    drawMinimap(viewW, viewH, t);
+    if (mapView === 1) drawFullMap(viewW, viewH, t);
+    else if (mapView === 2) drawWorldMap(viewW, viewH, t);
+
+    if (transition) {
+      const alpha = transition.phase === 'out'
+        ? Math.min(1, transition.t / transition.dur)
+        : Math.max(0, 1 - transition.t / transition.dur);
+      ctx.fillStyle = `rgba(20,16,14,${alpha})`;
+      ctx.fillRect(0, 0, viewW, viewH);
+    }
+
+    const dirText = bearingLabel(player.x, player.y);
+    if (dirText !== hudCache.dir) { posDirEl.textContent = dirText; hudCache.dir = dirText; }
+    const pct = z.totalCells ? Math.round((z.exploredCount / z.totalCells) * 100) : 0;
+    if (pct !== hudCache.pct) { explorePctEl.textContent = pct + '%'; hudCache.pct = pct; }
+    if (z.foundCount !== hudCache.found) {
+      foundLabelEl.textContent = z.landmarks.length ? `${z.foundCount}/${z.landmarks.length}` : '-';
+      hudCache.found = z.foundCount;
+    }
+    if (z.name !== hudCache.zone) { zoneLabelEl.textContent = z.name; hudCache.zone = z.name; }
+
+    requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+
+  function snapshot() {
+    const found = {};
+    for (const id in zones) found[id] = zones[id].landmarks.filter((l) => l.found).map((l) => l.id);
+    return { zone: currentZone.id, x: player.x, y: player.y, found };
+  }
+  function boot(data) {
+    if (!data) return;
+    if (data.zone && zones[data.zone]) currentZone = zones[data.zone];
+    if (typeof data.x === 'number' && typeof data.y === 'number') {
+      player.x = data.x; player.y = data.y;
+    }
+    if (data.found) {
+      for (const id in zones) {
+        const list = data.found[id];
+        if (!Array.isArray(list)) continue;
+        const z = zones[id];
+        for (const lm of z.landmarks) {
+          if (!lm.found && list.indexOf(lm.id) !== -1) { lm.found = true; z.foundCount++; }
+        }
+      }
+    }
+  }
+  if (window.claude && window.claude.hot) {
+    window.claude.hot.snapshot(snapshot);
+    window.claude.hot.ready ? window.claude.hot.ready(boot) : boot(window.claude.hot.data);
+  }
+})();
+</script>
