@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에버그린 탐사 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #3f9df2; }
+  body { font-family: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: #fff; }
+  #c { display: block; width: 100%; height: 100%; }
+  /* 로드맵 6 작업 E에서 원작 배치대로 다시 짤 예정 — 지금은 조작 힌트만 */
+  #hint {
+    position: fixed; left: 14px; top: 12px; font-size: 13px; line-height: 1.6;
+    text-shadow: 0 1px 2px rgba(0,0,0,.45); opacity: .9; pointer-events: none; user-select: none;
+  }
+  #hint b { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px;
+    background: rgba(0,0,0,.35); font-weight: 600; }
+  #fps { position: fixed; right: 12px; top: 10px; font: 12px/1.4 monospace; opacity: .8;
+    text-shadow: 0 1px 2px rgba(0,0,0,.5); display: none; pointer-events: none; }
+  #zoneName {
+    position: fixed; left: 50%; top: 14%; transform: translateX(-50%);
+    font-size: 30px; letter-spacing: .08em; text-shadow: 0 2px 6px rgba(0,0,0,.45);
+    opacity: 0; transition: opacity .6s; pointer-events: none; white-space: nowrap;
+  }
+  #zoneName small { display: block; text-align: center; font-size: 14px; letter-spacing: .2em; opacity: .85; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프 <b>마우스 드래그</b>카메라 회전</div>
+<div id="fps"></div>
+<div id="zoneName"><small>EVERGREEN</small>에버그린 · 별내림 천문대</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 로드맵 6 — 작업 A(3D 뼈대) + B(지형)
+// A: 구체 세계 위를 치비 캐릭터가 등을 보이며 걷고 뛰고, 3인칭 카메라가 따라오고,
+//    지평선이 둥글게 휘어 보이고, 나무가 툰 셰이딩+외곽선+그림자로 서 있다.
+// B: §3 표의 지형(착륙 초원·돌계단·단구 야영지·해자·다리 자리·슬라임 초원·바위벽)을
+//    도형의 합 하이트맵으로 세우고, 경사도로 풀/바위를 칠하고, 모래길과 물을 얹는다.
+// 구조물/초목(C·D)·UI(E)·NPC/슬라임(F)·연출(G)은 이 위에 얹는다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const DEG = Math.PI / 180;
+
+// §2-3 세계 규격 (임시값 — A 게시 후 눈으로 맞춰 확정)
+const R = 90;                 // 구 반지름
+const PLAYER_H = 1.6;         // 캐릭터 키
+const WALK = 4.5;             // 걷기 속도 /s
+const TURN = 10;              // 캐릭터 회전 속도 rad/s
+const G = 32;                 // 중력 (법선 반대 방향)
+const JUMP_V = 8.8;           // 점프 초속 → 최고 1.2, 체공 약 0.55s
+const CAM_BACK = 9.0, CAM_UP = 6.0, CAM_LOOK_UP = 1.0, CAM_FOV = 50; // 내려보는 각 약 29°
+// 세계 고정 태양 방향 — 시작점(+Z) 기준 고도 약 64°. 놀이 구역(위도 0~45°) 안에서는 계속 높이 떠 있어 그림자가 짧다.
+const SUN_DIR = new THREE.Vector3(0.35, 0.25, 0.9).normalize();
+
+// 원작에서 뽑은 색 (§1-2)
+const C = {
+  grass: 0x7ccf3a, grassLight: 0xa8e05a, grassShade: 0x4f9e2c,
+  skyTop: 0x3f9df2, skyHorizon: 0xbfe7ff,
+  leaf: 0x5cc23a, leafLine: 0x2f7a22, trunk: 0x8a5a2b,
+  outline: 0x1d3a14,
+};
+
+// ── 렌더러 / 씬 ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(C.skyHorizon, 55, 150);
+
+const camera = new THREE.PerspectiveCamera(CAM_FOV, 1, 0.1, 800);
+
+// ── 툰 셰이딩 재료 ───────────────────────────────────────────────────────────
+// 3단 그라데이션 맵: 그늘 / 중간 / 밝음. 원작의 셀 느낌.
+const gradientMap = (() => {
+  const data = new Uint8Array([
+    120, 120, 120, 255,
+    200, 200, 200, 255,
+    255, 255, 255, 255,
+  ]);
+  const t = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
+  t.minFilter = THREE.NearestFilter;
+  t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+
+function toon(color, extra = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap, ...extra });
+}
+
+// 외곽선: 뒷면을 법선 방향으로 밀어낸 두 번째 메시(inverted hull).
+// 스케일이 아니라 법선 변위라 원기둥·캡슐처럼 길쭉한 형태에서도 두께가 균일하다.
+const outlineMats = new Map();
+function outlineMat(thickness) {
+  const key = thickness.toFixed(3);
+  if (outlineMats.has(key)) return outlineMats.get(key);
+  const m = new THREE.MeshBasicMaterial({ color: C.outline, side: THREE.BackSide });
+  m.onBeforeCompile = (s) => {
+    s.vertexShader = s.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>\n transformed += normalize(normal) * ${key};`
+    );
+  };
+  outlineMats.set(key, m);
+  return m;
+}
+function withOutline(mesh, thickness = 0.04) {
+  const o = new THREE.Mesh(mesh.geometry, outlineMat(thickness));
+  o.castShadow = false; o.receiveShadow = false;
+  mesh.add(o);
+  return mesh;
+}
+
+// ── 값 노이즈 (지면 얼룩용) ──────────────────────────────────────────────────
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
+  h = (h ^ (h >> 13)) * 1274126177 | 0;
+  return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const l = (a, b, t) => a + (b - a) * t;
+  return l(
+    l(l(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u), l(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u), v),
+    l(l(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u), l(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u), v),
+    w);
+}
+
+// ── 구체 좌표 도우미 ─────────────────────────────────────────────────────────
+// (경도, 위도)°→ 단위 방향. 착륙 초원 중심 (0°,0°)이 +Z, 북(+위도)이 +Y.
+function dirFromLonLat(lonDeg, latDeg) {
+  const lon = lonDeg * DEG, lat = latDeg * DEG;
+  return new THREE.Vector3(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon));
+}
+// 접평면으로 투영해 단위화 (구 위에서 방향 벡터를 옮길 때마다 호출)
+function tangentize(v, up) {
+  return v.addScaledVector(up, -v.dot(up)).normalize();
+}
+
+// ── 작업 B: 지형 — 도형의 합으로 만드는 하이트맵 ──────────────────────────────
+// 모든 도형은 구 위의 각거리(°)로 정의한다. R=90이면 1° ≈ 1.57 유닛.
+// §3 표: 착륙 초원(0,0) → 돌계단(0,7.6~10.9) → 단구 위 야영지(0,15.5 r8) → 나무다리(0,23.3~29.2)
+//        → 슬라임 초원(위도 29~46, 경도 ±15.5) → 별 받침대(10,40). 물 수면 -2.5.
+const WATER = -2.5;
+const STEP_UP = 0.45;
+const ss = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+function angDeg(a, b) { return Math.acos(Math.max(-1, Math.min(1, a.dot(b)))) / DEG; }
+
+// 호(대원 조각) A→B 까지의 각거리와, 호 위 진행도 t(0~1)
+function makeSeg(lon0, lat0, lon1, lat1) {
+  const A = dirFromLonLat(lon0, lat0), B = dirFromLonLat(lon1, lat1);
+  const n = new THREE.Vector3().crossVectors(A, B).normalize();
+  const arc = angDeg(A, B), cosArc = A.dot(B);
+  const proj = new THREE.Vector3();
+  return {
+    A, B, n, arc,
+    dist(p, out) {
+      const d = p.dot(n);
+      proj.copy(p).addScaledVector(n, -d).normalize();
+      const inside = proj.dot(A) >= cosArc - 1e-6 && proj.dot(B) >= cosArc - 1e-6;
+      let t, dd;
+      if (inside) { dd = Math.asin(Math.min(1, Math.abs(d))) / DEG; t = angDeg(A, proj) / arc; }
+      else { const da = angDeg(p, A), db = angDeg(p, B); if (da < db) { dd = da; t = 0; } else { dd = db; t = 1; } }
+      if (out) { out.t = t; out.inside = inside; }
+      return dd;
+    },
+  };
+}
+// 중심에서 본 방위각(°, 북=0, 동=90)
+function bearingFrom(center, p) {
+  const north = tangentize(new THREE.Vector3(0, 1, 0), center);
+  const east = new THREE.Vector3().crossVectors(north, center).normalize(); // 북(+Y)×위(+Z) = +X = 동
+  const v = p.clone().addScaledVector(center, -p.dot(center));
+  return Math.atan2(v.dot(east), v.dot(north)) / DEG;
+}
+
+const T = {
+  meadow: dirFromLonLat(0, 0),
+  plateau: dirFromLonLat(0, 15.5),
+  stairs: makeSeg(0, 7.6, 0, 10.9),
+  stairCut: makeSeg(0, 6.3, 0, 10.9),   // 단구 절벽에서 계단 통로를 깎아내는 범위
+  bridge: makeSeg(0, 23.3, 0, 29.2),
+  starCrater: dirFromLonLat(10, 40),
+  // 바위벽(능선)
+  walls: [
+    makeSeg(-13, -12, 13, -12),        // 착륙 초원 남쪽
+    makeSeg(-14, 46.5, 14, 46.5),      // 슬라임 초원 북쪽
+    makeSeg(15.8, 30, 15.8, 46.5),     // 동쪽
+    makeSeg(-15.8, 30, -15.8, 46.5),   // 서쪽
+  ],
+  // 모래길
+  paths: [
+    makeSeg(0, -1, 0, 7.6),            // 초원 → 계단 아래
+    makeSeg(-5.2, 1, 0, -1),           // 데크 경사로 → 초원 중심
+    makeSeg(0, 10.9, 0, 23.3),         // 단구 야영지 관통
+    makeSeg(0, 29.2, 0, 38),           // 다리 건너 → 초원 안쪽
+    makeSeg(0, 38, 10, 40),            // → 별 받침대
+    makeSeg(0, 38, -8, 42.5),          // → 서쪽 지선
+  ],
+  // 걷기 판정용 구조물 (시각은 작업 C)
+  deck: dirFromLonLat(-7.2, 1),        // 팔각 착륙 데크 중심, 반경 2.3°, 높이 1.2
+  ramp: makeSeg(-5.0, 1, -3.4, 1),     // 데크 → 바닥 경사로
+};
+const _o = { t: 0, inside: false };
+
+// 자연 굴곡(놀이 구역 밖 완만한 언덕)
+function hills(p) {
+  return 0.9 * vnoise(p.x * 6 + 11, p.y * 6, p.z * 6) + 0.35 * vnoise(p.x * 17, p.y * 17 + 5, p.z * 17) - 0.45;
+}
+
+function terrainH(p) {
+  // 경도/위도 (놀이 구역 마스크용)
+  const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG;
+  const lon = Math.atan2(p.x, p.z) / DEG;
+  let h = hills(p);
+
+  // 착륙 초원: 반경 11°까지 평평, 13°까지 섞임
+  const dM = angDeg(p, T.meadow);
+  h = lerp(h, 0.08 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(13, 11, dM));
+
+  // 슬라임 초원: 위도 29~46, 경도 ±15.5. 남→북으로 2.5→3.5 완만 + 굴곡
+  const sm = ss(28.2, 29.6, lat) * ss(47.2, 45.8, lat) * ss(17, 15.6, Math.abs(lon));
+  h = lerp(h, 2.5 + ss(29, 45, lat) * 1.0 + 0.3 * vnoise(p.x * 24, p.y * 24, p.z * 24), sm);
+
+  // 단구(야영지): 반경 8°, 절벽 가장자리 0.5°. 계단 통로 자리는 비워둔다.
+  const dP = angDeg(p, T.plateau);
+  const dS = T.stairs.dist(p, _o), tS = _o.t;
+  const dCut = T.stairCut.dist(p, _o), cutInside = _o.inside;
+  const stairCorridor = cutInside ? ss(1.5, 1.05, dCut) : 0;
+  const plateauH = 2.5 * ss(8.45, 7.9, dP) * (1 - stairCorridor);
+  h = Math.max(h, plateauH);
+
+  // 물길(해자): 단구 둘레 8.2~14°, 남쪽 ±40° 방위는 제외(계단이 육지로 이어짐)
+  const bear = bearingFrom(T.plateau, p);
+  const southGap = 1 - ss(48, 34, Math.abs(Math.abs(bear) - 180));  // 남쪽(180°) 근처 0
+  const moat = ss(8.15, 8.75, dP) * ss(14.3, 13.4, dP) * southGap;
+  h = lerp(h, -4.2 + 0.4 * vnoise(p.x * 30, p.y * 30, p.z * 30), moat);
+
+  // 돌계단: 7단, 폭 ±1.0°(약 3유닛)
+  if (dS < 1.0 && tS > 0 && tS < 1) {
+    const stepH = Math.floor(tS * 7.001) / 7 * 2.5;
+    h = Math.max(h, stepH);
+  } else if (dS < 1.5 && tS > 0 && tS < 1) {
+    // 계단 옆 둔덕: 계단보다 0.6 높게 따라 올라가 낮은 벽 노릇(STEP_UP보다 높아 못 올라감)
+    h = Math.max(h, Math.min(2.5, tS * 2.5 + 0.6) * ss(1.5, 1.05, dS));
+  }
+
+  // 바위벽(능선): 높이 5, 폭 ±1.4°
+  for (const w of T.walls) {
+    const d = w.dist(p, _o);
+    if (d < 1.6) {
+      const wh = 5 * ss(1.6, 0.8, d) * (0.85 + 0.3 * vnoise(p.x * 50, p.y * 50, p.z * 50));
+      h = Math.max(h, wh);
+    }
+  }
+
+  // 별 받침대 분화구
+  const dC = angDeg(p, T.starCrater);
+  if (dC < 1.6) h -= 0.45 * ss(1.5, 0.5, dC);
+
+  return h;
+}
+
+// 모래길 마스크 0~1 (폭 ±0.55°)
+function pathMask(p) {
+  let m = 0;
+  for (const s of T.paths) { const d = s.dist(p, _o); if (d < 0.9) m = Math.max(m, ss(0.9, 0.5, d)); }
+  return m;
+}
+
+// 걷기 판정 높이: 지형 + 구조물(데크·경사로·다리)
+function walkH(p) {
+  let h = terrainH(p);
+  const dD = angDeg(p, T.deck);
+  if (dD < 2.25) h = Math.max(h, 1.2);
+  const dR = T.ramp.dist(p, _o);
+  if (dR < 0.55 && _o.t > 0 && _o.t < 1) h = Math.max(h, 1.2 * (1 - _o.t));
+  const dB = T.bridge.dist(p, _o);
+  if (dB < 0.8 && _o.t >= 0 && _o.t <= 1) h = Math.max(h, 2.5 + 0.35 * Math.sin(Math.PI * _o.t));
+  return h;
+}
+
+// 오브젝트를 구 표면에 세운다: 위치 = dir*(R+h), 로컬 +Y = dir, yaw는 로컬 Y 둘레.
+const _q = new THREE.Quaternion(), _y = new THREE.Vector3(0, 1, 0);
+function place(obj, lonDeg, latDeg, yaw = 0, lift = 0, useWalk = false) {
+  const dir = dirFromLonLat(lonDeg, latDeg);
+  obj.position.copy(dir).multiplyScalar(R + (useWalk ? walkH(dir) : terrainH(dir)) + lift);
+  _q.setFromUnitVectors(_y, dir);
+  obj.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(_y, yaw));
+  return obj;
+}
+
+// ── 지형 메시 ────────────────────────────────────────────────────────────────
+// 놀이 구역(경도 ±28°, 위도 -20~56°)은 고해상 패치, 나머지는 저해상 구.
+const PATCH = { lon0: -28, lon1: 28, lat0: -20, lat1: 56 };
+
+function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
+  const verts = (nLon + 1) * (nLat + 1);
+  const pos = new Float32Array(verts * 3), col = new Float32Array(verts * 3);
+  const dirs = new Array(verts);
+  const idx = [];
+  const p = new THREE.Vector3();
+  let k = 0;
+  for (let j = 0; j <= nLat; j++) {
+    const lat = lat0 + (lat1 - lat0) * j / nLat;
+    for (let i = 0; i <= nLon; i++) {
+      const lon = lon0 + (lon1 - lon0) * i / nLon;
+      p.copy(dirFromLonLat(lon, lat));
+      const r = radiusOf(p);
+      pos[k * 3] = p.x * r; pos[k * 3 + 1] = p.y * r; pos[k * 3 + 2] = p.z * r;
+      dirs[k] = p.clone();
+      k++;
+    }
+  }
+  for (let j = 0; j < nLat; j++) for (let i = 0; i < nLon; i++) {
+    if (skip) {
+      const lon = lon0 + (lon1 - lon0) * (i + 0.5) / nLon, lat = lat0 + (lat1 - lat0) * (j + 0.5) / nLat;
+      if (skip(lon, lat)) continue;
+    }
+    const a = j * (nLon + 1) + i, b = a + 1, c = a + nLon + 1, d = c + 1;
+    idx.push(a, b, c, b, d, c);   // 바깥(법선이 구 중심 반대)을 보는 감기 순서
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  geo.userData.dirs = dirs;
+  return geo;
+}
+
+const COL = {
+  grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
+  sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
+  rock: new THREE.Color(0xd9b26f), rockDark: new THREE.Color(0xb8904e), moss: new THREE.Color(0x6fbf46),
+  bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
+  stone: new THREE.Color(0xd6cbb4), stoneDark: new THREE.Color(0xbfb39b),
+};
+function paintTerrain(geo, withPaths) {
+  const pos = geo.attributes.position, nrm = geo.attributes.normal, col = geo.attributes.color;
+  const dirs = geo.userData.dirs;
+  const tmp = new THREE.Color(), n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const d = dirs[i];
+    n.set(nrm.getX(i), nrm.getY(i), nrm.getZ(i));
+    const r = Math.hypot(pos.getX(i), pos.getY(i), pos.getZ(i));
+    const h = r - R;
+    const slope = 1 - Math.max(0, n.dot(d));   // 0=평지, 0.16≈33°, 0.36≈50°
+    // 풀 + 밝은 얼룩
+    const a = vnoise(d.x * 9 + 3, d.y * 9, d.z * 9) * 0.65 + vnoise(d.x * 31, d.y * 31 + 7, d.z * 31) * 0.35;
+    tmp.copy(COL.grass);
+    if (a > 0.58) tmp.lerp(COL.grassLight, Math.min(1, (a - 0.58) * 4));
+    else if (a < 0.4) tmp.lerp(COL.grassShade, Math.min(1, (0.4 - a) * 2.5));
+    // 물 바닥
+    if (h < WATER + 0.9) {
+      const k = ss(WATER + 0.9, WATER - 0.6, h);
+      tmp.lerp(COL.bed, k);
+      tmp.lerp(COL.bedDeep, ss(WATER - 0.3, WATER - 1.4, h) * 0.8);
+    }
+    // 모래길
+    if (withPaths) {
+      const m = pathMask(d);
+      if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.sand : COL.sandEdge, m); }
+      // 돌계단은 돌색
+      const dS = T.stairs.dist(d, _o);
+      if (dS < 1.0 && _o.inside) tmp.copy(vnoise(d.x * 80, d.y * 80, d.z * 80) > 0.5 ? COL.stone : COL.stoneDark);
+    }
+    // 가파른 곳 = 바위 (줄무늬 + 이끼)
+    if (slope > 0.10) {
+      const k = ss(0.10, 0.26, slope);
+      const stripe = vnoise(d.x * 90, d.y * 90 + h * 1.5, d.z * 90);
+      const rock = stripe > 0.55 ? COL.rockDark : COL.rock;
+      tmp.lerp(rock, k);
+      const mossy = vnoise(d.x * 35 + 2, d.y * 35, d.z * 35);
+      if (mossy > 0.62 && slope < 0.3) tmp.lerp(COL.moss, k * 0.7);
+    }
+    col.setXYZ(i, tmp.r, tmp.g, tmp.b);
+  }
+  col.needsUpdate = true;
+}
+
+const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+const planet = (() => {
+  const inBox = (lon, lat) => lon > PATCH.lon0 + 0.5 && lon < PATCH.lon1 - 0.5 && lat > PATCH.lat0 + 0.5 && lat < PATCH.lat1 - 0.5;
+  const outer = buildGrid(-180, 180, -89.5, 89.5, 160, 80, (p) => R - 0.06 + terrainH(p), inBox);
+  paintTerrain(outer, false);
+  const om = new THREE.Mesh(outer, terrainMat); om.receiveShadow = true; scene.add(om);
+
+  const step = 0.15;
+  const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
+  const patch = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, (p) => R + terrainH(p));
+  paintTerrain(patch, true);
+  const pm = new THREE.Mesh(patch, terrainMat); pm.receiveShadow = true; pm.castShadow = true; scene.add(pm);
+  return pm;
+})();
+
+// ── 물 ───────────────────────────────────────────────────────────────────────
+// 수면 = R+WATER 위의 패치. 정점마다 '얕음' 값을 지형 높이에서 미리 계산해 포말·색을 정한다.
+const water = (() => {
+  const step = 0.3;
+  const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
+  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER);
+  const dirs = geo.userData.dirs;
+  const shore = new Float32Array(dirs.length);
+  for (let i = 0; i < dirs.length; i++) {
+    const h = terrainH(dirs[i]);
+    shore[i] = ss(WATER - 1.6, WATER + 0.25, h);   // 0 깊음 → 1 물가
+  }
+  geo.setAttribute('shore', new THREE.BufferAttribute(shore, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uDeep: { value: new THREE.Color(0x3fb6f0) },
+      uShallow: { value: new THREE.Color(0x7fd8f7) },
+      fogColor: { value: scene.fog.color }, fogNear: { value: scene.fog.near }, fogFar: { value: scene.fog.far },
+    },
+    vertexShader: `
+      attribute float shore;
+      uniform float uTime;
+      varying float vShore; varying vec3 vWorld; varying float vFogDepth;
+      void main() {
+        vShore = shore;
+        vec3 p = position;
+        float w = sin(dot(p, vec3(0.9, 1.3, 0.7)) * 1.7 + uTime * 1.6) * 0.06 + sin(dot(p, vec3(-1.1, 0.4, 1.2)) * 2.9 + uTime * 2.3) * 0.04;
+        p += normal * w;
+        vec4 wp = modelMatrix * vec4(p, 1.0);
+        vWorld = wp.xyz;
+        vec4 mv = viewMatrix * wp;
+        vFogDepth = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform vec3 uDeep, uShallow, fogColor; uniform float uTime, fogNear, fogFar;
+      varying float vShore; varying vec3 vWorld; varying float vFogDepth;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+        return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+      void main() {
+        vec3 col = mix(uDeep, uShallow, vShore);
+        // 물가 포말: 얕은 띠 + 흐르는 노이즈
+        float n = noise(vWorld.xy * 2.2 + vec2(uTime * 0.35, 0.0)) * 0.6 + noise(vWorld.zx * 4.0 - vec2(0.0, uTime * 0.5)) * 0.4;
+        float foam = smoothstep(0.55, 0.95, vShore) * smoothstep(0.42, 0.7, n + vShore * 0.25);
+        col = mix(col, vec3(1.0), foam * 0.85);
+        // 잔물결 하이라이트
+        float sp = noise(vWorld.xz * 3.0 + vec2(uTime * 0.2)) ;
+        col += vec3(0.10) * smoothstep(0.72, 0.9, sp);
+        float alpha = mix(0.82, 0.55, vShore) + foam * 0.3;
+        float f = smoothstep(fogNear, fogFar, vFogDepth);
+        gl_FragColor = vec4(mix(col, fogColor, f), alpha);
+      }`,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.renderOrder = 2;
+  scene.add(m);
+  return m;
+})();
+
+// ── 하늘 + 구름 ──────────────────────────────────────────────────────────────
+// 카메라를 따라다니는 큰 구. 그라데이션은 세계의 "위"(플레이어 위치 법선) 기준.
+const sky = (() => {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      uUp: { value: new THREE.Vector3(0, 0, 1) },
+      uTop: { value: new THREE.Color(C.skyTop) },
+      uHorizon: { value: new THREE.Color(C.skyHorizon) },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = (modelMatrix * vec4(position, 1.0)).xyz - cameraPosition;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uUp, uTop, uHorizon;
+      varying vec3 vDir;
+      void main() {
+        float t = dot(normalize(vDir), uUp);
+        float k = smoothstep(-0.02, 0.55, t);
+        gl_FragColor = vec4(mix(uHorizon, uTop, k), 1.0);
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), mat);
+  m.renderOrder = -10;
+  scene.add(m);
+  return m;
+})();
+
+const cloudTex = (() => {
+  const s = 256, cv = document.createElement('canvas'); cv.width = s; cv.height = s;
+  const g = cv.getContext('2d');
+  const puffs = [[128, 150, 70], [80, 160, 52], [180, 158, 56], [110, 118, 48], [150, 116, 44], [60, 172, 36], [200, 176, 34]];
+  for (const [x, y, r] of puffs) {
+    const rg = g.createRadialGradient(x, y, r * 0.35, x, y, r);
+    rg.addColorStop(0, 'rgba(255,255,255,1)');
+    rg.addColorStop(0.8, 'rgba(255,255,255,0.95)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
+const clouds = [];
+{
+  const mat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, depthWrite: false, opacity: 0.95, fog: false });
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < 160; i++) {
+    const sp = new THREE.Sprite(mat);
+    // 구 전체에 고르게
+    const z = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+    const dir = new THREE.Vector3(r * Math.cos(a), r * Math.sin(a), z);
+    const alt = 20 + rnd() * 14;
+    sp.position.copy(dir).multiplyScalar(R + alt);
+    const w = 9 + rnd() * 9;
+    sp.scale.set(w, w * 0.55, 1);
+    sp.userData = { dir, alt, drift: rnd() * Math.PI * 2 };
+    scene.add(sp); clouds.push(sp);
+  }
+}
+
+// ── 빛 ──────────────────────────────────────────────────────────────────────
+const hemi = new THREE.HemisphereLight(0xbfe7ff, 0x4f9e2c, 1.3);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4d6, 1.7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 160;
+sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
+sun.shadow.camera.top = 34; sun.shadow.camera.bottom = -34;
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.03;
+scene.add(sun); scene.add(sun.target);
+
+// ── 캐릭터 (임시 — 작업 F에서 다듬는다) ───────────────────────────────────────
+// 발이 y=0, 얼굴이 +Z. 2.5등신에 가깝게 머리를 크게.
+function makeCharacter() {
+  const g = new THREE.Group();
+  const skin = toon(0xffd9b3), shirt = toon(0x5fbf4a), pants = toon(0x4a6fb0), hair = toon(0x7a4a22), bagM = toon(0xb9895a);
+  const cast = (m) => { m.castShadow = true; return m; };
+
+  const legL = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.22, 4, 8), pants)));
+  const legR = legL.clone(); legR.material = pants;
+  legL.position.set(-0.12, 0.28, 0); legR.position.set(0.12, 0.28, 0);
+
+  const body = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.28, 6, 12), shirt)));
+  body.position.y = 0.66;
+
+  const armL = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.26, 4, 8), shirt)));
+  const armR = armL.clone();
+  armL.position.set(-0.34, 0.7, 0); armR.position.set(0.34, 0.7, 0);
+
+  const head = cast(withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 16), skin)));
+  head.position.y = 1.32;
+  // 더벅머리: 위·뒤를 덮는 조금 큰 반구 + 앞머리 덩어리
+  const hairTop = withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.54, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair));
+  hairTop.position.set(0, 0.02, -0.04);
+  head.add(hairTop);
+  const fringe = withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), hair));
+  fringe.position.set(0.16, 0.3, 0.36); fringe.scale.set(1.4, 0.7, 0.9);
+  head.add(fringe);
+  // 눈 두 점
+  const eyeM = new THREE.MeshBasicMaterial({ color: 0x2a1f16 });
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), eyeM);
+    e.position.set(sx * 0.16, 0.02, 0.47); head.add(e);
+  }
+  // 작은 배낭
+  const bag = cast(withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.2), bagM)));
+  bag.position.set(0, 0.72, -0.32);
+
+  g.add(legL, legR, body, armL, armR, head, bag);
+  g.userData = { legL, legR, armL, armR, body, head, bag };
+  return g;
+}
+
+// ── 나무 (작업 D의 초안 — 원작의 "겹친 잎덩이") ────────────────────────────────
+function makeTree(seed = 1) {
+  let s = seed * 9301 + 49297;
+  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const g = new THREE.Group();
+  const h = 2.6 + rnd() * 1.2;
+  const trunk = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, h, 8), toon(C.trunk)), 0.05);
+  trunk.position.y = h / 2; trunk.castShadow = true;
+  g.add(trunk);
+  const leaf = toon(C.leaf);
+  const layers = 5 + Math.floor(rnd() * 2);
+  const baseR = 1.5 + rnd() * 0.6;
+  for (let i = 0; i < layers; i++) {
+    const t = i / (layers - 1);
+    const r = baseR * (1.05 - t * 0.55);
+    const ring = i === 0 ? 1 : 3;
+    for (let k = 0; k < ring; k++) {
+      const a = (k / ring) * Math.PI * 2 + i * 0.9 + rnd();
+      const off = ring === 1 ? 0 : r * 0.45;
+      const m = withOutline(new THREE.Mesh(new THREE.SphereGeometry(r * (ring === 1 ? 1 : 0.78), 14, 10), leaf), 0.07);
+      m.position.set(Math.cos(a) * off, h - 0.3 + t * baseR * 1.5, Math.sin(a) * off);
+      m.castShadow = true;
+      g.add(m);
+    }
+  }
+  g.userData.radius = baseR * 0.55; // 충돌 반지름(작업 B에서 사용)
+  return g;
+}
+
+// ── 세계 채우기 ───────────────────────────────────────────────────────────────
+const player = {
+  pos: dirFromLonLat(0, 0).multiplyScalar(R),  // 착륙 초원 중심
+  fwd: new THREE.Vector3(0, 1, 0),             // 북쪽
+  z: 0, vz: 0, grounded: true, moving: false, walkT: 0, inShallow: false,
+  safe: dirFromLonLat(0, 0), safeFwd: new THREE.Vector3(0, 1, 0),
+  safeNext: dirFromLonLat(0, 0), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
+  mesh: makeCharacter(),
+};
+scene.add(player.mesh);
+
+// 이동 시도: 목적지의 걷기 높이가 STEP_UP보다 높으면 벽. 막히면 앞/옆 성분으로 나눠 미끄러진다.
+const _np = new THREE.Vector3(), _nd = new THREE.Vector3(), _try = new THREE.Vector3();
+function canStand(dirUnit) {
+  const h = walkH(dirUnit);
+  if (h - player.z > STEP_UP) return false;
+  for (const t of trees) {                      // 나무 기둥 충돌
+    const dd = angDeg(dirUnit, t.userData.dir) * DEG * R;
+    if (dd < t.userData.radius + 0.35) return false;
+  }
+  return true;
+}
+function tryMove(dir, dist) {
+  const up = _up;
+  const attempt = (v) => {
+    _np.copy(player.pos).addScaledVector(v, dist); _nd.copy(_np).normalize();
+    if (!canStand(_nd)) return false;
+    player.pos.copy(_nd).multiplyScalar(R + player.z);
+    return true;
+  };
+  if (attempt(dir)) return true;
+  // 미끄러짐: 카메라 앞/옆 성분
+  const f = dir.dot(cam.fwd), r = dir.dot(_right);
+  if (Math.abs(f) > 0.2 && attempt(_try.copy(cam.fwd).multiplyScalar(Math.sign(f)))) return true;
+  if (Math.abs(r) > 0.2 && attempt(_try.copy(_right).multiplyScalar(Math.sign(r)))) return true;
+  return false;
+}
+function respawn() {
+  const d = player.safe;
+  player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
+  player.fwd.copy(player.safeFwd); tangentize(player.fwd, d); tangentize(cam.fwd, d);
+  camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+}
+
+const trees = [];
+{
+  // 좌표 직접 배치(§10 원칙). 초원 가장자리 링, 단구 야영지 구석, 슬라임 초원, 벽 바깥 언덕.
+  const spots = [
+    [-9.5, 4.5], [9.5, 5.5], [-10, -5], [10.5, -4], [-4, -9.5], [5, -9.5],
+    [-8, 9.5], [8.5, 9.5],
+    [5.2, 19.5], [-5.4, 20.5], [4.8, 12.6],
+    [-9, 32], [9.5, 33], [-11, 38], [12, 36.5], [-4, 44], [6, 44.5], [-12.5, 43.5], [13, 43],
+    [-20, 8], [20, 10], [-22, 30], [22, 27], [-18, 52], [18, 51], [3, 52],
+  ];
+  spots.forEach(([lon, lat], i) => {
+    const t = place(makeTree(i + 3), lon, lat, i * 1.3);
+    t.userData.dir = dirFromLonLat(lon, lat);
+    scene.add(t); trees.push(t);
+  });
+}
+
+// ── 입력 ─────────────────────────────────────────────────────────────────────
+const keys = new Set();
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (k === ' ') { e.preventDefault(); if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } }
+});
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
+const cam = { fwd: new THREE.Vector3(0, 1, 0), dragging: false, lastX: 0, yawVel: 0, userHold: 0 };
+canvas.addEventListener('pointerdown', (e) => { cam.dragging = true; cam.lastX = e.clientX; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!cam.dragging) return;
+  const dx = e.clientX - cam.lastX; cam.lastX = e.clientX;
+  cam.yawVel += dx * 0.0045; cam.userHold = 1.2;
+});
+canvas.addEventListener('pointerup', () => { cam.dragging = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ── 프레임 ───────────────────────────────────────────────────────────────────
+const _up = new THREE.Vector3(), _right = new THREE.Vector3(), _dir = new THREE.Vector3();
+const _m = new THREE.Matrix4(), _camPos = new THREE.Vector3(), _look = new THREE.Vector3();
+const _rot = new THREE.Quaternion();
+let last = performance.now(), fpsAcc = 0, fpsN = 0;
+let zoneShown = false;
+
+function rotateAround(v, axis, ang) { return v.applyQuaternion(_rot.setFromAxisAngle(axis, ang)); }
+
+function step(dt) {
+  _up.copy(player.pos).normalize();
+
+  // 카메라 요(yaw): 드래그 → 각속도, 감쇠
+  if (Math.abs(cam.yawVel) > 1e-4) {
+    rotateAround(cam.fwd, _up, -cam.yawVel);
+    cam.yawVel *= Math.pow(0.001, dt);
+  } else cam.yawVel = 0;
+  tangentize(cam.fwd, _up);
+  _right.crossVectors(cam.fwd, _up).normalize(); // 카메라 기준 오른쪽
+
+  // 이동 입력 (카메라 기준)
+  let ix = 0, iy = 0;
+  if (keys.has('w') || keys.has('arrowup')) iy += 1;
+  if (keys.has('s') || keys.has('arrowdown')) iy -= 1;
+  if (keys.has('d') || keys.has('arrowright')) ix += 1;
+  if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
+  player.moving = (ix !== 0 || iy !== 0);
+  if (player.moving) {
+    _dir.copy(cam.fwd).multiplyScalar(iy).addScaledVector(_right, ix).normalize();
+    // 캐릭터가 이동 방향으로 돈다
+    const ang = Math.atan2(_dir.dot(_right), _dir.dot(cam.fwd)) - Math.atan2(player.fwd.dot(_right), player.fwd.dot(cam.fwd));
+    let d = Math.atan2(Math.sin(ang), Math.cos(ang));
+    const maxT = TURN * dt;
+    d = Math.max(-maxT, Math.min(maxT, d));
+    rotateAround(player.fwd, _up, -d);
+    const speed = WALK * (player.inShallow ? 0.55 : 1);
+    tryMove(_dir, speed * dt);
+    player.walkT += dt * (player.inShallow ? 6 : 9);
+    // 움직이는 동안 카메라가 서서히 등 뒤로 (드래그 직후엔 잠시 보류)
+    if (cam.userHold <= 0 && iy > 0) {
+      const a = Math.atan2(player.fwd.dot(_right), player.fwd.dot(cam.fwd));
+      rotateAround(cam.fwd, _up, -a * Math.min(1, dt * 1.6));
+    }
+  }
+  cam.userHold = Math.max(0, cam.userHold - dt);
+
+  // 수직: 중력 / 착지 / 내리막 붙기
+  player.vz -= G * dt;
+  player.z += player.vz * dt;
+  _up.copy(player.pos).normalize();
+  const ground = walkH(_up);
+  if (player.z <= ground) { player.z = ground; player.vz = 0; player.grounded = true; }
+  else if (player.grounded && player.vz <= 0 && player.z - ground < 0.5) { player.z = ground; player.vz = 0; }
+  else if (player.z - ground > 0.05) player.grounded = false;
+  player.pos.copy(_up).multiplyScalar(R + player.z);
+  tangentize(player.fwd, _up);
+  tangentize(cam.fwd, _up);
+
+  // 물: 얕으면 느리게, 깊으면 마지막 육지로 복귀 (로드맵 5 B 규칙 그대로)
+  const th = terrainH(_up);
+  const onStructure = ground > th + 0.3;
+  player.inShallow = !onStructure && player.grounded && th < WATER + 0.25 && th > WATER - 0.9;
+  if (!onStructure && player.grounded && th <= WATER - 0.9) {
+    respawn();
+  } else if (player.grounded && th > WATER + 0.3) {
+    // 안전 지점은 0.8초마다 갱신 — 절벽 끝이 아니라 그 조금 전 자리로 돌아오게
+    player.safeT += dt;
+    if (player.safeT > 0.8) { player.safeT = 0; player.safe.copy(player.safeNext); player.safeFwd.copy(player.safeNextFwd); player.safeNext.copy(_up); player.safeNextFwd.copy(player.fwd); }
+  }
+
+  // 캐릭터 자세: 로컬 Y=위, Z=앞
+  _right.crossVectors(_up, player.fwd).normalize();
+  _m.makeBasis(_right, _up, player.fwd);
+  player.mesh.quaternion.setFromRotationMatrix(_m);
+  player.mesh.position.copy(player.pos);
+  // 걷기 애니메이션 / 숨쉬기
+  const u = player.mesh.userData;
+  const sw = player.moving ? Math.sin(player.walkT) * 0.6 : 0;
+  u.legL.rotation.x = sw; u.legR.rotation.x = -sw;
+  u.armL.rotation.x = -sw * 0.8; u.armR.rotation.x = sw * 0.8;
+  const breathe = player.moving ? Math.abs(Math.sin(player.walkT)) * 0.05 : Math.sin(performance.now() * 0.002) * 0.015;
+  u.body.position.y = 0.66 + breathe; u.head.position.y = 1.32 + breathe; u.bag.position.y = 0.72 + breathe;
+  if (!player.grounded) { u.legL.rotation.x = 0.5; u.legR.rotation.x = -0.3; }
+
+  // 카메라
+  _right.crossVectors(cam.fwd, _up).normalize();
+  _camPos.copy(player.pos).addScaledVector(_up, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+  // 카메라가 지면 아래로 들어가지 않게 (작업 B에서 지형 충돌로 확장)
+  const camDir = _camPos.clone().normalize();
+  const camMin = R + Math.max(terrainH(camDir), WATER) + 0.9;
+  if (_camPos.length() < camMin) _camPos.copy(camDir).multiplyScalar(camMin);
+  camera.position.lerp(_camPos, 1 - Math.pow(0.0005, dt));
+  camera.up.copy(_up);
+  _look.copy(player.pos).addScaledVector(_up, CAM_LOOK_UP);
+  camera.lookAt(_look);
+
+  // 태양·그림자 프러스텀은 플레이어를 따라간다
+  sun.position.copy(player.pos).addScaledVector(SUN_DIR, 70);
+  sun.target.position.copy(player.pos);
+  sun.target.updateMatrixWorld();
+
+  // 하늘은 카메라 중심, 그라데이션은 "위" 기준
+  sky.position.copy(camera.position);
+  sky.material.uniforms.uUp.value.copy(_up);
+  water.material.uniforms.uTime.value = performance.now() * 0.001;
+  // 구름은 제자리에서 살짝 떠다님
+  const t = performance.now() * 0.0004;
+  for (const c of clouds) {
+    const d = c.userData;
+    c.position.copy(d.dir).multiplyScalar(R + d.alt + Math.sin(t + d.drift) * 0.8);
+  }
+
+  if (!zoneShown) { zoneShown = true; setTimeout(showZoneName, 600); }
+}
+
+function showZoneName() {
+  const el = document.getElementById('zoneName');
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 2600);
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const fpsEl = document.getElementById('fps');
+if (DEBUG) fpsEl.style.display = 'block';
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  step(dt);
+  renderer.render(scene, camera);
+  if (DEBUG) {
+    fpsAcc += dt; fpsN++;
+    if (fpsAcc >= 0.5) { fpsEl.textContent = `${(fpsN / fpsAcc).toFixed(0)} fps · z ${player.z.toFixed(2)}`; fpsAcc = 0; fpsN = 0; }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ── 디버그 훅 (?debug 에서만) — Playwright 검증용 ─────────────────────────────
+if (DEBUG) {
+  window.__dbg = {
+    THREE, scene, camera, renderer, player, cam, trees, R, WATER,
+    terrainH, walkH, pathMask, dirFromLonLat, angDeg, T, canStand,
+    setLonLat(lon, lat) {
+      const d = dirFromLonLat(lon, lat);
+      player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
+      tangentize(player.fwd, d); tangentize(cam.fwd, d);
+      camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+    },
+    lonLat() {
+      const d = player.pos.clone().normalize();
+      return { lon: Math.atan2(d.x, d.z) / DEG, lat: Math.asin(Math.max(-1, Math.min(1, d.y))) / DEG, z: player.z };
+    },
+    press(k, on) { on ? keys.add(k) : keys.delete(k); },
+    stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
+    jump() { if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } },
+  };
+}
+</script>
+</body>
+</html>
