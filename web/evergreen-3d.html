@@ -82,7 +82,7 @@ const G = 32;                 // 중력 (법선 반대 방향)
 const JUMP_V = 8.8;           // 점프 초속 → 최고 1.2, 체공 약 0.55s
 // 카메라는 회전하지 않는다. 항상 북쪽을 보며 위 대각선(약 42°)에서 내려다본다.
 // 캐릭터가 화면 세로의 1/7 크기로 작게 보이고, 빌보드 그림이 늘 같은 방향을 향한다.
-const CAM_BACK = 13.0, CAM_UP = 11.7, CAM_LOOK_UP = 0.8, CAM_FOV = 38;
+const CAM_BACK = 15.0, CAM_UP = 12.6, CAM_LOOK_UP = 0.8, CAM_FOV = 46;   // 약 40°, 위쪽에 하늘이 살짝
 const CAM_PITCH = Math.atan2(CAM_UP, CAM_BACK);
 // 세계 고정 태양 방향 — 시작점(+Z) 기준 고도 약 64°. 놀이 구역(위도 0~45°) 안에서는 계속 높이 떠 있어 그림자가 짧다.
 const SUN_DIR = new THREE.Vector3(0.35, 0.25, 0.9).normalize();
@@ -424,7 +424,7 @@ function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
 const COL = {
   grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
   sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
-  rock: new THREE.Color(0xd9b26f), rockDark: new THREE.Color(0xb8904e), moss: new THREE.Color(0x6fbf46),
+  rock: new THREE.Color(0xd9b26f), rockDark: new THREE.Color(0xa9803f), rockLight: new THREE.Color(0xecd39a), moss: new THREE.Color(0x6fbf46),
   bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
   stone: new THREE.Color(0xd6cbb4), stoneDark: new THREE.Color(0xbfb39b),
 };
@@ -462,11 +462,13 @@ function paintTerrain(geo, withPaths) {
     if (slope > 0.10) {
       const k = ss(0.10, 0.26, slope);
       rockK = Math.max(rockK, k);
-      const stripe = vnoise(d.x * 90, d.y * 90 + h * 1.5, d.z * 90);
-      const rock = stripe > 0.55 ? COL.rockDark : COL.rock;
+      // 층층이 쌓인 돌: 높이에 따라 밝은 층/어두운 층이 번갈아 (사진의 절벽처럼)
+      const band = Math.sin(h * 3.6 + vnoise(d.x * 40, d.y * 40, d.z * 40) * 2.2);
+      const rock = band > 0.25 ? COL.rockDark : (band < -0.45 ? COL.rockLight : COL.rock);
       tmp.lerp(rock, k);
+      tmp.multiplyScalar(1 - 0.18 * k * ss(-0.2, 0.6, band));   // 어두운 층은 더 어둡게 — 음영
       const mossy = vnoise(d.x * 35 + 2, d.y * 35, d.z * 35);
-      if (mossy > 0.62 && slope < 0.3) tmp.lerp(COL.moss, k * 0.7);
+      if (mossy > 0.5 && slope < 0.3) tmp.lerp(COL.moss, k * 0.8);
     }
     col.setXYZ(i, tmp.r, tmp.g, tmp.b);
     rockA.setX(i, rockK);
@@ -500,6 +502,10 @@ const planet = (() => {
   const patch = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, (p) => R + terrainH(p));
   paintTerrain(patch, true);
   const pm = new THREE.Mesh(patch, terrainMat); pm.receiveShadow = true; pm.castShadow = true; scene.add(pm);
+  // 실루엣 외곽선: 같은 메시를 법선 방향으로 0.14 밀어낸 뒷면만 그린다 → 절벽 끝·단구 가장자리에 진한 선
+  const hull = new THREE.Mesh(patch, outlineMat(0.14, 0x3a2f1c));
+  hull.renderOrder = 1; scene.add(hull);
+  const hull2 = new THREE.Mesh(outer, outlineMat(0.14, 0x3a2f1c)); scene.add(hull2);
   return pm;
 })();
 
@@ -554,6 +560,10 @@ const water = (() => {
         // 잔물결 하이라이트
         float sp = noise(vWorld.xz * 3.0 + vec2(uTime * 0.2)) ;
         col += vec3(0.10) * smoothstep(0.72, 0.9, sp);
+        // 빛줄기: 비스듬한 밝은 띠 두 겹
+        float ray = smoothstep(0.86, 1.0, sin((vWorld.x * 0.9 + vWorld.y * 0.35 + vWorld.z * 0.6) * 2.3 + uTime * 0.6) * 0.5 + 0.5)
+                  + smoothstep(0.9, 1.0, sin((vWorld.x * 0.5 - vWorld.z * 1.1) * 3.1 - uTime * 0.45) * 0.5 + 0.5);
+        col += vec3(0.85, 0.95, 1.0) * ray * 0.18 * (1.0 - vShore * 0.5);
         float alpha = mix(0.82, 0.55, vShore) + foam * 0.3;
         float f = smoothstep(fogNear, fogFar, vFogDepth);
         gl_FragColor = vec4(mix(col, fogColor, f), alpha);
@@ -666,36 +676,56 @@ function blob(g, x, y, rx, ry, fill, line, lw = 3) {
   if (line) { g.strokeStyle = line; g.lineWidth = lw; g.stroke(); }
 }
 
-// 나무: 겹친 비늘 잎덩이. 아래가 넓고 위가 좁고, 맨 위는 밝다.
+// 나무: 카메라(약 40° 위)에서 본 모습으로 그린다 — 잎덩이 윗면이 넓게 보이고 아래는 어둡다.
 function drawTreeSprite(g, W, H, v) {
-  const cx = W / 2;
-  // 기둥
-  g.fillStyle = '#8a5a2b'; g.strokeStyle = '#5a3a18'; g.lineWidth = 4;
-  g.beginPath(); g.moveTo(cx - 14, H - 4); g.lineTo(cx - 10, H * 0.55); g.lineTo(cx + 10, H * 0.55); g.lineTo(cx + 14, H - 4); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = '#6b4520'; g.fillRect(cx + 2, H * 0.6, 6, H * 0.3);
-  // 잎덩이 층
-  // 큰 덩어리 실루엣 먼저, 그 위에 비늘처럼 겹친 잎 몇 덩이
-  blob(g, cx, H * 0.4, W * 0.46, H * 0.3, '#5cc23a', '#2f7a22', 4);
-  const rows = [[H * 0.55, W * 0.4, 4], [H * 0.42, W * 0.34, 3], [H * 0.3, W * 0.24, 2], [H * 0.2, W * 0.12, 1]];
-  const cols = ['#5cc23a', '#6ccc42', '#82d94f', '#a6e86c'];
-  rows.forEach(([y, rw, n], i) => {
-    const fill = cols[Math.min(i + (v % 2), 3)];
-    for (let k = 0; k < n; k++) {
-      const x = cx + (n === 1 ? 0 : (k / (n - 1) - 0.5) * rw * 1.6);
-      blob(g, x, y, rw / n * 1.5 + 10, rw / n * 1.1 + 8, fill, '#2f7a22', 3);
-    }
-  });
-  // 하이라이트
-  g.fillStyle = 'rgba(255,255,255,0.28)';
-  blob(g, cx - W * 0.1, H * 0.15, W * 0.08, H * 0.03, 'rgba(255,255,255,0.35)');
-  blob(g, cx + W * 0.18, H * 0.34, W * 0.06, H * 0.025, 'rgba(255,255,255,0.25)');
+  const cx = W / 2, line = '#2a5e1a';
+  // 기둥 (짧게 — 위에서 보면 잎에 가린다)
+  g.fillStyle = '#8a5a2b'; g.strokeStyle = '#4e3113'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(cx - 15, H - 4); g.lineTo(cx - 11, H * 0.7); g.lineTo(cx + 11, H * 0.7); g.lineTo(cx + 15, H - 4); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(cx + 4, H * 0.72, 8, H * 0.24);
+  // 아래쪽 어두운 잎덩이(그늘) — 큰 덩어리
+  blob(g, cx, H * 0.52, W * 0.47, H * 0.27, '#3f9a2a', line, 4);
+  // 중간 층: 좌우로 겹친 덩이
+  const mid = [[-0.3, 0.5, 0.2], [0.3, 0.5, 0.2], [0, 0.44, 0.24]];
+  for (const [dx, dy, r] of mid) blob(g, cx + dx * W, H * dy, W * r, H * r * 0.75, '#56b834', line, 3.5);
+  // 윗면(밝은 캡): 위에서 내려다본 넓은 타원
+  blob(g, cx, H * 0.34, W * 0.42, H * 0.22, '#7fd24a', line, 4);
+  const cap = [[-0.22, 0.36, 0.17], [0.22, 0.36, 0.17], [0, 0.28, 0.2], [-0.1, 0.22, 0.13], [0.12, 0.2, 0.12]];
+  for (const [dx, dy, r] of cap) blob(g, cx + dx * W, H * dy, W * r, H * r * 0.7, v % 2 ? '#8fdc55' : '#84d64f', line, 3);
+  // 맨 위 하이라이트
+  blob(g, cx - W * 0.06, H * 0.19, W * 0.11, H * 0.045, 'rgba(255,255,255,0.35)');
+  blob(g, cx + W * 0.16, H * 0.3, W * 0.06, H * 0.03, 'rgba(255,255,255,0.25)');
+  // 잎 결: 아래쪽 덩이에 어두운 비늘선
+  g.strokeStyle = 'rgba(40,90,25,0.5)'; g.lineWidth = 2.5;
+  for (let i = 0; i < 6; i++) { const x = cx - W * 0.3 + i * W * 0.12; g.beginPath(); g.arc(x, H * 0.6, W * 0.07, Math.PI * 0.15, Math.PI * 0.85); g.stroke(); }
 }
 function drawBushSprite(g, W, H) {
+  const cx = W / 2, line = '#2a5e1a';
+  blob(g, cx, H * 0.7, W * 0.46, H * 0.26, '#3f9a2a', line, 3.5);      // 아래 그늘
+  blob(g, cx - W * 0.22, H * 0.56, W * 0.26, H * 0.26, '#5cbf38', line, 3);
+  blob(g, cx + W * 0.22, H * 0.56, W * 0.26, H * 0.26, '#5cbf38', line, 3);
+  blob(g, cx, H * 0.42, W * 0.32, H * 0.3, '#7fd24a', line, 3);           // 윗면
+  blob(g, cx - W * 0.08, H * 0.3, W * 0.1, H * 0.05, 'rgba(255,255,255,0.32)');
+}
+// 갈대·풀숲: 사진의 노란빛 긴 풀 다발
+function drawReedSprite(g, W, H) {
   const cx = W / 2;
-  blob(g, cx - W * 0.22, H * 0.68, W * 0.26, H * 0.28, '#5fbf3a', '#2f7a22', 3);
-  blob(g, cx + W * 0.22, H * 0.68, W * 0.26, H * 0.28, '#5fbf3a', '#2f7a22', 3);
-  blob(g, cx, H * 0.5, W * 0.3, H * 0.34, '#72d148', '#2f7a22', 3);
-  blob(g, cx - W * 0.08, H * 0.36, W * 0.09, H * 0.05, 'rgba(255,255,255,0.3)');
+  for (let i = 0; i < 9; i++) {
+    const t = (i / 8 - 0.5);
+    const x0 = cx + t * W * 0.5, x1 = cx + t * W * 0.9, top = H * (0.08 + Math.abs(t) * 0.35);
+    g.strokeStyle = i % 3 === 0 ? '#c9c93a' : (i % 3 === 1 ? '#a3c93a' : '#7fb534'); g.lineWidth = 4;
+    g.beginPath(); g.moveTo(x0, H - 2); g.quadraticCurveTo(x0 + (x1 - x0) * 0.6, H * 0.55, x1, top); g.stroke();
+    g.strokeStyle = 'rgba(60,90,20,0.45)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x0 + 2, H - 2); g.quadraticCurveTo(x0 + (x1 - x0) * 0.6 + 2, H * 0.55, x1 + 2, top); g.stroke();
+  }
+  // 이삭
+  for (let i = 0; i < 4; i++) { const t = (i / 3 - 0.5); blob(g, cx + t * W * 0.7, H * (0.12 + Math.abs(t) * 0.3), 5, 11, '#e2c94a', 'rgba(120,90,20,0.6)', 1.5); }
+}
+function drawStoneSprite(g, W, H) {
+  const cx = W / 2, line = '#5a4a2a';
+  blob(g, cx, H * 0.62, W * 0.46, H * 0.3, '#b9a37a', line, 3.5);
+  blob(g, cx - W * 0.05, H * 0.5, W * 0.4, H * 0.24, '#d8c59c', line, 3);
+  blob(g, cx - W * 0.12, H * 0.42, W * 0.16, H * 0.07, 'rgba(255,255,255,0.35)');
+  blob(g, cx + W * 0.2, H * 0.62, W * 0.12, H * 0.07, 'rgba(100,150,60,0.7)');  // 이끼
 }
 function drawFlowerSprite(g, W, H, color) {
   const cx = W / 2;
@@ -772,6 +802,8 @@ charTex.repeat.set(1 / 6, 1);
 
 const treeTex = [0, 1, 2].map(v => spriteTex(192, 256, (g, W, H) => drawTreeSprite(g, W, H, v)));
 const bushTex = spriteTex(128, 96, (g, W, H) => drawBushSprite(g, W, H));
+const reedTex = spriteTex(128, 128, (g, W, H) => drawReedSprite(g, W, H));
+const stoneTex = spriteTex(128, 96, (g, W, H) => drawStoneSprite(g, W, H));
 const flowerTex = { yellow: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#ffd93b')), white: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#fff6f0')) };
 const mushTex = { red: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#e84a4a')), blue: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#4aa6f5')) };
 
@@ -884,7 +916,57 @@ const decor = [];
   flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f); });
   const mush = [[-4.2, 1.2, 'blue'], [-4.8, 0.6, 'blue'], [6, -1, 'red'], [-8.5, -1, 'red'], [9, 8.5, 'red'], [-9.5, 35, 'red'], [10, 42, 'red']];
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m); });
+  // 갈대 — 물가(단구 가장자리·다리 양끝·슬라임 초원 남쪽)에 다발로
+  const reeds = [[-7.4, 12], [7.6, 12.5], [-7.9, 18.5], [8, 19], [-2.6, 22.6], [2.7, 22.8], [-3, 30.2], [3.2, 30.4], [-6, 30.8], [6.5, 31], [-9, 34.5], [10.5, 36], [-12, 40], [-2.2, 21.9], [2.3, 29.6]];
+  reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
+  // 돌덩이·유적 조각
+  const stones = [[-6.5, 6.5], [8.2, 3.2], [-4, 32.5], [6.8, 38], [-9.5, 41.5], [11.5, 39.5], [-3.8, 17.8], [5.5, 14.2]];
+  stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); });
 }
+
+// ── 나무다리 (작업 C 첫 항목) — 사진의 아치형 판자 다리. 걷기 높이는 walkH의 아치와 같다 ──
+const bridge = (() => {
+  const g = new THREE.Group();
+  const seg = T.bridge, N = 24;
+  const plankM = toon(0xd9a45a), plankDark = toon(0xb9823f), postM = toon(0x8a5a2b), ropeM = toon(0xe6d3a0);
+  const north = new THREE.Vector3(), east = new THREE.Vector3(), up = new THREE.Vector3(), mtx = new THREE.Matrix4(), pos = new THREE.Vector3();
+  const frameAt = (t) => {
+    // 호 위 t 지점의 방향·높이·프레임
+    const dir = seg.A.clone().lerp(seg.B, t).normalize();
+    up.copy(dir); north.copy(seg.B).sub(seg.A); tangentize(north, up); east.crossVectors(north, up).normalize();
+    const h = 2.5 + 0.35 * Math.sin(Math.PI * t);
+    pos.copy(dir).multiplyScalar(R + h);
+    mtx.makeBasis(east, up, north); mtx.setPosition(pos);
+    return { h, dir };
+  };
+  const span = seg.arc * DEG * R;   // 다리 길이(유닛)
+  const plankLen = span / N;
+  for (let i = 0; i < N; i++) {
+    const t = (i + 0.5) / N; frameAt(t);
+    const m = withOutline(new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, plankLen * 0.92), i % 2 ? plankM : plankDark), 0.02, 0x6b4a1e);
+    m.applyMatrix4(mtx); m.castShadow = true; m.receiveShadow = true; g.add(m);
+  }
+  // 난간 기둥 + 밧줄
+  const ropePts = [[], []];
+  for (let i = 0; i <= 6; i++) {
+    const t = i / 6; frameAt(t);
+    for (const side of [-1, 1]) {
+      const post = withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.1, 0.22), postM), 0.02, 0x4e3113);
+      post.position.set(side * 1.25, 0.55, 0); post.applyMatrix4(mtx); post.castShadow = true; g.add(post);
+      const top = new THREE.Vector3(side * 1.25, 1.05, 0).applyMatrix4(mtx);
+      ropePts[side > 0 ? 1 : 0].push(top);
+    }
+  }
+  for (const pts of ropePts) {
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const rope = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.06, 6, false), ropeM);
+    g.add(rope);
+  }
+  // 양끝 발판(돌)
+  for (const t of [0, 1]) { frameAt(t); const step = withOutline(new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.3, 1.2), toon(0xcfc3a8)), 0.02, 0x6b5a3a); step.position.set(0, -0.1, t ? 0.5 : -0.5); step.applyMatrix4(mtx); step.receiveShadow = true; g.add(step); }
+  scene.add(g);
+  return g;
+})();
 
 // ── 입력 ─────────────────────────────────────────────────────────────────────
 const keys = new Set();
