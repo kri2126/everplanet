@@ -8,7 +8,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: #3f9df2; }
   body { font-family: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: #fff; }
   #c { display: block; width: 100%; height: 100%; }
-  /* 로드맵 6 작업 E에서 원작 배치대로 다시 짤 예정 — 지금은 조작 힌트만 */
+  /* 조작 힌트 (왼쪽 위) */
   #hint {
     position: fixed; left: 14px; top: 12px; font-size: 13px; line-height: 1.6;
     text-shadow: 0 1px 2px rgba(0,0,0,.45); opacity: .9; pointer-events: none; user-select: none;
@@ -44,6 +44,58 @@
   #zonemap .lbl { position: absolute; transform: translate(-50%, -100%); font: 600 11px 'Gowun Dodum', sans-serif; color: #5b4632;
     background: rgba(255,250,240,.92); border: 1px solid rgba(180,140,100,.6); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
   #ui2d { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
+  /* ── 작업 E: 원작 배치 HUD — 아래 중앙 HP/MP 오브 + 스킬바 + 경험치, 오른쪽 퀘스트, 왼쪽 아래 로그 ── */
+  #hud { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; user-select: none; }
+  .orb { width: 68px; height: 68px; border-radius: 50%; position: relative; margin-bottom: 2px;
+    box-shadow: 0 0 0 3px #c99354, 0 0 0 5px #5a3a1c, 0 4px 10px rgba(0,0,0,.45), inset 0 -8px 14px rgba(0,0,0,.35), inset 0 6px 10px rgba(255,255,255,.35); }
+  .orb.hp { background: radial-gradient(circle at 35% 30%, #ff9a9a, #e2322f 55%, #7d0f12); }
+  .orb.mp { background: radial-gradient(circle at 35% 30%, #9ad2ff, #2f7fe2 55%, #0f2f7d); }
+  .orb span { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font: 700 13px monospace; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  .orb b { position: absolute; left: 0; right: 0; top: -18px; text-align: center; font: 700 11px sans-serif; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  #skills { display: grid; grid-template-columns: repeat(8, 34px); gap: 4px; padding: 6px; background: rgba(40,28,18,.72);
+    border: 2px solid #c99354; border-radius: 8px; box-shadow: 0 0 0 2px #5a3a1c, 0 4px 10px rgba(0,0,0,.4); }
+  #skills i { width: 34px; height: 34px; border-radius: 5px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,220,170,.25); position: relative; display: block; }
+  #skills i::after { content: attr(data-k); position: absolute; right: 3px; bottom: 1px; font: 700 9px monospace; color: rgba(255,240,210,.75); font-style: normal; }
+  #skills i.f { background: radial-gradient(circle at 50% 40%, #ffd166, #d9781c 70%, #7a3a0a); }
+  #exp { position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%); width: 440px; height: 5px; background: rgba(0,0,0,.55); border-radius: 3px; overflow: hidden; pointer-events: none; }
+  #exp i { display: block; height: 100%; width: 12%; background: linear-gradient(#9cf07a, #3ea83a); transition: width .4s; }
+  #quest { position: fixed; right: 14px; top: 212px; width: 190px; font-size: 12px; line-height: 1.45; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.7);
+    background: rgba(30,22,14,.45); border-left: 3px solid #ffd166; padding: 6px 8px; border-radius: 0 6px 6px 0; pointer-events: none; }
+  #quest b { display: block; color: #ffd166; font-size: 12px; margin-bottom: 2px; }
+  #quest .obj::before { content: '◦ '; color: #9ad2ff; }
+  #quest .obj.done { opacity: .7; }
+  #log { position: fixed; left: 12px; bottom: 12px; width: 320px; max-height: 118px; overflow: hidden; font-size: 12px; line-height: 1.5; color: #eef;
+    background: rgba(10,14,24,.42); border-radius: 6px; padding: 6px 10px; pointer-events: none; }
+  #log:empty { display: none; }
+  #log div { text-shadow: 0 1px 2px rgba(0,0,0,.8); } #log .sys { color: #ffd166; } #log .npc { color: #9ad2ff; }
+  #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .lb { position: absolute; transform: translate(-50%,-100%); white-space: nowrap; font: 700 12px 'Gowun Dodum', sans-serif; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.5); text-align: center; }
+  .lb.npc { color: #ffe9a8; }
+  .lb.npc.q::before { content: '!'; display: block; color: #ffd166; font: 900 22px sans-serif; line-height: 18px; animation: bob .7s ease-in-out infinite alternate; }
+  .lb.slime { color: #bfe3ff; font-size: 11px; }
+  .lb.tip { background: rgba(20,24,34,.8); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 3px 8px; font-weight: 600; font-size: 12px;
+    transform: translate(-50%,-100%) translateY(-22px); }
+  .lb.tip b { display: inline-block; padding: 0 5px; margin-right: 4px; border-radius: 3px; background: #fff; color: #223; font-size: 11px; }
+  .lb.dmg { color: #fff; font: 900 20px sans-serif; -webkit-text-stroke: 1px #7a2020; text-shadow: 0 2px 3px rgba(0,0,0,.7); }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+  #dialog { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); width: min(620px, 92vw); background: rgba(16,20,30,.86);
+    border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 12px 18px 12px; display: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); pointer-events: none; }
+  #dialog .who { color: #ffd166; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  #dialog .txt { font-size: 15px; line-height: 1.55; min-height: 46px; }
+  #dialog .next { text-align: right; font-size: 11px; opacity: .85; margin-top: 6px; animation: blink 1.1s infinite; }
+  #dialog .next b { display: inline-block; padding: 0 5px; margin-right: 4px; border-radius: 3px; background: #fff; color: #223; }
+  @keyframes blink { 50% { opacity: .35; } }
+  #inv { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14;
+    border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); pointer-events: none; }
+  #inv h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
+  #inv .grid { display: grid; grid-template-columns: repeat(5, 44px); gap: 5px; }
+  #inv .grid i { width: 44px; height: 44px; display: block; background: #4a3219; border: 1px solid #2f1e0c; box-shadow: inset 0 1px 0 rgba(255,220,170,.15); border-radius: 4px; }
+  #inv .foot { margin-top: 8px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .8; }
+  #cut { position: fixed; inset: 0; display: none; pointer-events: none; }
+  #cut .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; } #cut .top { top: 0; } #cut .bot { bottom: 0; }
+  #cut .skip { position: absolute; right: 18px; bottom: 11%; font-size: 12px; opacity: .85; text-shadow: 0 1px 2px #000; }
+  #cut .skip b { display: inline-block; padding: 0 5px; border-radius: 3px; background: rgba(255,255,255,.9); color: #223; }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -51,12 +103,20 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프 <b>M</b>지도 <b>M M</b>전경도</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프·대화 <b>Z</b>공격 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도</div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv" width="150" height="150"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
-<div id="zoneName"><small>EVERGREEN</small>에버그린 · 별내림 천문대</div>
+<div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
+<div id="hud"><div class="orb hp"><b>HP</b><span>100</span></div><div id="skills"></div><div class="orb mp"><b>MP</b><span>50</span></div></div>
+<div id="exp"><i></i></div>
+<div id="quest"><b id="questTitle"></b><div id="questObj"></div></div>
+<div id="log"></div>
+<div id="labels"></div>
+<div id="dialog"><div class="who" id="dlgWho"></div><div class="txt" id="dlgTxt"></div><div class="next"><b>Space Bar</b>다음</div></div>
+<div id="inv"><h3>인벤토리</h3><div class="grid"></div><div class="foot">I 닫기 · 아직 담긴 물건이 없다</div></div>
+<div id="cut"><div class="bar top"></div><div class="bar bot"></div><div class="skip"><b>Space</b> 건너뛰기</div></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -67,7 +127,7 @@ import * as THREE from 'three';
 //    지평선이 둥글게 휘어 보이고, 나무가 툰 셰이딩+외곽선+그림자로 서 있다.
 // B: §3 표의 지형(착륙 초원·돌계단·단구 야영지·해자·다리 자리·슬라임 초원·바위벽)을
 //    도형의 합 하이트맵으로 세우고, 경사도로 풀/바위를 칠하고, 모래길과 물을 얹는다.
-// 구조물/초목(C·D)·UI(E)·NPC/슬라임(F)·연출(G)은 이 위에 얹는다.
+// C·D(구조물·초목)는 그림 판(빌보드)으로, E(HUD)·F(NPC·슬라임)·G(컷신·빛기둥·화살표)는 그 위에 얹었다.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -846,12 +906,13 @@ function mapDot(dir, radius, color) {
 }
 
 // ── 세계 채우기 ───────────────────────────────────────────────────────────────
+const START = [-3.2, 3.0];                     // 착륙 초원, 비행정 착지 자리 옆
 const player = {
-  pos: dirFromLonLat(0, 0).multiplyScalar(R),  // 착륙 초원 중심
+  pos: dirFromLonLat(START[0], START[1]).multiplyScalar(R),
   fwd: new THREE.Vector3(0, 1, 0),             // 북쪽
   z: 0, vz: 0, grounded: true, moving: false, walkT: 0, inShallow: false,
-  safe: dirFromLonLat(0, 0), safeFwd: new THREE.Vector3(0, 1, 0),
-  safeNext: dirFromLonLat(0, 0), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
+  safe: dirFromLonLat(START[0], START[1]), safeFwd: new THREE.Vector3(0, 1, 0),
+  safeNext: dirFromLonLat(START[0], START[1]), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
   mesh: makeBillboard(charTex, 1.25, 1.7), view: 0, frame: 0,
 };
 scene.add(player.mesh);
@@ -1100,8 +1161,8 @@ function addProp(tex, w, h, lon, lat, opts = {}) {
   const m = placeSprite(makeBillboard(tex, w, h, opts), lon, lat, opts.useWalk, opts.lift || 0);
   scene.add(m); props.push(m); return m;
 }
-// 착륙 초원: 비행정(데크 서쪽 풀밭 위에 떠 있음)·표지판·등불
-const airship = addProp(airshipTex, 6.4, 4.8, -10.2, 2.4, { lift: 1.2 }); airship.userData.base = airship.position.clone();
+// 착륙 초원: 비행정(데크 북쪽 풀밭 위에 떠 있음, 시작 컷신에서 여기로 내려온다)·표지판·등불
+const airship = addProp(airshipTex, 6.4, 4.8, -6.6, 4.9, { lift: 0.35 }); airship.userData.base = airship.position.clone(); airship.userData.alt = 0;
 addProp(signTex, 1.3, 1.75, 2.4, -1.6);
 addProp(lanternTex, 1.1, 1.5, -4.4, 2.6);
 addProp(starTex, 1.9, 1.9, 7.2, -4.6);
@@ -1256,17 +1317,350 @@ const bridge = (() => {
   return g;
 })();
 
+// ── 작업 E·F·G: HUD · NPC · 슬라임 · 퀘스트 · 연출 ─────────────────────────────
+// NPC는 앞(남)을 보고 서 있는 그림 판 하나. kind: sailor(파란 모자) | keeper(앞치마) | knight(갑옷)
+function drawNpcSprite(g, W, H, kind) {
+  const cx = W / 2, skin = '#ffd9b3', line = 'rgba(70,40,20,0.75)';
+  const shirt = kind === 'knight' ? '#b9c4d6' : kind === 'sailor' ? '#3f7fe0' : '#c9743a';
+  const pants = kind === 'knight' ? '#7a8599' : '#4a4a5a';
+  blob(g, cx - W * 0.12, H * 0.86, W * 0.11, H * 0.08, pants, line, 2); blob(g, cx + W * 0.12, H * 0.86, W * 0.11, H * 0.08, pants, line, 2);
+  blob(g, cx, H * 0.64, W * 0.28, H * 0.17, shirt, line, 2.5);
+  if (kind === 'keeper') { g.fillStyle = '#f2e6cf'; g.strokeStyle = line; g.lineWidth = 2; g.beginPath(); g.roundRect(cx - W * 0.16, H * 0.6, W * 0.32, H * 0.2, 4); g.fill(); g.stroke(); }
+  if (kind === 'knight') {
+    blob(g, cx - W * 0.3, H * 0.57, W * 0.1, H * 0.06, '#d9e2f0', line, 2); blob(g, cx + W * 0.3, H * 0.57, W * 0.1, H * 0.06, '#d9e2f0', line, 2);
+    g.strokeStyle = '#4a4a5a'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx + W * 0.4, H * 0.5); g.lineTo(cx + W * 0.4, H * 0.92); g.stroke();
+    g.strokeStyle = '#ffd166'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx + W * 0.31, H * 0.52); g.lineTo(cx + W * 0.49, H * 0.52); g.stroke();
+  }
+  blob(g, cx - W * 0.3, H * 0.66, W * 0.07, H * 0.11, shirt, line, 2); blob(g, cx + W * 0.3, H * 0.66, W * 0.07, H * 0.11, shirt, line, 2);
+  const hy = H * 0.34, hr = W * 0.33;
+  blob(g, cx, hy, hr, hr * 0.98, skin, line, 2.5);
+  if (kind === 'knight') {
+    blob(g, cx, hy - hr * 0.2, hr * 1.06, hr * 0.9, '#c8d2e2', line, 2.5);
+    blob(g, cx, hy - hr * 1.05, hr * 0.14, hr * 0.32, '#e2534a', line, 2);
+  } else {
+    const hair = kind === 'sailor' ? '#3a2a1a' : '#8a5a2b';
+    g.fillStyle = hair; g.strokeStyle = line; g.lineWidth = 2.5;
+    g.beginPath(); g.ellipse(cx, hy - hr * 0.35, hr * 1.04, hr * 0.7, 0, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+    if (kind === 'sailor') { blob(g, cx, hy - hr * 0.78, hr * 1.1, hr * 0.42, '#2c6fd6', line, 2.5); g.fillStyle = '#1b3f8a'; g.fillRect(cx - hr * 1.15, hy - hr * 0.66, hr * 2.3, hr * 0.16); }
+    else { blob(g, cx, hy - hr * 0.82, hr * 1.0, hr * 0.3, '#5a8a3a', line, 2.5); }
+  }
+  blob(g, cx - hr * 0.35, hy + hr * 0.15, 3.5, 5, '#2a1f16'); blob(g, cx + hr * 0.35, hy + hr * 0.15, 3.5, 5, '#2a1f16');
+  blob(g, cx - hr * 0.55, hy + hr * 0.42, 6, 3.5, 'rgba(255,120,120,0.45)'); blob(g, cx + hr * 0.55, hy + hr * 0.42, 6, 3.5, 'rgba(255,120,120,0.45)');
+}
+// 슬라임: 파란 반구 + 흰 하이라이트 + 눈 2. frame 1은 착지해서 납작한 모습.
+function drawSlimeSprite(g, W, H, frame) {
+  const cx = W / 2, sq = frame ? 1.15 : 1, st = frame ? 0.8 : 1;
+  const rx = W * 0.38 * sq, ry = H * 0.4 * st, cy = H - 3 - ry;
+  g.fillStyle = '#4aa6f5'; g.strokeStyle = '#1f4f9a'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(cx - rx, H - 3); g.quadraticCurveTo(cx - rx, cy - ry, cx, cy - ry); g.quadraticCurveTo(cx + rx, cy - ry, cx + rx, H - 3); g.closePath(); g.fill(); g.stroke();
+  blob(g, cx - rx * 0.4, cy - ry * 0.4, rx * 0.22, ry * 0.16, 'rgba(255,255,255,0.75)');
+  blob(g, cx - rx * 0.35, cy + ry * 0.05, 4, 6, '#1b2a4a'); blob(g, cx + rx * 0.35, cy + ry * 0.05, 4, 6, '#1b2a4a');
+  g.strokeStyle = '#1b2a4a'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy + ry * 0.3, 5, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+}
+function drawArrowSprite(g, W, H) {   // 파란 아래 화살표 (튜토리얼)
+  g.fillStyle = '#4aa6f5'; g.strokeStyle = '#fff'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(W * 0.5, H * 0.95); g.lineTo(W * 0.08, H * 0.52); g.lineTo(W * 0.3, H * 0.52); g.lineTo(W * 0.3, H * 0.05); g.lineTo(W * 0.7, H * 0.05); g.lineTo(W * 0.7, H * 0.52); g.lineTo(W * 0.92, H * 0.52); g.closePath(); g.fill(); g.stroke();
+}
+function drawSlashSprite(g, W, H) {   // 기본 공격 휘두름
+  g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 9; g.lineCap = 'round';
+  g.beginPath(); g.arc(W * 0.5, H * 0.55, W * 0.4, -0.9 * Math.PI, -0.1 * Math.PI); g.stroke();
+  g.strokeStyle = 'rgba(160,220,255,0.8)'; g.lineWidth = 4;
+  g.beginPath(); g.arc(W * 0.5, H * 0.55, W * 0.3, -0.85 * Math.PI, -0.15 * Math.PI); g.stroke();
+}
+function drawSparkleSprite(g, W, H) {
+  g.strokeStyle = '#fff'; g.lineWidth = 3; g.fillStyle = 'rgba(160,255,240,0.9)';
+  for (const [x, y, r] of [[0.5, 0.5, 0.3], [0.2, 0.3, 0.12], [0.8, 0.7, 0.1], [0.75, 0.25, 0.08]]) {
+    g.beginPath(); g.moveTo(W * x, H * (y - r)); g.lineTo(W * (x + r * 0.3), H * y); g.lineTo(W * x, H * (y + r)); g.lineTo(W * (x - r * 0.3), H * y); g.closePath(); g.fill(); g.stroke();
+  }
+}
+const npcTex = {
+  sailor: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'sailor')),
+  keeper: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'keeper')),
+  knight: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'knight')),
+};
+const slimeTex = [0, 1].map(f => spriteTex(96, 80, (g, W, H) => drawSlimeSprite(g, W, H, f)));
+const arrowTex = spriteTex(64, 96, drawArrowSprite);
+const slashTex = spriteTex(128, 96, drawSlashSprite);
+const sparkleTex = spriteTex(96, 96, drawSparkleSprite);
+
+// 이름표·툴팁·데미지 숫자: HTML 라벨을 카메라 투영으로 따라 붙인다
+const labelsEl = document.getElementById('labels');
+const _lp = new THREE.Vector3();
+function makeLabel(cls, text) { const d = document.createElement('div'); d.className = 'lb ' + cls; d.textContent = text; labelsEl.appendChild(d); return d; }
+function placeLabel(el, worldPos, dy = 0) {
+  _lp.copy(worldPos).project(camera);
+  const on = _lp.z < 1 && Math.abs(_lp.x) < 1.1 && Math.abs(_lp.y) < 1.1;
+  el.style.display = on ? 'block' : 'none';
+  if (on) { el.style.left = ((_lp.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - _lp.y) / 2 * innerHeight + dy) + 'px'; }
+}
+const _headPos = new THREE.Vector3();
+function headOf(mesh, h) { return _headPos.copy(mesh.position).addScaledVector(mesh.userData.dir || _up, h); }
+
+// 채팅/시스템 로그 (왼쪽 아래)
+const logEl = document.getElementById('log');
+function log(text, cls = '') {
+  const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; logEl.appendChild(d);
+  while (logEl.children.length > 6) logEl.removeChild(logEl.firstChild);
+}
+
+// NPC 3 — 좌표 직접 배치 (§8)
+const NPCS = [
+  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -2.3, lat: 4.6, lift: 0.78,
+    quest: ['별내림 천문대에 온 걸 환영해. 비행정은 여기 세워 둘게.', '북쪽 돌계단을 오르면 야영지가 있어. 도토가 기다리고 있을 거야.', '길바닥의 노란 화살표를 따라가면 돼. 물에 빠지면 마지막 자리로 돌아오니까 겁먹지 말고.'],
+    idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
+  { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: 2.2, lat: 17.4, lift: 0,
+    quest: ['잘 왔어! 가마솥에 국을 끓이는 중이야.', '북쪽 나무다리를 건너면 수문장 벨라가 있어. 슬라임 때문에 골치라더라.'],
+    idle: '국이 아직 덜 됐어. 조금만 기다려.' },
+  { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 1.2, lat: 32.8, lift: 0,
+    quest: ['다리를 건너왔군. 이 초원엔 파란 슬라임이 자꾸 늘어.', 'Z 키로 공격할 수 있어. 세 마리만 정리해 주겠나?'],
+    after: ['고맙다. 그리고 하늘에서 떨어진 별 조각이 두 개 있다던데 — 하나는 착륙 초원 동쪽, 하나는 이 초원 동쪽이야.'],
+    idle: '슬라임은 세 대면 쓰러진다.' },
+];
+for (const n of NPCS) {
+  n.dir = dirFromLonLat(n.lon, n.lat);
+  n.mesh = placeSprite(makeBillboard(npcTex[n.kind], 1.25, 1.7), n.lon, n.lat, false, n.lift); scene.add(n.mesh);
+  n.label = makeLabel('npc', n.name);
+  if (n.lift > 0) { const c = placeSprite(makeBillboard(crateTex, 1.0, 1.0), n.lon, n.lat); scene.add(c); }   // 상자 위
+  mapDot(n.dir, 0.5, 0xffd166);
+}
+
+// 퀘스트 (한 줄짜리 진행)
+const QUESTS = [
+  { title: '별내림 천문대 도착', obj: '항해사 미르와 이야기하기', npc: 'sailor' },
+  { title: '야영지로', obj: '돌계단을 올라 야영지 지기 도토 만나기', npc: 'keeper' },
+  { title: '다리 건너', obj: '나무다리를 건너 수문장 벨라 만나기', npc: 'knight' },
+  { title: '슬라임 퇴치', obj: '파란 슬라임 3마리 처치', npc: null, kills: 3 },
+  { title: '별을 찾아서', obj: '떨어진 별 조각 2개 찾기', npc: null, stars: 2 },
+  { title: '탐사 완료', obj: '별내림 천문대의 목표를 모두 마쳤다', npc: null },
+];
+const quest = { i: 0, kills: 0, stars: 0 };
+const questTitle = document.getElementById('questTitle'), questObj = document.getElementById('questObj');
+const expEl = document.querySelector('#exp i'); let exp = 0.12;
+function updateQuestUI() {
+  const q = QUESTS[quest.i];
+  questTitle.textContent = q.title;
+  let o = q.obj;
+  if (q.kills) o += ` (${Math.min(quest.kills, q.kills)}/${q.kills})`;
+  if (q.stars) o += ` (${Math.min(quest.stars, q.stars)}/${q.stars})`;
+  questObj.innerHTML = `<div class="obj${quest.i >= QUESTS.length - 1 ? ' done' : ''}">${o}</div>`;
+  expEl.style.width = (Math.min(1, exp) * 100).toFixed(1) + '%';
+}
+function advanceQuest() {
+  if (quest.i >= QUESTS.length - 1) return;
+  quest.i++; exp = Math.min(1, exp + 0.14);
+  log(`퀘스트: ${QUESTS[quest.i].title} — ${QUESTS[quest.i].obj}`, 'sys');
+  updateQuestUI();
+  // 먼저 해 둔 목표(별·슬라임)는 바로 넘어간다
+  const q = QUESTS[quest.i];
+  if ((q.kills && quest.kills >= q.kills) || (q.stars && quest.stars >= q.stars)) advanceQuest();
+}
+// 스킬바 16칸 (첫 칸 = 기본 공격 Z)
+{
+  const sk = document.getElementById('skills');
+  for (let i = 0; i < 16; i++) { const s = document.createElement('i'); if (i === 0) { s.className = 'f'; s.dataset.k = 'Z'; } else if (i < 8) s.dataset.k = String(i + 1); sk.appendChild(s); }
+  const inv = document.querySelector('#inv .grid'); for (let i = 0; i < 30; i++) inv.appendChild(document.createElement('i'));
+}
+updateQuestUI();
+
+// 퀘스트 빛기둥 (현재 목표 NPC 위, 파란 반투명 원기둥)
+const questBeam = (() => {
+  const geo = new THREE.CylinderGeometry(0.55, 0.55, 9, 14, 1, true); geo.translate(0, 4.5, 0);
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms: { uT: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'varying vec2 vUv; uniform float uT; void main(){ float a = (1.0 - vUv.y) * (0.45 + 0.15 * sin(uT * 3.0 - vUv.y * 12.0)); gl_FragColor = vec4(0.35, 0.65, 1.0, a * 0.55); }' });
+  const m = new THREE.Mesh(geo, mat); scene.add(m); return m;
+})();
+function updateQuestBeam() {
+  const q = QUESTS[quest.i]; const n = q.npc && NPCS.find(x => x.id === q.npc);
+  questBeam.visible = !!n;
+  if (n) { questBeam.position.copy(n.dir).multiplyScalar(R + terrainH(n.dir) + n.lift + 0.1); questBeam.quaternion.setFromUnitVectors(_y, n.dir); }
+}
+// 튜토리얼 파란 화살표 2개 — 첫 NPC 좌우에서 안쪽으로 통통
+const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35, { shadow: false }); m.userData.side = s; scene.add(m); return m; });
+function updateTutArrows(nowS) {
+  const n = NPCS[0]; const show = quest.i === 0;
+  for (const a of tutArrows) {
+    a.visible = show; if (!show) continue;
+    _bn.set(0, 1, 0); tangentize(_bn, n.dir); _be.crossVectors(_bn, n.dir).normalize();
+    const k = 1.6 + Math.abs(Math.sin(nowS * 3.2)) * 0.5;
+    a.position.copy(n.dir).multiplyScalar(R + terrainH(n.dir) + n.lift + 2.2).addScaledVector(_be, a.userData.side * k);
+    orientBillboard(a, n.dir); a.scale.x = -a.userData.side;
+  }
+}
+
+// 슬라임 8마리 — 슬라임 초원(§3), 집 반경 3 안을 배회, 6 안에 들어오면 다가온다
+const SLIME_HOMES = [[-6, 34.5], [-8.5, 37.5], [-4, 39.5], [5.5, 35.5], [7.5, 38.5], [4, 41.5], [-2, 43], [9, 42.5]];
+const slimes = SLIME_HOMES.map(([lon, lat], i) => {
+  const home = dirFromLonLat(lon, lat);
+  const m = makeBillboard(slimeTex[0], 1.1, 0.95); scene.add(m);
+  const s = { home, dir: home.clone(), mesh: m, alive: true, hp: 45, hopT: i * 1.3, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '슬라임 Lv.1'), flip: 1 };
+  return s;
+});
+const _sd = new THREE.Vector3(), _sn = new THREE.Vector3();
+function updateSlimes(dt) {
+  const pdir = _up;
+  for (const s of slimes) {
+    if (!s.alive) {
+      s.respawnT -= dt;
+      if (s.respawnT <= 0) { s.alive = true; s.hp = 45; s.dir.copy(s.home); s.mesh.visible = true; s.label.style.display = 'block'; }
+      else continue;
+    }
+    s.hopT += dt * 4.2;
+    const dp = angDeg(s.dir, pdir) * DEG * R;
+    let target = null;
+    if (dp < 6 && dp > 1.05) target = pdir;
+    else {
+      s.wanderT -= dt;
+      if (s.wanderT <= 0) { s.wanderT = 1.5 + Math.random() * 2.5; const a = Math.random() * Math.PI * 2; _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize(); s.wander.copy(_bn).multiplyScalar(Math.cos(a)).addScaledVector(_be, Math.sin(a)); if (Math.random() < 0.35) s.wander.set(0, 0, 0); }
+      if (s.wander.lengthSq() > 0) target = _sn.copy(s.dir).addScaledVector(s.wander, 0.05).normalize();
+    }
+    const hop = Math.max(0, Math.sin(s.hopT));
+    if (target && hop > 0) {   // 공중에 있을 때만 앞으로
+      _sd.copy(target).sub(s.dir); tangentize(_sd, s.dir);
+      if (_sd.lengthSq() > 1e-8) {
+        _sd.normalize();
+        _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.3 : 0.9) * dt / R).normalize();
+        const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
+        if (th > WATER + 0.4 && fromHome < (target === pdir ? 6.5 : 3.2)) s.dir.copy(_sn);
+        _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
+        const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
+      }
+    }
+    s.mesh.position.copy(s.dir).multiplyScalar(R + terrainH(s.dir) + 0.02 + hop * 0.35);
+    orientBillboard(s.mesh, s.dir); s.mesh.userData.dir = s.dir;
+    s.mesh.material.map = slimeTex[hop > 0.05 ? 0 : 1]; s.mesh.scale.x = s.flip;
+  }
+}
+// 기본 공격 (Z / 클릭): 앞 1.4 안의 슬라임에 데미지, 3대면 소멸 → 10초 뒤 재생성
+const slash = makeBillboard(slashTex, 1.6, 1.2, { shadow: false }); slash.visible = false; scene.add(slash);
+let attackT = 0, slashT = 0;
+const dmgPops = [];
+function attack() {
+  if (attackT > 0 || dialog.open || cut.on) return;
+  attackT = 0.38; slashT = 0.16;
+  slash.visible = true; slash.position.copy(player.pos).addScaledVector(player.fwd, 0.9).addScaledVector(_up, 0.2); orientBillboard(slash, _up); slash.userData.dir = _up.clone();
+  for (const s of slimes) {
+    if (!s.alive) continue;
+    const d = angDeg(s.dir, _up) * DEG * R; if (d > 1.5) continue;
+    _sd.copy(s.dir).sub(_up); tangentize(_sd, _up); if (_sd.dot(player.fwd) < 0) continue;
+    const dmg = 12 + Math.floor(Math.random() * 7);
+    s.hp -= dmg; s.hopT = Math.PI * 0.5;
+    const el = makeLabel('dmg', String(dmg)); dmgPops.push({ el, pos: s.mesh.position.clone(), dir: s.dir.clone(), t: 0 });
+    if (s.hp <= 0) {
+      s.alive = false; s.respawnT = 10; s.mesh.visible = false; s.label.style.display = 'none';
+      quest.kills++; exp = Math.min(1, exp + 0.05); log('파란 슬라임을 쓰러뜨렸다.');
+      if (QUESTS[quest.i].kills && quest.kills >= QUESTS[quest.i].kills) { log('슬라임 3마리 처치 완료! 수문장 벨라에게 돌아가자.', 'sys'); advanceQuest(); }
+      updateQuestUI();
+    }
+  }
+}
+function updateCombat(dt) {
+  attackT = Math.max(0, attackT - dt);
+  if (slashT > 0) { slashT -= dt; if (slashT <= 0) slash.visible = false; }
+  for (let i = dmgPops.length - 1; i >= 0; i--) {
+    const p = dmgPops[i]; p.t += dt;
+    if (p.t > 0.85) { p.el.remove(); dmgPops.splice(i, 1); continue; }
+    _headPos.copy(p.pos).addScaledVector(p.dir, 0.9 + p.t * 1.4); placeLabel(p.el, _headPos); p.el.style.opacity = String(1 - p.t / 0.85);
+  }
+}
+
+// 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
+const STARS = [[7.2, -4.6], [10, 40]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));
+const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
+function updateStars(dt) {
+  for (const st of STARS) {
+    if (st.found) continue;
+    if (angDeg(st.dir, _up) * DEG * R < 2.0) {
+      st.found = true; quest.stars++; exp = Math.min(1, exp + 0.08);
+      sparkle.visible = true; sparkleT = 1.4; sparkle.position.copy(st.dir).multiplyScalar(R + terrainH(st.dir) + 1.2); orientBillboard(sparkle, st.dir);
+      log(`✦ 떨어진 별 조각을 찾았다 (${quest.stars}/2)`, 'sys');
+      if (QUESTS[quest.i].stars && quest.stars >= QUESTS[quest.i].stars) { log('별 조각을 모두 찾았다. 탐사 완료!', 'sys'); advanceQuest(); }
+      updateQuestUI();
+    }
+  }
+  if (sparkleT > 0) { sparkleT -= dt; sparkle.scale.setScalar(1 + Math.sin(sparkleT * 9) * 0.15); if (sparkleT <= 0) sparkle.visible = false; }
+}
+
+// 대화창
+const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null };
+const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt');
+let nearNpc = null;
+const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>Space Bar</b>대화하기'; tipEl.style.display = 'none';
+const myLabel = makeLabel('me', '탐사자');
+function openDialog(n) {
+  const q = QUESTS[quest.i];
+  let lines, onEnd = null;
+  if (q.npc === n.id) { lines = n.quest; onEnd = advanceQuest; }
+  else if (n.after && quest.i === 4 && !n.afterSaid) { lines = n.after; onEnd = () => { n.afterSaid = true; }; }
+  else lines = [n.idle];
+  dialog.open = true; dialog.npc = n; dialog.lines = lines; dialog.i = 0; dialog.onEnd = onEnd;
+  dlgWho.textContent = n.name; dlgTxt.textContent = lines[0]; dlgEl.style.display = 'block';
+  keys.clear(); player.moving = false;
+  log(`${n.name}: ${lines[0]}`, 'npc');
+}
+function advanceDialog() {
+  dialog.i++;
+  if (dialog.i >= dialog.lines.length) { dialog.open = false; dlgEl.style.display = 'none'; if (dialog.onEnd) dialog.onEnd(); return; }
+  dlgTxt.textContent = dialog.lines[dialog.i]; log(`${dialog.npc.name}: ${dialog.lines[dialog.i]}`, 'npc');
+}
+// 인벤토리 (I)
+const invEl = document.getElementById('inv'); let invOpen = false;
+function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) keys.clear(); }
+
+// 시작 컷신 (1:30~1:40): 높은 곳에서 내려오는 카메라, 비행정 하강·착지, 캐릭터 등 뒤로 붙음, 지역명
+const cut = { on: !DEBUG && !new URLSearchParams(location.search).has('nocut'), t: 0, dur: 8, land: 5.4 };
+const cutEl = document.getElementById('cut');
+const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _cn = new THREE.Vector3(), _ce = new THREE.Vector3();
+const easeOut = (x) => 1 - Math.pow(1 - x, 3), smooth = (x) => x * x * (3 - 2 * x);
+function startCutscene() { cut.on = true; cut.t = 0; cutEl.style.display = 'block'; player.mesh.visible = false; myLabel.style.display = 'none'; }
+function endCutscene() { cut.on = false; cutEl.style.display = 'none'; player.mesh.visible = true; airship.userData.alt = 0; zoneShown = true; showZoneName(); log('별내림 천문대에 도착했다. 항해사 미르에게 말을 걸어 보자 (Space Bar).', 'sys'); }
+function updateCutscene(dt) {
+  cut.t += dt;
+  const base = airship.userData.base, bd = base.clone().normalize();
+  const e = easeOut(Math.min(1, cut.t / cut.land));
+  airship.userData.alt = 24 * (1 - e);                              // 착지 전 높이
+  _cn.set(0, 1, 0); tangentize(_cn, bd); _ce.crossVectors(_cn, bd).normalize();
+  // 카메라: 비행정 뒤 위에서 함께 내려오며 비행정을 본다
+  _cp.copy(base).addScaledVector(bd, 30 - 16 * e).addScaledVector(_cn, -22 + 6 * e).addScaledVector(_ce, 5);
+  _cl.copy(base).addScaledVector(bd, airship.userData.alt + 1.5);
+  if (cut.t >= cut.land) {
+    if (!player.mesh.visible) { player.mesh.visible = true; myLabel.style.display = 'block'; }
+    const k = smooth(Math.min(1, (cut.t - cut.land) / (cut.dur - cut.land)));
+    _cp.lerp(_camPos, k); _cl.lerp(_look, k);
+  }
+  camera.position.copy(_cp); camera.up.copy(_up); camera.lookAt(_cl);
+  if (cut.t >= cut.dur) endCutscene();
+}
+if (cut.on) startCutscene(); else { player.mesh.visible = true; }
+
+const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너머로 비쳐 보이지 않게)
+function updateLabels() {
+  placeLabel(myLabel, headOf(player.mesh, 1.95));
+  if (nearNpc && !dialog.open && !cut.on) placeLabel(tipEl, headOf(player.mesh, 1.95)); else tipEl.style.display = 'none';
+  for (const n of NPCS) {
+    if (angDeg(n.dir, _up) * DEG * R > LABEL_DIST) { n.label.style.display = 'none'; continue; }
+    placeLabel(n.label, headOf(n.mesh, 1.95)); n.label.classList.toggle('q', QUESTS[quest.i].npc === n.id);
+  }
+  for (const s of slimes) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R > LABEL_DIST) s.label.style.display = 'none'; else placeLabel(s.label, headOf(s.mesh, 1.15)); }
+}
+
 // ── 입력 ─────────────────────────────────────────────────────────────────────
 const keys = new Set();
 // 0 = 닫힘, 1 = 구역 지도, 2 = 에버그린 전경도 (옛 판과 같은 조작)
 let mapView = 0;
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); e.preventDefault(); return; }
-  if (k === 'escape') { mapView = 0; return; }
+  if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
+  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); e.preventDefault(); return; }
+  if (k === 'escape') { mapView = 0; toggleInv(false); return; }
   if (mapView) return;
+  if (k === 'i') { toggleInv(); return; }
+  if (dialog.open) { if (k === ' ') { e.preventDefault(); advanceDialog(); } return; }
+  if (invOpen) return;
   keys.add(k);
-  if (k === ' ') { e.preventDefault(); if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } }
+  if (k === ' ') { e.preventDefault(); if (nearNpc) openDialog(nearNpc); else if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } }
+  if (k === 'z') attack();
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
@@ -1275,6 +1669,10 @@ const cam = { fwd: new THREE.Vector3(0, 1, 0) };   // 항상 그 자리의 북�
 canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 1) { mapView = insideZoneDisc(e.clientX, e.clientY) ? 2 : 0; return; }
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
+  if (cut.on) { cut.t = cut.dur; return; }
+  if (dialog.open) { advanceDialog(); return; }
+  if (invOpen) return;
+  attack();   // 클릭도 기본 공격
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -1300,6 +1698,7 @@ function step(dt) {
   if (keys.has('s') || keys.has('arrowdown')) iy -= 1;
   if (keys.has('d') || keys.has('arrowright')) ix += 1;
   if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
+  if (cut.on || dialog.open || invOpen) { ix = 0; iy = 0; }   // 컷신·대화·가방 중엔 안 움직인다
   player.moving = (ix !== 0 || iy !== 0);
   if (player.moving) {
     _dir.copy(cam.fwd).multiplyScalar(iy).addScaledVector(_right, ix).normalize();
@@ -1358,9 +1757,14 @@ function step(dt) {
   {
     const nowS = performance.now() * 0.001;
     const bd = airship.userData.base.clone().normalize();
-    airship.position.copy(airship.userData.base).addScaledVector(bd, Math.sin(nowS * 0.9) * 0.18);
+    airship.position.copy(airship.userData.base).addScaledVector(bd, Math.sin(nowS * 0.9) * 0.08 + (airship.userData.alt || 0));
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     for (const b of beams) b.material.uniforms.uT.value = nowS;
+    // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
+    updateSlimes(dt); updateCombat(dt); updateStars(dt);
+    updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
+    nearNpc = null; let best = 2.4;
+    for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
   }
 
   // 카메라
@@ -1374,6 +1778,7 @@ function step(dt) {
   camera.up.copy(_up);
   _look.copy(player.pos).addScaledVector(_up, CAM_LOOK_UP);
   camera.lookAt(_look);
+  if (cut.on) updateCutscene(dt);   // 컷신 중엔 카메라를 덮어쓴다
 
   // 태양·그림자 프러스텀은 플레이어를 따라간다
   sun.position.copy(player.pos).addScaledVector(SUN_DIR, 70);
@@ -1391,7 +1796,7 @@ function step(dt) {
     c.position.copy(d.dir).multiplyScalar(R + d.alt + Math.sin(t + d.drift) * 0.8);
   }
 
-  if (!zoneShown) { zoneShown = true; setTimeout(showZoneName, 600); }
+  if (!zoneShown && !cut.on) { zoneShown = true; setTimeout(showZoneName, 600); }
 }
 
 function showZoneName() {
@@ -1472,7 +1877,8 @@ function insideRect(h, px, py) { return px >= h.x && px <= h.x + h.w && py >= h.
 
 function drawMaps(t) {
   const W = innerWidth, H = innerHeight;
-  miniEl.style.display = mapView === 0 ? 'block' : 'none';
+  miniEl.style.display = mapView === 0 && !cut.on ? 'block' : 'none';
+  for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'hint']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
@@ -1511,10 +1917,11 @@ function drawMaps(t) {
 }
 
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;   // 첫 rAF 시각이 모듈 실행 시각보다 앞설 수 있어 음수 방지
   if (!mapView) step(dt); else { keys.clear(); }
   renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
+  if (mapView === 0) updateLabels();
   drawMaps(now * 0.001);
   if (DEBUG) {
     fpsAcc += dt; fpsN++;
@@ -1866,6 +2273,8 @@ if (DEBUG) {
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { if (player.grounded) { player.vz = JUMP_V; player.grounded = false; } },
+    NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
+    nearNpc() { return nearNpc; },
   };
 }
 </script>
