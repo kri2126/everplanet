@@ -876,6 +876,12 @@
       decorations.push({ ...d, seed: rand(), phase: rand() * Math.PI * 2 });
     }
 
+    // 로드맵 5 §4-2/폭포 장식: 마지막까지 미뤄뒀던 광장 소품(착륙 데크·비행정·깃발·등불·
+    // 상자·가마솥·부서진 석재·선돌)과 폭포 — G와 같은 패턴으로 좌표를 직접 넘긴다.
+    for (const d of (opts.plazaProps || [])) {
+      decorations.push({ ...d, seed: rand(), phase: rand() * Math.PI * 2 });
+    }
+
     const spring = opts.spring || null;
 
     const landmarks = (opts.landmarkDefs || []).map((l) => ({ ...l }));
@@ -1078,6 +1084,36 @@
       { type: 'cart', x: -500, y: -20 },
       { type: 'scarecrow', x: -440, y: 10 },
       { type: 'clothesline', x: -410, y: -70 }
+    ],
+    // 로드맵 5 §4-2/폭포 장식: 마지막까지 미뤄뒀던 광장 소품 + 폭포. 전부 순수 장식(충돌
+    // 없음)이라 광장 남서~북서 쪽(방위 170~340°, 반경 40~160)의 열린 바닥에 직접 배치했다
+    // — 광장 중심(10,10)에서 갈라지는 두 통로(방위 20°대 돌계단행, 150°대 다리행)와는
+    // 겹치지 않는 방위대다. 폭포는 절벽(방위30~55°)이 개울(방위55~75°)로 넘어가는 이음매
+    // 쪽에 둬 벽에서 물로 떨어지는 것처럼 보이게 했다.
+    plazaProps: [
+      { type: 'landingDeck', x: -25, y: 92 },
+      { type: 'airship', x: -46, y: 127 },
+      { type: 'flag', x: -35, y: 42 },
+      { type: 'crate', x: -10, y: 110 },
+      { type: 'crate', x: -50, y: 87 },
+      { type: 'crate', x: -32, y: 121 },
+      { type: 'cauldron', x: -43, y: 25 },
+      { type: 'rubble', x: -138, y: 24, tone: 0.7 },
+      { type: 'rubble', x: -113, y: -65, tone: 0.3 },
+      { type: 'rubble', x: -77, y: -92, tone: 0.6 },
+      { type: 'rubble', x: -34, y: -94, tone: 0.4 },
+      { type: 'standingStone', x: -57, y: -27 },
+      { type: 'standingStone', x: -69, y: -10 },
+      { type: 'standingStone', x: -90, y: -16 },
+      { type: 'standingStone', x: -90, y: -38 },
+      { type: 'standingStone', x: -69, y: -44 },
+      { type: 'lantern', x: 0, y: 155 },
+      { type: 'lantern', x: -78, y: 134 },
+      { type: 'lantern', x: -134, y: 78 },
+      { type: 'lantern', x: -155, y: 0 },
+      { type: 'lantern', x: -134, y: -78 },
+      { type: 'lantern', x: -78, y: -134 },
+      { type: 'waterfall', x: 158, y: -106 }
     ],
     portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
   });
@@ -1540,6 +1576,192 @@
     }
   }
 
+  // 로드맵 5 §4-2/폭포 장식: 마지막으로 미뤄뒀던 광장 소품(착륙 데크·비행정·깃발·등불·
+  // 상자·가마솥·부서진 석재·선돌)과 폭포. G와 같은 패턴 — decorations에 type만 붙여 편입.
+  function drawLandingDeck(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 10, 58, 20, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b9895a';
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-56, -18, 112, 36, 6); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-56, -18, 112, 36); ctx.fill(); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(122,82,48,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i * 12, -18); ctx.lineTo(i * 12, 18); ctx.stroke(); }
+    ctx.fillStyle = '#8a6438';
+    ctx.beginPath(); ctx.rect(-58, -20, 6, 40); ctx.fill();
+    ctx.beginPath(); ctx.rect(52, -20, 6, 40); ctx.fill();
+  }
+
+  function drawAirship(d, t) {
+    const bob = reduceMotion ? 0 : Math.sin(t * 0.9 + d.phase) * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(0, 40, 46, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(0, bob);
+    // 곤돌라
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.4;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-26, 10, 52, 20, 6); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.rect(-26, 10, 52, 20); ctx.fill(); ctx.stroke(); }
+    // 계류 로프
+    ctx.strokeStyle = '#9a8a7a';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-18, 22); ctx.lineTo(-30, -12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(18, 22); ctx.lineTo(30, -12); ctx.stroke();
+    // 기구(풍선)
+    ctx.fillStyle = '#d8635a';
+    ctx.strokeStyle = '#8a3a34';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(0, -18, 34, 26, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.ellipse(-10, -26, 12, 8, -0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(138,58,52,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.ellipse(0, -18, 34, 26, 0, 0, Math.PI * 2); ctx.moveTo(i * 12, -44); ctx.lineTo(i * 12, 8); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawFlag(d, t) {
+    const wave = reduceMotion ? 0 : Math.sin(t * 2 + d.phase) * 0.18;
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 30, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(0, -40); ctx.stroke();
+    ctx.save();
+    ctx.translate(0, -38);
+    ctx.fillStyle = '#ff8aa0';
+    ctx.strokeStyle = '#c65a72';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -8);
+    ctx.quadraticCurveTo(16, -8 + wave * 10, 30, -4);
+    ctx.quadraticCurveTo(20, 2, 30, 10);
+    ctx.quadraticCurveTo(14, 6 + wave * 10, 0, 10);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLantern(d, t) {
+    const flick = reduceMotion ? 0.85 : 0.7 + Math.sin(t * 5 + d.phase) * 0.15 + Math.sin(t * 11 + d.phase) * 0.08;
+    ctx.fillStyle = 'rgba(0,0,0,0.13)';
+    ctx.beginPath(); ctx.ellipse(0, 20, 10, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(0, -6); ctx.stroke();
+    const glow = ctx.createRadialGradient(0, -14, 2, 0, -14, 20);
+    glow.addColorStop(0, `rgba(255,210,120,${0.5 * flick})`);
+    glow.addColorStop(1, 'rgba(255,210,120,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, -14, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8a6438';
+    ctx.strokeStyle = '#5a4028';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-3, -6); ctx.lineTo(3, -6); ctx.lineTo(5, -22); ctx.lineTo(-5, -22); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = `rgba(255,214,140,${flick})`;
+    ctx.beginPath(); ctx.ellipse(0, -14, 5, 6.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a6438';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(0, -26); ctx.stroke();
+  }
+
+  function drawCrate(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.beginPath(); ctx.ellipse(0, 12, 15, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b9895a';
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.rect(-13, -12, 26, 24); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-13, -12); ctx.lineTo(13, 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13, -12); ctx.lineTo(-13, 12); ctx.stroke();
+  }
+
+  function drawCauldron(d, t) {
+    const flick = reduceMotion ? 0.8 : 0.65 + Math.sin(t * 6 + d.phase) * 0.2;
+    ctx.fillStyle = `rgba(255,150,60,${flick * 0.5})`;
+    ctx.beginPath(); ctx.moveTo(-8, 8); ctx.quadraticCurveTo(-10, -4, -2, -14); ctx.quadraticCurveTo(2, -6, 0, 0);
+    ctx.quadraticCurveTo(6, -8, 8, 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 15, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a332e';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(-11, 9); ctx.lineTo(-15, 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(11, 9); ctx.lineTo(15, 15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 11); ctx.lineTo(0, 16); ctx.stroke();
+    ctx.fillStyle = '#3a332e';
+    ctx.beginPath(); ctx.ellipse(0, 4, 13, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2a231e';
+    ctx.beginPath(); ctx.ellipse(0, 1, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawRubble(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.ellipse(0, 6, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+    const stones = [[-10, 2, 9, 0.2], [6, 4, 11, -0.15], [-2, -4, 7, 0.4]];
+    for (const [ox, oy, r, rot] of stones) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(rot);
+      ctx.fillStyle = d.tone > 0.5 ? '#a89a88' : '#948578';
+      ctx.strokeStyle = '#6b5f52';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-r, r * 0.4); ctx.lineTo(-r * 0.3, -r * 0.7); ctx.lineTo(r * 0.6, -r * 0.4); ctx.lineTo(r, r * 0.5); ctx.lineTo(0, r); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawStandingStone(d) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0, 26, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8f8698';
+    ctx.strokeStyle = '#5f5768';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-11, 24); ctx.lineTo(-9, -30); ctx.lineTo(-3, -42); ctx.lineTo(3, -42); ctx.lineTo(9, -30); ctx.lineTo(11, 24);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.beginPath(); ctx.moveTo(-7, 18); ctx.lineTo(-6, -26); ctx.lineTo(-2, -34); ctx.lineTo(-4, -20); ctx.lineTo(-5, 18); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(95,87,104,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-8, -4); ctx.lineTo(8, -8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9, 8); ctx.lineTo(7, 5); ctx.stroke();
+  }
+
+  function drawWaterfall(d, t) {
+    const flow = reduceMotion ? 0 : t;
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.ellipse(0, 8, 26, 9, 0, 0, Math.PI * 2); ctx.fill();
+    const grad = ctx.createLinearGradient(0, -70, 0, 6);
+    grad.addColorStop(0, 'rgba(180,225,245,0.05)');
+    grad.addColorStop(0.5, 'rgba(200,235,250,0.5)');
+    grad.addColorStop(1, 'rgba(230,248,255,0.75)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(-16, -70); ctx.lineTo(16, -70); ctx.lineTo(20, 6); ctx.lineTo(-20, 6); ctx.closePath();
+    ctx.fill();
+    if (!reduceMotion) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 4; i++) {
+        const ox = -12 + i * 8;
+        const off = ((flow * 60 + i * 17) % 76);
+        ctx.beginPath(); ctx.moveTo(ox, -70 + off - 20); ctx.lineTo(ox + 2, -70 + off); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI + (reduceMotion ? 0 : t * 0.7);
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * 16, 6 + Math.sin(a) * 3, 4, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawFence(angle) {
     ctx.save();
     ctx.rotate(angle);
@@ -1974,6 +2196,15 @@
     scarecrow: { w: 20, upH: 40, downH: 10 },
     clothesline: { w: 26, upH: 30, downH: 8 },
     fence: null,
+    landingDeck: null,
+    airship: { w: 40, upH: 60, downH: 16 },
+    flag: { w: 12, upH: 48, downH: 16 },
+    lantern: { w: 12, upH: 30, downH: 10 },
+    crate: { w: 16, upH: 20, downH: 8 },
+    cauldron: { w: 18, upH: 20, downH: 10 },
+    rubble: null,
+    standingStone: { w: 14, upH: 46, downH: 12 },
+    waterfall: { w: 24, upH: 70, downH: 6 },
   };
   function objectReach(s) {
     if (s.o) {
@@ -2790,6 +3021,15 @@
           case 'scarecrow': drawScarecrow(s.d, t); break;
           case 'clothesline': drawClothesline(s.d, t); break;
           case 'fence': drawFence(s.d.angle || 0); break;
+          case 'landingDeck': drawLandingDeck(s.d); break;
+          case 'airship': drawAirship(s.d, t); break;
+          case 'flag': drawFlag(s.d, t); break;
+          case 'lantern': drawLantern(s.d, t); break;
+          case 'crate': drawCrate(s.d); break;
+          case 'cauldron': drawCauldron(s.d, t); break;
+          case 'rubble': drawRubble(s.d); break;
+          case 'standingStone': drawStandingStone(s.d); break;
+          case 'waterfall': drawWaterfall(s.d, t); break;
           default: drawMushroom(s.d.seed, s.d.red);
         }
       }
