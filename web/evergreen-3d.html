@@ -828,9 +828,9 @@ function orientBillboard(obj, dir) {
   _bm.makeBasis(_be, _bU, _bN);
   obj.quaternion.setFromRotationMatrix(_bm);
 }
-function placeSprite(mesh, lonDeg, latDeg, useWalk = false) {
+function placeSprite(mesh, lonDeg, latDeg, useWalk = false, lift = 0) {
   const dir = dirFromLonLat(lonDeg, latDeg);
-  mesh.position.copy(dir).multiplyScalar(R + (useWalk ? walkH(dir) : terrainH(dir)) + 0.02);
+  mesh.position.copy(dir).multiplyScalar(R + (useWalk ? walkH(dir) : terrainH(dir)) + 0.02 + lift);
   orientBillboard(mesh, dir);
   mesh.userData.dir = dir;
   return mesh;
@@ -922,6 +922,294 @@ const decor = [];
   // 돌덩이·유적 조각
   const stones = [[-6.5, 6.5], [8.2, 3.2], [-4, 32.5], [6.8, 38], [-9.5, 41.5], [11.5, 39.5], [-3.8, 17.8], [5.5, 14.2]];
   stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); });
+}
+
+
+// ── 작업 C 나머지 + D 소품: 그림 판들 ───────────────────────────────────────────
+function drawAirshipSprite(g, W, H) {
+  const cx = W / 2, line = 'rgba(40,50,90,0.8)';
+  // 곤돌라(주황 나무)
+  g.fillStyle = '#d98a3a'; g.strokeStyle = '#7a4a1a'; g.lineWidth = 3;
+  g.beginPath(); g.roundRect(cx - W * 0.22, H * 0.58, W * 0.44, H * 0.2, 12); g.fill(); g.stroke();
+  g.strokeStyle = 'rgba(120,70,20,0.5)'; g.lineWidth = 2;
+  for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(cx - W * 0.22 + i * W * 0.088, H * 0.58); g.lineTo(cx - W * 0.22 + i * W * 0.088, H * 0.78); g.stroke(); }
+  // 줄
+  g.strokeStyle = '#6b5a3a'; g.lineWidth = 2.5;
+  for (const dx of [-0.18, 0.18]) { g.beginPath(); g.moveTo(cx + dx * W, H * 0.58); g.lineTo(cx + dx * W * 1.4, H * 0.36); g.stroke(); }
+  // 좌우 부양구(파랑)
+  for (const dx of [-0.36, 0.36]) { blob(g, cx + dx * W, H * 0.5, W * 0.11, W * 0.11, '#4aa6f5', line, 3); blob(g, cx + dx * W - 6, H * 0.46, 6, 4, 'rgba(255,255,255,0.6)'); }
+  // 선체(흰 타원 + 파란 띠)
+  blob(g, cx, H * 0.32, W * 0.34, H * 0.2, '#f4f7ff', line, 3.5);
+  g.save(); g.beginPath(); g.ellipse(cx, H * 0.32, W * 0.34, H * 0.2, 0, 0, Math.PI * 2); g.clip();
+  g.fillStyle = '#3f7fe0'; g.fillRect(cx - W * 0.34, H * 0.37, W * 0.68, H * 0.06); g.fillRect(cx - W * 0.34, H * 0.2, W * 0.68, H * 0.035);
+  g.restore();
+  // 잎 문양
+  blob(g, cx, H * 0.3, W * 0.07, W * 0.1, '#7ccf3a', '#2f7a22', 2.5);
+  g.strokeStyle = '#2f7a22'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, H * 0.2); g.lineTo(cx, H * 0.4); g.stroke();
+  // 프로펠러(뒤)
+  g.fillStyle = '#ffd166'; g.strokeStyle = '#8a6a1a'; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(cx - W * 0.38, H * 0.3, 5, W * 0.1, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+  blob(g, cx - W * 0.1, H * 0.25, W * 0.1, H * 0.035, 'rgba(255,255,255,0.7)');
+}
+function drawTentSprite(g, W, H) {
+  const cx = W / 2, line = '#1f5f5a';
+  // 원뿔 텐트
+  g.fillStyle = '#3aa8a0'; g.strokeStyle = line; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(cx, H * 0.12); g.lineTo(cx + W * 0.46, H * 0.9); g.lineTo(cx - W * 0.46, H * 0.9); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = '#2f8f88';
+  g.beginPath(); g.moveTo(cx, H * 0.12); g.lineTo(cx + W * 0.46, H * 0.9); g.lineTo(cx + W * 0.15, H * 0.9); g.closePath(); g.fill();
+  // 입구(어두운 삼각)
+  g.fillStyle = '#1a4a46'; g.beginPath(); g.moveTo(cx, H * 0.45); g.lineTo(cx + W * 0.12, H * 0.9); g.lineTo(cx - W * 0.12, H * 0.9); g.closePath(); g.fill();
+  // 잎 문양
+  blob(g, cx - W * 0.2, H * 0.62, W * 0.07, W * 0.1, '#7ccf3a', '#2f7a22', 2.5);
+  // 기둥과 깃발
+  g.strokeStyle = '#6b4a1e'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx, H * 0.12); g.lineTo(cx, H * 0.0 + 4); g.stroke();
+  g.fillStyle = '#2c6fd6'; g.strokeStyle = '#1b3f8a'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cx, 4); g.lineTo(cx + W * 0.2, H * 0.06); g.lineTo(cx, H * 0.11); g.closePath(); g.fill(); g.stroke();
+  // 하이라이트
+  blob(g, cx - W * 0.15, H * 0.35, W * 0.06, H * 0.12, 'rgba(255,255,255,0.22)');
+}
+function drawCauldronSprite(g, W, H) {
+  const cx = W / 2;
+  blob(g, cx, H * 0.62, W * 0.4, H * 0.3, '#2b2b30', '#111', 3);
+  blob(g, cx, H * 0.4, W * 0.42, H * 0.12, '#3a3a42', '#111', 3);
+  blob(g, cx, H * 0.4, W * 0.34, H * 0.07, '#c9741c');   // 국물 빛
+  g.strokeStyle = '#111'; g.lineWidth = 4;
+  for (const dx of [-0.28, 0, 0.28]) { g.beginPath(); g.moveTo(cx + dx * W, H * 0.85); g.lineTo(cx + dx * W * 1.2, H - 2); g.stroke(); }
+  blob(g, cx - W * 0.15, H * 0.55, W * 0.08, H * 0.05, 'rgba(255,255,255,0.18)');
+}
+function drawCrateSprite(g, W, H) {
+  const cx = W / 2;
+  g.fillStyle = '#c8955a'; g.strokeStyle = '#6b4a1e'; g.lineWidth = 3;
+  g.beginPath(); g.roundRect(cx - W * 0.4, H * 0.28, W * 0.8, H * 0.68, 4); g.fill(); g.stroke();
+  g.fillStyle = '#dcae70'; g.beginPath(); g.moveTo(cx - W * 0.4, H * 0.28); g.lineTo(cx - W * 0.28, H * 0.1); g.lineTo(cx + W * 0.52, H * 0.1); g.lineTo(cx + W * 0.4, H * 0.28); g.closePath(); g.fill(); g.stroke();
+  g.strokeStyle = 'rgba(107,74,30,0.7)'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(cx - W * 0.4, H * 0.28); g.lineTo(cx + W * 0.4, H * 0.96); g.moveTo(cx + W * 0.4, H * 0.28); g.lineTo(cx - W * 0.4, H * 0.96); g.stroke();
+}
+function drawArchSprite(g, W, H) {
+  const line = '#5a4a2a';
+  const pillar = (x) => {
+    for (let i = 0; i < 5; i++) {
+      const y = H * 0.32 + i * H * 0.13, w = W * 0.17 + (i % 2) * 6;
+      g.fillStyle = i % 2 ? '#d9b26f' : '#ecd39a'; g.strokeStyle = line; g.lineWidth = 3;
+      g.beginPath(); g.roundRect(x - w / 2, y, w, H * 0.135, 5); g.fill(); g.stroke();
+    }
+    blob(g, x - 8, H * 0.5, 14, 8, 'rgba(100,160,60,0.85)');
+    blob(g, x + 10, H * 0.78, 12, 7, 'rgba(100,160,60,0.85)');
+  };
+  pillar(W * 0.2); pillar(W * 0.8);
+  // 상인방
+  g.fillStyle = '#d9b26f'; g.strokeStyle = line; g.lineWidth = 3.5;
+  g.beginPath(); g.roundRect(W * 0.08, H * 0.18, W * 0.84, H * 0.15, 7); g.fill(); g.stroke();
+  g.fillStyle = '#ecd39a'; g.beginPath(); g.roundRect(W * 0.32, H * 0.06, W * 0.36, H * 0.14, 6); g.fill(); g.stroke();
+  blob(g, W * 0.45, H * 0.2, 22, 8, 'rgba(100,160,60,0.85)');
+  g.strokeStyle = 'rgba(80,60,30,0.4)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(W * 0.15, H * 0.26); g.lineTo(W * 0.85, H * 0.26); g.stroke();
+}
+function drawWaterfallSprite(g, W, H) {
+  // 세로로 이어지는 흰 물줄기 (wrapT 반복)
+  // 반투명 물막 + 흰 물줄기 (배경은 투명)
+  const bg = g.createLinearGradient(0, 0, W, 0);
+  bg.addColorStop(0, 'rgba(170,220,245,0)'); bg.addColorStop(0.2, 'rgba(190,230,250,0.55)'); bg.addColorStop(0.8, 'rgba(190,230,250,0.55)'); bg.addColorStop(1, 'rgba(170,220,245,0)');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 9; i++) {
+    const x = W * (0.08 + i * 0.1), w = 4 + (i % 3) * 3;
+    g.fillStyle = i % 2 ? 'rgba(255,255,255,0.95)' : 'rgba(225,245,255,0.85)';
+    for (let k = -1; k <= 1; k++) {
+      g.beginPath(); g.roundRect(x, k * H + (i * 23) % H, w, H * (0.35 + (i % 2) * 0.25), 3); g.fill();
+    }
+  }
+}
+function drawFoamSprite(g, W, H) {
+  for (let i = 0; i < 9; i++) blob(g, W * (0.1 + i * 0.1), H * (0.5 + Math.sin(i) * 0.15), W * 0.09, H * 0.18, 'rgba(255,255,255,0.85)');
+}
+function drawStarSprite(g, W, H) {
+  const cx = W / 2, line = '#5a4a2a';
+  // 돌 받침대
+  g.fillStyle = '#d9b26f'; g.strokeStyle = line; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(cx - W * 0.42, H * 0.9); g.lineTo(cx - W * 0.3, H * 0.62); g.lineTo(cx + W * 0.3, H * 0.62); g.lineTo(cx + W * 0.42, H * 0.9); g.closePath(); g.fill(); g.stroke();
+  blob(g, cx, H * 0.62, W * 0.3, H * 0.07, '#ecd39a', line, 3);
+  // 빛 무리
+  const rg = g.createRadialGradient(cx, H * 0.4, 4, cx, H * 0.4, W * 0.4);
+  rg.addColorStop(0, 'rgba(120,255,240,0.9)'); rg.addColorStop(0.5, 'rgba(79,240,232,0.35)'); rg.addColorStop(1, 'rgba(79,240,232,0)');
+  g.fillStyle = rg; g.beginPath(); g.arc(cx, H * 0.4, W * 0.4, 0, Math.PI * 2); g.fill();
+  blob(g, cx, H * 0.4, W * 0.15, W * 0.15, '#4ff0e8', '#1fb5ad', 2.5);
+  blob(g, cx - 6, H * 0.36, 6, 4, 'rgba(255,255,255,0.9)');
+  // 반짝임
+  g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2;
+  for (const [dx, dy] of [[-0.3, 0.25], [0.32, 0.2], [0.2, 0.52]]) { const x = cx + dx * W, y = H * dy; g.beginPath(); g.moveTo(x - 6, y); g.lineTo(x + 6, y); g.moveTo(x, y - 6); g.lineTo(x, y + 6); g.stroke(); }
+}
+function drawStandingStoneSprite(g, W, H) {
+  const cx = W / 2;
+  g.fillStyle = '#9a90a8'; g.strokeStyle = '#4e4658'; g.lineWidth = 3.5;
+  g.beginPath(); g.moveTo(cx - W * 0.3, H * 0.95); g.lineTo(cx - W * 0.26, H * 0.2); g.lineTo(cx - W * 0.08, H * 0.05); g.lineTo(cx + W * 0.12, H * 0.06); g.lineTo(cx + W * 0.28, H * 0.22); g.lineTo(cx + W * 0.32, H * 0.95); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.moveTo(cx - W * 0.2, H * 0.9); g.lineTo(cx - W * 0.18, H * 0.22); g.lineTo(cx - W * 0.08, H * 0.1); g.lineTo(cx - W * 0.1, H * 0.9); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(78,70,88,0.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - W * 0.15, H * 0.4); g.lineTo(cx + W * 0.15, H * 0.35); g.moveTo(cx - W * 0.2, H * 0.62); g.lineTo(cx + W * 0.1, H * 0.6); g.stroke();
+  blob(g, cx + W * 0.1, H * 0.85, 12, 6, 'rgba(100,160,60,0.8)');
+}
+function drawSignSprite(g, W, H) {
+  const cx = W / 2;
+  g.fillStyle = '#8a5a2b'; g.strokeStyle = '#4e3113'; g.lineWidth = 3;
+  g.beginPath(); g.roundRect(cx - 5, H * 0.3, 10, H * 0.68, 3); g.fill(); g.stroke();
+  const board = (y, dir) => {
+    g.fillStyle = '#d9a45a'; g.strokeStyle = '#6b4a1e'; g.lineWidth = 3;
+    g.beginPath();
+    if (dir > 0) { g.moveTo(cx - W * 0.35, y - 9); g.lineTo(cx + W * 0.3, y - 9); g.lineTo(cx + W * 0.42, y); g.lineTo(cx + W * 0.3, y + 9); g.lineTo(cx - W * 0.35, y + 9); }
+    else { g.moveTo(cx + W * 0.35, y - 9); g.lineTo(cx - W * 0.3, y - 9); g.lineTo(cx - W * 0.42, y); g.lineTo(cx - W * 0.3, y + 9); g.lineTo(cx + W * 0.35, y + 9); }
+    g.closePath(); g.fill(); g.stroke();
+  };
+  board(H * 0.18, 1); board(H * 0.4, -1);
+}
+function drawLanternSprite(g, W, H) {
+  const cx = W / 2;
+  g.strokeStyle = '#4e3113'; g.lineWidth = 5; g.beginPath(); g.moveTo(cx, H - 2); g.lineTo(cx, H * 0.2); g.stroke();
+  g.beginPath(); g.moveTo(cx, H * 0.2); g.lineTo(cx + W * 0.25, H * 0.2); g.lineTo(cx + W * 0.25, H * 0.3); g.stroke();
+  const rg = g.createRadialGradient(cx + W * 0.25, H * 0.42, 3, cx + W * 0.25, H * 0.42, W * 0.3);
+  rg.addColorStop(0, 'rgba(255,230,140,0.9)'); rg.addColorStop(1, 'rgba(255,230,140,0)');
+  g.fillStyle = rg; g.beginPath(); g.arc(cx + W * 0.25, H * 0.42, W * 0.3, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffd166'; g.strokeStyle = '#8a5a2b'; g.lineWidth = 3;
+  g.beginPath(); g.roundRect(cx + W * 0.25 - 9, H * 0.3, 18, H * 0.22, 4); g.fill(); g.stroke();
+}
+function drawFencePostSprite(g, W, H) {
+  const cx = W / 2;
+  g.fillStyle = '#c8955a'; g.strokeStyle = '#6b4a1e'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(cx - W * 0.22, H - 2); g.lineTo(cx - W * 0.18, H * 0.2); g.lineTo(cx, H * 0.04); g.lineTo(cx + W * 0.18, H * 0.2); g.lineTo(cx + W * 0.22, H - 2); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(cx - W * 0.14, H * 0.22, 4, H * 0.6);
+}
+function drawChevronTex(g, W, H) {
+  g.fillStyle = 'rgba(255,215,60,0.85)'; g.strokeStyle = 'rgba(160,110,10,0.7)'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(W * 0.5, H * 0.08); g.lineTo(W * 0.92, H * 0.6); g.lineTo(W * 0.72, H * 0.6); g.lineTo(W * 0.5, H * 0.34); g.lineTo(W * 0.28, H * 0.6); g.lineTo(W * 0.08, H * 0.6); g.closePath(); g.fill(); g.stroke();
+}
+const airshipTex = spriteTex(256, 192, drawAirshipSprite);
+const tentTex = spriteTex(192, 192, drawTentSprite);
+const cauldronTex = spriteTex(96, 96, drawCauldronSprite);
+const crateTex = spriteTex(80, 80, drawCrateSprite);
+const archTex = spriteTex(256, 224, drawArchSprite);
+const waterfallTex = spriteTex(96, 256, drawWaterfallSprite); waterfallTex.wrapT = THREE.RepeatWrapping;
+const foamTex = spriteTex(192, 64, drawFoamSprite);
+const starTex = spriteTex(128, 128, drawStarSprite);
+const stoneTallTex = spriteTex(96, 160, drawStandingStoneSprite);
+const signTex = spriteTex(96, 128, drawSignSprite);
+const lanternTex = spriteTex(96, 128, drawLanternSprite);
+const fenceTex = spriteTex(48, 96, drawFencePostSprite);
+const chevronTex = spriteTex(96, 96, drawChevronTex);
+
+// 소품 배치 (좌표 직접, §3 표 기준)
+const props = [];
+function addProp(tex, w, h, lon, lat, opts = {}) {
+  const m = placeSprite(makeBillboard(tex, w, h, opts), lon, lat, opts.useWalk, opts.lift || 0);
+  scene.add(m); props.push(m); return m;
+}
+// 착륙 초원: 비행정(데크 서쪽 풀밭 위에 떠 있음)·표지판·등불
+const airship = addProp(airshipTex, 6.4, 4.8, -10.2, 2.4, { lift: 1.2 }); airship.userData.base = airship.position.clone();
+addProp(signTex, 1.3, 1.75, 2.4, -1.6);
+addProp(lanternTex, 1.1, 1.5, -4.4, 2.6);
+addProp(starTex, 1.9, 1.9, 7.2, -4.6);
+// 계단 위 선돌 2기
+addProp(stoneTallTex, 1.3, 2.2, -1.7, 11.7); addProp(stoneTallTex, 1.2, 2.0, 1.7, 11.7);
+// 단구 야영지: 텐트·가마솥·상자
+addProp(tentTex, 4.4, 4.4, 3.6, 16.2);
+addProp(cauldronTex, 1.2, 1.2, 1.9, 15.3);
+addProp(crateTex, 1.0, 1.0, 4.9, 17.6); addProp(crateTex, 0.9, 0.9, 5.4, 16.9); addProp(crateTex, 0.9, 0.9, -1.2, 14.6);
+addProp(lanternTex, 1.1, 1.5, 1.4, 22.7);
+// 다리 건너 돌 아치 (가운데가 비어 캐릭터가 지나간다)
+addProp(archTex, 5.6, 4.9, 0, 30.1);
+// 슬라임 초원: 표지판·별 받침대
+addProp(signTex, 1.3, 1.75, -1.6, 38.6);
+addProp(starTex, 1.9, 1.9, 10, 40);
+addProp(signTex, 1.3, 1.75, 11.2, 41.4);
+// 폭포: 단구 서쪽 절벽면(방위 270°) — 수면에서 단구 위까지, 물줄기가 흐른다
+const waterfall = (() => {
+  // 절벽 발치 바로 앞(서쪽) 물 위에 세우고, 절벽에 기대듯 30° 돌린다 (판이 절벽 속으로 파고들지 않게)
+  const dir = dirFromLonLat(-9.4, 15.5);
+  const m = makeBillboard(waterfallTex, 2.4, 5.2, { shadow: false });
+  m.material.transparent = true; m.material.alphaTest = 0.1; m.material.opacity = 0.95;
+  m.position.copy(dir).multiplyScalar(R + WATER - 0.2); orientBillboard(m, dir);
+  m.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -0.55)); scene.add(m);
+  const foam = makeBillboard(foamTex, 3.6, 1.1, { shadow: false }); foam.material.alphaTest = 0.1;
+  foam.position.copy(dirFromLonLat(-9.5, 15.5)).multiplyScalar(R + WATER + 0.05); orientBillboard(foam, dirFromLonLat(-9.5, 15.5)); scene.add(foam);
+  return m;
+})();
+// 떨어진 별 빛기둥
+function addBeam(lon, lat) {
+  const dir = dirFromLonLat(lon, lat);
+  const geo = new THREE.PlaneGeometry(1.2, 9); geo.translate(0, 4.5, 0);
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uT: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'varying vec2 vUv; uniform float uT; void main(){ float a = (1.0 - vUv.y) * smoothstep(0.0, 0.25, vUv.x) * smoothstep(1.0, 0.75, vUv.x); a *= 0.55 + 0.15 * sin(uT * 2.0 + vUv.y * 9.0); gl_FragColor = vec4(0.5, 0.95, 0.9, a * 0.5); }' });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.copy(dir).multiplyScalar(R + terrainH(dir) + 0.6); orientBillboard(m, dir); scene.add(m); return m;
+}
+const beams = [addBeam(7.2, -4.6), addBeam(10, 40)];
+
+// 착륙 데크(3D — 걷는 바닥) + 경사로 + 난간
+const deck = (() => {
+  const g = new THREE.Group();
+  const dir = T.deck; const rad = 2.25 * DEG * R;   // 반경(유닛)
+  const woodTop = toon(0xd9a45a), woodSide = toon(0xb9823f);
+  const body = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.02, 1.2, 8), [woodSide, woodTop, woodSide]), 0.03, 0x6b4a1e);
+  body.position.y = 0.6; body.castShadow = true; body.receiveShadow = true; g.add(body);
+  // 판자 줄
+  for (let i = -3; i <= 3; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(rad * 1.9, 0.02, 0.06), toon(0x9a6a33)); l.position.set(0, 1.21, i * rad * 0.28); g.add(l); }
+  // 난간 기둥 (동쪽 경사로 자리 제외)
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const px = Math.cos(a) * rad * 0.92, pz = Math.sin(a) * rad * 0.92;
+    if (px > rad * 0.6 && Math.abs(pz) < rad * 0.5) continue;   // 동쪽 트임
+    const post = withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.0, 0.22), toon(0x8a5a2b)), 0.02, 0x4e3113);
+    post.position.set(px, 1.7, pz); post.castShadow = true; g.add(post);
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 6), toon(0x8a5a2b)); rail.position.set(px, 2.15, pz); g.add(rail);
+  }
+  // 경사로: 동쪽으로 내려감 (T.ramp 구간, 1.2→0)
+  const rampLen = T.ramp.arc * DEG * R;
+  const ramp = withOutline(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, Math.hypot(rampLen, 1.2)), woodTop), 0.02, 0x6b4a1e);
+  ramp.position.set(rad + rampLen / 2, 0.6, 0); ramp.rotation.y = Math.PI / 2; ramp.rotation.x = -Math.atan2(1.2, rampLen); ramp.receiveShadow = true; g.add(ramp);
+  place(g, -7.2, 1, 0); scene.add(g);
+  return g;
+})();
+
+// 길가 말뚝 울타리(인스턴싱) + 바닥 셰브론
+{
+  const fenceGeo = new THREE.PlaneGeometry(0.42, 0.85); fenceGeo.translate(0, 0.42, 0);
+  const fenceMat = new THREE.MeshBasicMaterial({ map: fenceTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
+  const slots = [];
+  const chevGeo = new THREE.PlaneGeometry(1.4, 1.4);
+  const chevMat = new THREE.MeshBasicMaterial({ map: chevronTex, transparent: true, alphaTest: 0.2, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const chevs = [];
+  const mainPaths = [T.paths[0], T.paths[2], T.paths[3], T.paths[4], T.paths[5]];
+  const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpP = new THREE.Vector3(), up = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
+  for (const seg of mainPaths) {
+    const len = seg.arc * DEG * R;
+    const n = Math.floor(len / 1.7);
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const dir = seg.A.clone().lerp(seg.B, t).normalize();
+      up.copy(dir); fwd.copy(seg.B).sub(seg.A); tangentize(fwd, up); right.crossVectors(fwd, up).normalize();
+      // 계단·다리 구간엔 말뚝을 안 세운다
+      if (T.stairs.dist(dir, _o) < 1.6 && _o.inside) continue;
+      for (const side of [-1, 1]) {
+        const p = dir.clone().addScaledVector(right, side * 1.15 / R).normalize();
+        const h = terrainH(p); if (h < WATER + 0.5) continue;
+        slots.push({ p, h });
+      }
+      if (i % 3 === 0) {
+        const h = terrainH(dir);
+        tmpP.copy(dir).multiplyScalar(R + h + 0.06);
+        basis.makeBasis(right, fwd, up); tmpQ.setFromRotationMatrix(basis);
+        chevs.push({ p: tmpP.clone(), q: tmpQ.clone() });
+      }
+    }
+  }
+  const fences = new THREE.InstancedMesh(fenceGeo, fenceMat, slots.length);
+  slots.forEach(({ p, h }, i) => {
+    const o = new THREE.Object3D(); o.position.copy(p).multiplyScalar(R + h + 0.02); orientBillboard(o, p); o.updateMatrix();
+    fences.setMatrixAt(i, o.matrix);
+  });
+  fences.instanceMatrix.needsUpdate = true; scene.add(fences);
+  const chevMesh = new THREE.InstancedMesh(chevGeo, chevMat, chevs.length);
+  chevs.forEach(({ p, q }, i) => { tmpM.compose(p, q, new THREE.Vector3(1, 1, 1)); chevMesh.setMatrixAt(i, tmpM); });
+  chevMesh.instanceMatrix.needsUpdate = true; chevMesh.renderOrder = 1; scene.add(chevMesh);
 }
 
 // ── 나무다리 (작업 C 첫 항목) — 사진의 아치형 판자 다리. 걷기 높이는 walkH의 아치와 같다 ──
@@ -1066,6 +1354,14 @@ function step(dt) {
   // 나무는 바람에 살짝
   const tw = performance.now() * 0.0012;
   for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
+  // 비행정은 살짝 떠다니고, 폭포는 흐르고, 별 빛기둥은 일렁인다
+  {
+    const nowS = performance.now() * 0.001;
+    const bd = airship.userData.base.clone().normalize();
+    airship.position.copy(airship.userData.base).addScaledVector(bd, Math.sin(nowS * 0.9) * 0.18);
+    waterfallTex.offset.y = -(nowS * 0.55) % 1;
+    for (const b of beams) b.material.uniforms.uT.value = nowS;
+  }
 
   // 카메라
   _right.crossVectors(cam.fwd, _up).normalize();
