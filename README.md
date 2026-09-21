@@ -23,6 +23,7 @@
   - [`roadmap/ROADMAP_6.md`](./roadmap/ROADMAP_6.md) — 6단계: three.js로 2.5D 재구축 — 빌보드 그림 판, HUD, NPC·슬라임, 착륙 컷신 (완료)
 - `web/evergreen-3d.html` — **현재 플레이 판**(로드맵 6). three.js 구체 지형 위에 2D 그림 판(빌보드)을 세운 2.5D 구성. 고정 카메라, 원형 미니맵·M 지도·MM 전경도, HUD, NPC 3·슬라임 8·기본 공격, 착륙 컷신.
 - `versions/` — 로드맵 번호 = 버전 번호로 보관한 옛 판(`v0.05-roadmap5/`, `v0.06-roadmap6/`). 보관본은 수정하지 않습니다.
+- `web/assets/` — 3D판이 쓰는 그림 에셋(PNG)과 규격서. 같은 이름으로 덮어쓰면 게임이 바꿔 끼웁니다 — [`web/assets/README.md`](./web/assets/README.md).
 - `web/evergreen-exploration.html` — 로드맵 1~5의 2D 판(HTML5 Canvas, 바닐라 JS). 원작 실제 플레이 영상을 참고해 구현한
   '작은 행성' 정구형 투영 렌더링(둥근 지평선 너머는 걸어가야 드러남)이 핵심 특징이었고, 그대로 보존합니다.
 - `DESIGN_DOC.md` — 기획 문서(세계관, 핵심 루프, 시스템 설계, 구현 단계).
