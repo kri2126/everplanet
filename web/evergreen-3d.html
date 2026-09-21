@@ -51,7 +51,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프 <b>마우스 드래그</b>카메라 회전 <b>M</b>지도 <b>M M</b>전경도</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프 <b>M</b>지도 <b>M M</b>전경도</div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv" width="150" height="150"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
@@ -80,9 +80,10 @@ const WALK = 4.5;             // 걷기 속도 /s
 const TURN = 10;              // 캐릭터 회전 속도 rad/s
 const G = 32;                 // 중력 (법선 반대 방향)
 const JUMP_V = 8.8;           // 점프 초속 → 최고 1.2, 체공 약 0.55s
-// 원작 1:50 구도: 캐릭터 등 뒤 멀리·높이서 내려다보고(약 32°), 화각이 좁아 원근 왜곡이 적다.
-// 캐릭터가 화면 세로의 1/7~1/8 크기로 작게 보이는 것이 핵심.
-const CAM_BACK = 15.0, CAM_UP = 9.5, CAM_LOOK_UP = 0.9, CAM_FOV = 38;
+// 카메라는 회전하지 않는다. 항상 북쪽을 보며 위 대각선(약 42°)에서 내려다본다.
+// 캐릭터가 화면 세로의 1/7 크기로 작게 보이고, 빌보드 그림이 늘 같은 방향을 향한다.
+const CAM_BACK = 13.0, CAM_UP = 11.7, CAM_LOOK_UP = 0.8, CAM_FOV = 38;
+const CAM_PITCH = Math.atan2(CAM_UP, CAM_BACK);
 // 세계 고정 태양 방향 — 시작점(+Z) 기준 고도 약 64°. 놀이 구역(위도 0~45°) 안에서는 계속 높이 떠 있어 그림자가 짧다.
 const SUN_DIR = new THREE.Vector3(0.35, 0.25, 0.9).normalize();
 
@@ -195,20 +196,6 @@ const rockTex = makeTex(256, (g, S) => {
     for (const ox of [0, S, -S]) for (const oy of [0, S, -S]) { g.beginPath(); g.ellipse(x + ox, y + oy, w, h, 0, 0, Math.PI * 2); g.fill(); }
   }
 });
-// 나뭇잎: 겹친 비늘(스캘럽) 무늬, 위쪽이 밝다
-const leafTex = makeTex(256, (g, S) => {
-  g.fillStyle = '#7fd24a'; g.fillRect(0, 0, S, S);
-  const r = 22;
-  for (let row = -1; row < S / (r * 0.8) + 1; row++) {
-    for (let col = -1; col < S / (r * 1.6) + 2; col++) {
-      const x = col * r * 1.6 + (row % 2 ? r * 0.8 : 0), y = row * r * 0.8;
-      g.fillStyle = `hsl(${100 + trnd() * 12}, ${58 + trnd() * 12}%, ${44 + trnd() * 12}%)`;
-      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = 'rgba(40,110,30,0.55)'; g.lineWidth = 2.2;
-      g.beginPath(); g.arc(x, y, r, Math.PI * 0.05, Math.PI * 0.95); g.stroke();
-    }
-  }
-}, 3);
 
 // ── 값 노이즈 (지면 얼룩용) ──────────────────────────────────────────────────
 function hash3(x, y, z) {
@@ -644,9 +631,9 @@ const clouds = [];
 }
 
 // ── 빛 ──────────────────────────────────────────────────────────────────────
-const hemi = new THREE.HemisphereLight(0xe6f6ff, 0x8fc65a, 1.8);
+const hemi = new THREE.HemisphereLight(0xf2fbff, 0x9fd06a, 2.0);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff4d6, 1.15);   // 약하게 — 그림자가 옅은 얼룩 정도로만
+const sun = new THREE.DirectionalLight(0xfff4d6, 0.9);   // 약하게 — 그림자가 옅은 얼룩 정도로만
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 160;
@@ -657,76 +644,173 @@ sun.shadow.normalBias = 0.03;
 sun.shadow.radius = 6;
 scene.add(sun); scene.add(sun.target);
 
-// ── 캐릭터 (임시 — 작업 F에서 다듬는다) ───────────────────────────────────────
-// 발이 y=0, 얼굴이 +Z. 2.5등신에 가깝게 머리를 크게.
-function makeCharacter() {
-  const g = new THREE.Group();
-  const skin = toon(0xffd9b3), shirt = toon(0x5fbf4a), pants = toon(0x4a6fb0), hair = toon(0x7a4a22), bagM = toon(0xb9895a);
-  const cast = (m) => { m.castShadow = true; return m; };
+// ── 빌보드 스프라이트 — "2D 그림을 3D에서" ─────────────────────────────────
+// 캐릭터·나무·덤불·꽃·버섯(이후 NPC·소품)은 캔버스에 손으로 그린 2D 그림을 판에 붙여 세운다.
+// 카메라가 북쪽을 보는 고정 각도라, 판은 그 자리의 동쪽을 가로축으로, 위쪽은 카메라 쪽으로
+// 살짝 기울여(원통 빌보드 + 기울기) 한 번 세워두면 된다. 매 프레임 회전 계산이 없다.
+const SPRITE_TILT = 0.38;   // 카메라 내려보는 각(라디안)의 몇 %만큼 판을 눕힐지
 
-  const legL = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.22, 4, 8), pants)));
-  const legR = legL.clone(); legR.material = pants;
-  legL.position.set(-0.12, 0.28, 0); legR.position.set(0.12, 0.28, 0);
-
-  const body = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.28, 6, 12), shirt)));
-  body.position.y = 0.66;
-
-  const armL = cast(withOutline(new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.26, 4, 8), shirt)));
-  const armR = armL.clone();
-  armL.position.set(-0.34, 0.7, 0); armR.position.set(0.34, 0.7, 0);
-
-  const head = cast(withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 16), skin)));
-  head.position.y = 1.32;
-  // 더벅머리: 위·뒤를 덮는 조금 큰 반구 + 앞머리 덩어리
-  const hairTop = withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.54, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair));
-  hairTop.position.set(0, 0.02, -0.04);
-  head.add(hairTop);
-  const fringe = withOutline(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), hair));
-  fringe.position.set(0.16, 0.3, 0.36); fringe.scale.set(1.4, 0.7, 0.9);
-  head.add(fringe);
-  // 눈 두 점
-  const eyeM = new THREE.MeshBasicMaterial({ color: 0x2a1f16 });
-  for (const sx of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), eyeM);
-    e.position.set(sx * 0.16, 0.02, 0.47); head.add(e);
-  }
-  // 작은 배낭
-  const bag = cast(withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.2), bagM)));
-  bag.position.set(0, 0.72, -0.32);
-
-  g.add(legL, legR, body, armL, armR, head, bag);
-  g.userData = { legL, legR, armL, armR, body, head, bag };
-  return g;
+function spriteTex(w, h, draw) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  draw(g, w, h);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 4;
+  return t;
+}
+// 색 채우고 어두운 같은 계열 선으로 테두리
+function blob(g, x, y, rx, ry, fill, line, lw = 3) {
+  g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  g.fillStyle = fill; g.fill();
+  if (line) { g.strokeStyle = line; g.lineWidth = lw; g.stroke(); }
 }
 
-// ── 나무 (작업 D의 초안 — 원작의 "겹친 잎덩이") ────────────────────────────────
-function makeTree(seed = 1) {
-  let s = seed * 9301 + 49297;
-  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-  const g = new THREE.Group();
-  const h = 2.6 + rnd() * 1.2;
-  const trunk = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, h, 8), toon(C.trunk)), 0.035);
-  trunk.position.y = h / 2; trunk.castShadow = true;
-  g.add(trunk);
-  const leaf = toon(0xffffff, { map: leafTex });
-  const leafTop = toon(0xe8ffc0, { map: leafTex });   // 맨 위 덩이는 더 밝게
-  const layers = 5 + Math.floor(rnd() * 2);
-  const baseR = 1.5 + rnd() * 0.6;
-  for (let i = 0; i < layers; i++) {
-    const t = i / (layers - 1);
-    const r = baseR * (1.05 - t * 0.55);
-    const ring = i === 0 ? 1 : 3;
-    for (let k = 0; k < ring; k++) {
-      const a = (k / ring) * Math.PI * 2 + i * 0.9 + rnd();
-      const off = ring === 1 ? 0 : r * 0.45;
-      const m = withOutline(new THREE.Mesh(new THREE.SphereGeometry(r * (ring === 1 ? 1 : 0.78), 14, 10), i === layers - 1 ? leafTop : leaf), 0.045, C.leafLine);
-      m.position.set(Math.cos(a) * off, h - 0.3 + t * baseR * 1.5, Math.sin(a) * off);
-      m.castShadow = true;
-      g.add(m);
+// 나무: 겹친 비늘 잎덩이. 아래가 넓고 위가 좁고, 맨 위는 밝다.
+function drawTreeSprite(g, W, H, v) {
+  const cx = W / 2;
+  // 기둥
+  g.fillStyle = '#8a5a2b'; g.strokeStyle = '#5a3a18'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(cx - 14, H - 4); g.lineTo(cx - 10, H * 0.55); g.lineTo(cx + 10, H * 0.55); g.lineTo(cx + 14, H - 4); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = '#6b4520'; g.fillRect(cx + 2, H * 0.6, 6, H * 0.3);
+  // 잎덩이 층
+  // 큰 덩어리 실루엣 먼저, 그 위에 비늘처럼 겹친 잎 몇 덩이
+  blob(g, cx, H * 0.4, W * 0.46, H * 0.3, '#5cc23a', '#2f7a22', 4);
+  const rows = [[H * 0.55, W * 0.4, 4], [H * 0.42, W * 0.34, 3], [H * 0.3, W * 0.24, 2], [H * 0.2, W * 0.12, 1]];
+  const cols = ['#5cc23a', '#6ccc42', '#82d94f', '#a6e86c'];
+  rows.forEach(([y, rw, n], i) => {
+    const fill = cols[Math.min(i + (v % 2), 3)];
+    for (let k = 0; k < n; k++) {
+      const x = cx + (n === 1 ? 0 : (k / (n - 1) - 0.5) * rw * 1.6);
+      blob(g, x, y, rw / n * 1.5 + 10, rw / n * 1.1 + 8, fill, '#2f7a22', 3);
     }
+  });
+  // 하이라이트
+  g.fillStyle = 'rgba(255,255,255,0.28)';
+  blob(g, cx - W * 0.1, H * 0.15, W * 0.08, H * 0.03, 'rgba(255,255,255,0.35)');
+  blob(g, cx + W * 0.18, H * 0.34, W * 0.06, H * 0.025, 'rgba(255,255,255,0.25)');
+}
+function drawBushSprite(g, W, H) {
+  const cx = W / 2;
+  blob(g, cx - W * 0.22, H * 0.68, W * 0.26, H * 0.28, '#5fbf3a', '#2f7a22', 3);
+  blob(g, cx + W * 0.22, H * 0.68, W * 0.26, H * 0.28, '#5fbf3a', '#2f7a22', 3);
+  blob(g, cx, H * 0.5, W * 0.3, H * 0.34, '#72d148', '#2f7a22', 3);
+  blob(g, cx - W * 0.08, H * 0.36, W * 0.09, H * 0.05, 'rgba(255,255,255,0.3)');
+}
+function drawFlowerSprite(g, W, H, color) {
+  const cx = W / 2;
+  g.strokeStyle = '#4f9e2c'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx, H - 2); g.quadraticCurveTo(cx + 6, H * 0.6, cx, H * 0.42); g.stroke();
+  g.fillStyle = '#5fbf3a'; blob(g, cx + 10, H * 0.72, 9, 5, '#5fbf3a');
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2;
+    blob(g, cx + Math.cos(a) * W * 0.16, H * 0.3 + Math.sin(a) * W * 0.16, W * 0.13, W * 0.11, color, 'rgba(120,80,20,0.5)', 2);
   }
-  g.userData.radius = baseR * 0.55; // 충돌 반지름(작업 B에서 사용)
-  return g;
+  blob(g, cx, H * 0.3, W * 0.1, W * 0.1, '#ffd166', '#c98a1e', 2);
+}
+function drawMushroomSprite(g, W, H, cap) {
+  const cx = W / 2;
+  g.fillStyle = '#f6efe0'; g.strokeStyle = '#b9a98a'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(cx - W * 0.14, H - 3); g.lineTo(cx - W * 0.12, H * 0.5); g.lineTo(cx + W * 0.12, H * 0.5); g.lineTo(cx + W * 0.14, H - 3); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = cap; g.strokeStyle = 'rgba(60,20,20,0.55)'; g.lineWidth = 3;
+  g.beginPath(); g.ellipse(cx, H * 0.45, W * 0.44, H * 0.34, 0, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  blob(g, cx - W * 0.18, H * 0.3, W * 0.07, H * 0.06, 'rgba(255,255,255,0.9)');
+  blob(g, cx + W * 0.14, H * 0.22, W * 0.05, H * 0.045, 'rgba(255,255,255,0.9)');
+}
+// 캐릭터: 2.5등신 치비. 뒤(북)·앞(남)·옆(동) 세 방향 × 걷기 2프레임 = 6칸 시트.
+function drawCharFrame(g, ox, W, H, view, frame) {
+  const cx = ox + W / 2, skin = '#ffd9b3', hair = '#7a4a22', shirt = '#5fbf4a', pants = '#4a6fb0', line = 'rgba(70,40,20,0.75)';
+  const step = frame ? 1 : -1;
+  g.save(); g.translate(0, 0);
+  // 다리
+  const legW = W * 0.11, legH = H * 0.16, ly = H * 0.78;
+  if (view === 'side') {
+    blob(g, cx - 4 + step * 5, ly + legH / 2, legW, legH / 2, pants, line, 2);
+    blob(g, cx + 4 - step * 5, ly + legH / 2 + 2, legW, legH / 2, pants, line, 2);
+  } else {
+    blob(g, cx - W * 0.12, ly + legH / 2 + step * 3, legW, legH / 2, pants, line, 2);
+    blob(g, cx + W * 0.12, ly + legH / 2 - step * 3, legW, legH / 2, pants, line, 2);
+  }
+  // 몸
+  blob(g, cx, H * 0.64, W * 0.27, H * 0.17, shirt, line, 2.5);
+  // 팔
+  if (view === 'side') {
+    blob(g, cx, H * 0.68 + step * 2, W * 0.07, H * 0.11, shirt, line, 2);
+  } else {
+    blob(g, cx - W * 0.3, H * 0.66 - step * 2, W * 0.07, H * 0.11, shirt, line, 2);
+    blob(g, cx + W * 0.3, H * 0.66 + step * 2, W * 0.07, H * 0.11, shirt, line, 2);
+  }
+  // 배낭(뒤)
+  if (view === 'back') { g.fillStyle = '#b9895a'; g.strokeStyle = line; g.lineWidth = 2; g.beginPath(); g.roundRect(cx - W * 0.16, H * 0.56, W * 0.32, H * 0.2, 6); g.fill(); g.stroke(); }
+  // 머리
+  const hy = H * 0.34, hr = W * 0.33;
+  blob(g, cx, hy, hr, hr * 0.98, skin, line, 2.5);
+  // 머리카락
+  g.fillStyle = hair; g.strokeStyle = line; g.lineWidth = 2.5;
+  if (view === 'back') { blob(g, cx, hy - hr * 0.12, hr * 1.03, hr * 0.92, hair, line, 2.5); }
+  else {
+    g.beginPath(); g.ellipse(cx, hy - hr * 0.35, hr * 1.04, hr * 0.7, 0, Math.PI, 0); g.closePath(); g.fill(); g.stroke();
+    // 앞머리 갈래
+    for (const dx of [-0.55, -0.15, 0.3]) { blob(g, cx + dx * hr, hy - hr * 0.28, hr * 0.28, hr * 0.22, hair); }
+  }
+  if (view === 'side') { blob(g, cx - hr * 0.5, hy - hr * 0.1, hr * 0.5, hr * 0.7, hair); }
+  // 얼굴
+  if (view !== 'back') {
+    g.fillStyle = '#2a1f16';
+    if (view === 'front') { blob(g, cx - hr * 0.35, hy + hr * 0.15, 3.5, 5, '#2a1f16'); blob(g, cx + hr * 0.35, hy + hr * 0.15, 3.5, 5, '#2a1f16'); }
+    else { blob(g, cx + hr * 0.45, hy + hr * 0.15, 3.5, 5, '#2a1f16'); }
+    blob(g, cx - hr * 0.55, hy + hr * 0.42, 6, 3.5, 'rgba(255,120,120,0.45)');
+    blob(g, cx + hr * 0.55, hy + hr * 0.42, 6, 3.5, 'rgba(255,120,120,0.45)');
+  }
+  g.restore();
+}
+const CHAR_FW = 96, CHAR_FH = 128, CHAR_VIEWS = ['back', 'front', 'side'];
+const charTex = spriteTex(CHAR_FW * 6, CHAR_FH, (g, W, H) => {
+  CHAR_VIEWS.forEach((v, vi) => { for (let f = 0; f < 2; f++) drawCharFrame(g, (vi * 2 + f) * CHAR_FW, CHAR_FW, CHAR_FH, v, f); });
+});
+charTex.repeat.set(1 / 6, 1);
+
+const treeTex = [0, 1, 2].map(v => spriteTex(192, 256, (g, W, H) => drawTreeSprite(g, W, H, v)));
+const bushTex = spriteTex(128, 96, (g, W, H) => drawBushSprite(g, W, H));
+const flowerTex = { yellow: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#ffd93b')), white: spriteTex(64, 80, (g, W, H) => drawFlowerSprite(g, W, H, '#fff6f0')) };
+const mushTex = { red: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#e84a4a')), blue: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H, '#4aa6f5')) };
+
+// 판 하나: 밑변이 발 자리. 그림자도 그림 모양대로 떨어지게 depth 재질에 alphaTest.
+function makeBillboard(tex, w, h, opts = {}) {
+  const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2, 0);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, fog: true });
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = opts.shadow !== false; m.receiveShadow = false;
+  m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: tex, alphaTest: 0.5 });
+  m.userData.isBillboard = true; m.userData.w = w; m.userData.h = h;
+  return m;
+}
+// 그 자리의 동/북/위로 판을 세운다 (카메라는 항상 북쪽을 보므로 판은 남쪽을 향해 살짝 젖힘)
+const _bn = new THREE.Vector3(), _be = new THREE.Vector3(), _bu = new THREE.Vector3(), _bU = new THREE.Vector3(), _bN = new THREE.Vector3(), _bm = new THREE.Matrix4();
+function orientBillboard(obj, dir) {
+  _bn.set(0, 1, 0); tangentize(_bn, dir);
+  _be.crossVectors(_bn, dir).normalize();
+  const t = CAM_PITCH * SPRITE_TILT;
+  _bU.copy(_bn).multiplyScalar(Math.sin(t)).addScaledVector(dir, Math.cos(t));      // 판의 위
+  _bN.copy(_bn).multiplyScalar(-Math.cos(t)).addScaledVector(dir, Math.sin(t));     // 판의 법선(카메라 쪽)
+  _bm.makeBasis(_be, _bU, _bN);
+  obj.quaternion.setFromRotationMatrix(_bm);
+}
+function placeSprite(mesh, lonDeg, latDeg, useWalk = false) {
+  const dir = dirFromLonLat(lonDeg, latDeg);
+  mesh.position.copy(dir).multiplyScalar(R + (useWalk ? walkH(dir) : terrainH(dir)) + 0.02);
+  orientBillboard(mesh, dir);
+  mesh.userData.dir = dir;
+  return mesh;
+}
+// 미니맵(위에서 본 지도)용 납작 표식 — 레이어 2에만
+function mapDot(dir, radius, color) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 12), new THREE.MeshBasicMaterial({ color }));
+  m.position.copy(dir).multiplyScalar(R + terrainH(dir) + 0.6);
+  _q.setFromUnitVectors(_y, dir); m.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2));
+  m.layers.set(2);
+  scene.add(m);
+  return m;
 }
 
 // ── 세계 채우기 ───────────────────────────────────────────────────────────────
@@ -736,9 +820,10 @@ const player = {
   z: 0, vz: 0, grounded: true, moving: false, walkT: 0, inShallow: false,
   safe: dirFromLonLat(0, 0), safeFwd: new THREE.Vector3(0, 1, 0),
   safeNext: dirFromLonLat(0, 0), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
-  mesh: makeCharacter(),
+  mesh: makeBillboard(charTex, 1.25, 1.7), view: 0, frame: 0,
 };
 scene.add(player.mesh);
+charTex.offset.set(0, 0);
 
 // 이동 시도: 목적지의 걷기 높이가 STEP_UP보다 높으면 벽. 막히면 앞/옆 성분으로 나눠 미끄러진다.
 const _np = new THREE.Vector3(), _nd = new THREE.Vector3(), _try = new THREE.Vector3();
@@ -774,6 +859,7 @@ function respawn() {
 }
 
 const trees = [];
+const decor = [];
 {
   // 좌표 직접 배치(§10 원칙). 초원 가장자리 링, 단구 야영지 구석, 슬라임 초원, 벽 바깥 언덕.
   const spots = [
@@ -784,10 +870,20 @@ const trees = [];
     [-20, 8], [20, 10], [-22, 30], [22, 27], [-18, 52], [18, 51], [3, 52],
   ];
   spots.forEach(([lon, lat], i) => {
-    const t = place(makeTree(i + 3), lon, lat, i * 1.3);
-    t.userData.dir = dirFromLonLat(lon, lat);
+    const sc = 0.9 + ((i * 7) % 5) * 0.06;
+    const t = placeSprite(makeBillboard(treeTex[i % 3], 4.6 * sc, 6.1 * sc), lon, lat);
+    t.userData.radius = 0.55;
+    t.userData.sway = i * 1.7;
     scene.add(t); trees.push(t);
+    mapDot(t.userData.dir, 1.6, 0x3f9a2a);
   });
+  // 덤불·꽃·버섯 — 원작 2:00 화면처럼 초원 군데군데 (작업 D의 초안)
+  const bushes = [[-6, -3.5], [7, -2.5], [-3.5, 8.2], [4, 10], [-7.5, 13], [8, 14.5], [-6, 33], [7.5, 35], [-3, 41], [5, 42.5]];
+  bushes.forEach(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); });
+  const flowers = [[-2.5, -4.5, 'yellow'], [-3.5, -5.2, 'yellow'], [3, -5, 'white'], [-5, 2.5, 'yellow'], [5.5, 3, 'yellow'], [6.2, 2.4, 'white'], [-2, 12.5, 'yellow'], [2.5, 17, 'white'], [-4.5, 31, 'yellow'], [3, 34, 'yellow'], [-7, 37, 'white'], [8, 40, 'yellow']];
+  flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f); });
+  const mush = [[-4.2, 1.2, 'blue'], [-4.8, 0.6, 'blue'], [6, -1, 'red'], [-8.5, -1, 'red'], [9, 8.5, 'red'], [-9.5, 35, 'red'], [10, 42, 'red']];
+  mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m); });
 }
 
 // ── 입력 ─────────────────────────────────────────────────────────────────────
@@ -805,18 +901,11 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
-const cam = { fwd: new THREE.Vector3(0, 1, 0), dragging: false, lastX: 0, yawVel: 0, userHold: 0 };
+const cam = { fwd: new THREE.Vector3(0, 1, 0) };   // 항상 그 자리의 북쪽
 canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 1) { mapView = insideZoneDisc(e.clientX, e.clientY) ? 2 : 0; return; }
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
-  cam.dragging = true; cam.lastX = e.clientX; canvas.setPointerCapture(e.pointerId);
 });
-canvas.addEventListener('pointermove', (e) => {
-  if (!cam.dragging) return;
-  const dx = e.clientX - cam.lastX; cam.lastX = e.clientX;
-  cam.yawVel += dx * 0.0045; cam.userHold = 1.2;
-});
-canvas.addEventListener('pointerup', () => { cam.dragging = false; });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ── 프레임 ───────────────────────────────────────────────────────────────────
@@ -831,12 +920,8 @@ function rotateAround(v, axis, ang) { return v.applyQuaternion(_rot.setFromAxisA
 function step(dt) {
   _up.copy(player.pos).normalize();
 
-  // 카메라 요(yaw): 드래그 → 각속도, 감쇠
-  if (Math.abs(cam.yawVel) > 1e-4) {
-    rotateAround(cam.fwd, _up, -cam.yawVel);
-    cam.yawVel *= Math.pow(0.001, dt);
-  } else cam.yawVel = 0;
-  tangentize(cam.fwd, _up);
+  // 카메라는 늘 북쪽을 본다 (회전 없음)
+  cam.fwd.set(0, 1, 0); tangentize(cam.fwd, _up);
   _right.crossVectors(cam.fwd, _up).normalize(); // 카메라 기준 오른쪽
 
   // 이동 입력 (카메라 기준)
@@ -857,13 +942,7 @@ function step(dt) {
     const speed = WALK * (player.inShallow ? 0.55 : 1);
     tryMove(_dir, speed * dt);
     player.walkT += dt * (player.inShallow ? 6 : 9);
-    // 움직이는 동안 카메라가 서서히 등 뒤로 (드래그 직후엔 잠시 보류)
-    if (cam.userHold <= 0 && iy > 0) {
-      const a = Math.atan2(player.fwd.dot(_right), player.fwd.dot(cam.fwd));
-      rotateAround(cam.fwd, _up, -a * Math.min(1, dt * 1.6));
-    }
   }
-  cam.userHold = Math.max(0, cam.userHold - dt);
 
   // 수직: 중력 / 착지 / 내리막 붙기
   player.vz -= G * dt;
@@ -875,7 +954,7 @@ function step(dt) {
   else if (player.z - ground > 0.05) player.grounded = false;
   player.pos.copy(_up).multiplyScalar(R + player.z);
   tangentize(player.fwd, _up);
-  tangentize(cam.fwd, _up);
+  cam.fwd.set(0, 1, 0); tangentize(cam.fwd, _up);
 
   // 물: 얕으면 느리게, 깊으면 마지막 육지로 복귀 (로드맵 5 B 규칙 그대로)
   const th = terrainH(_up);
@@ -889,19 +968,22 @@ function step(dt) {
     if (player.safeT > 0.8) { player.safeT = 0; player.safe.copy(player.safeNext); player.safeFwd.copy(player.safeNextFwd); player.safeNext.copy(_up); player.safeNextFwd.copy(player.fwd); }
   }
 
-  // 캐릭터 자세: 로컬 Y=위, Z=앞
-  _right.crossVectors(_up, player.fwd).normalize();
-  _m.makeBasis(_right, _up, player.fwd);
-  player.mesh.quaternion.setFromRotationMatrix(_m);
+  // 캐릭터 스프라이트: 진행 방향에 따라 뒤/앞/옆 그림, 걷는 동안 2프레임 교대
   player.mesh.position.copy(player.pos);
-  // 걷기 애니메이션 / 숨쉬기
-  const u = player.mesh.userData;
-  const sw = player.moving ? Math.sin(player.walkT) * 0.6 : 0;
-  u.legL.rotation.x = sw; u.legR.rotation.x = -sw;
-  u.armL.rotation.x = -sw * 0.8; u.armR.rotation.x = sw * 0.8;
-  const breathe = player.moving ? Math.abs(Math.sin(player.walkT)) * 0.05 : Math.sin(performance.now() * 0.002) * 0.015;
-  u.body.position.y = 0.66 + breathe; u.head.position.y = 1.32 + breathe; u.bag.position.y = 0.72 + breathe;
-  if (!player.grounded) { u.legL.rotation.x = 0.5; u.legR.rotation.x = -0.3; }
+  orientBillboard(player.mesh, _up);
+  {
+    _right.crossVectors(cam.fwd, _up).normalize();
+    const a = Math.atan2(player.fwd.dot(_right), player.fwd.dot(cam.fwd)) / DEG;   // 0=북(등), ±180=남(앞), +90=동
+    let view = 0, flip = 1;
+    if (Math.abs(a) < 50) view = 0; else if (Math.abs(a) > 130) view = 1; else { view = 2; flip = a < 0 ? -1 : 1; }
+    const frame = player.moving ? (Math.floor(player.walkT / 2.4) % 2) : 0;
+    charTex.offset.set((view * 2 + frame) / 6, 0);
+    player.mesh.scale.x = flip;
+    // 점프 중엔 살짝 위로 뜬 느낌만 (같은 그림)
+  }
+  // 나무는 바람에 살짝
+  const tw = performance.now() * 0.0012;
+  for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
 
   // 카메라
   _right.crossVectors(cam.fwd, _up).normalize();
@@ -954,6 +1036,7 @@ if (DEBUG) fpsEl.style.display = 'block';
 // 미니맵과 M 지도는 플레이어 위 직교 카메라로 실제 지형을 내려다본 렌더(북쪽 위).
 // 전경도(M M)는 옛 판의 그림책풍 캔버스 그림을 그대로 옮겼다.
 const mapCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 220);
+mapCam.layers.enable(2);
 const _north = new THREE.Vector3(), _east = new THREE.Vector3();
 const miniEl = document.getElementById('mini'), miniMark = document.getElementById('miniMark'), miniCv = document.getElementById('miniCv'), zoneCv = document.getElementById('zoneCv');
 const zoneEl = document.getElementById('zonemap'), zoneDisc = document.getElementById('zoneDisc');
