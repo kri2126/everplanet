@@ -1086,34 +1086,32 @@
       { type: 'clothesline', x: -410, y: -70 }
     ],
     // 로드맵 5 §4-2/폭포 장식: 마지막까지 미뤄뒀던 광장 소품 + 폭포. 전부 순수 장식(충돌
-    // 없음)이라 광장 남서~북서 쪽(방위 170~340°, 반경 40~160)의 열린 바닥에 직접 배치했다
-    // — 광장 중심(10,10)에서 갈라지는 두 통로(방위 20°대 돌계단행, 150°대 다리행)와는
-    // 겹치지 않는 방위대다. 폭포는 §4-1 표에 명시된 그대로 방위330° 절벽면(cliff, 방위
-    // 300~10°)에 뒀다 — 그쪽엔 실제 물 도형이 없어(물 반달은 방위75~300°뿐) drawWaterfall
-    // 자체가 그리는 포말 웅덩이가 "아래쪽 못"을 대신한다(순수 장식, 물리 판정 없음).
+    // 없음)이며, §4-2 원문이 준 구체적인 자리를 그대로 따랐다 — 착륙 데크는 원문 좌표
+    // (-90,-90) 그대로(방위315°, 반경127), 비행정은 그 뒤(반경165, 데크 "위"), 깃발은
+    // 옆(반경132). 등불 2개는 정확히 "데크 입구"(반경59)와 "다리 어귀"(방위150°, 반경165,
+    // 다리 시작 직전 바닥). 상자 무더기 3곳은 데크 주변에 모았다. 가마솥은 광장 중앙
+    // 부근(반경35, 두 통로 방위를 피한 250°)에, 부서진 석재 4개는 "계단 아래"(방위8~29°,
+    // 반경145~165 — 돌계단이 시작되는 바닥)에, 선돌 3개는 "계단 위 단구 가장자리"(방위
+    // 12~28°, 반경250~260, 단구 top48 위)에 흩었다. 폭포는 §4-1 표대로 방위330° 절벽면
+    // (cliff, 방위300~10°)에 뒀다 — 그쪽엔 실제 물 도형이 없어(물 반달은 방위75~300°뿐)
+    // drawWaterfall 자체가 그리는 포말 웅덩이가 "아래쪽 못"을 대신한다(물리 판정 없음).
     plazaProps: [
-      { type: 'landingDeck', x: -25, y: 92 },
-      { type: 'airship', x: -46, y: 127 },
-      { type: 'flag', x: -35, y: 42 },
-      { type: 'crate', x: -10, y: 110 },
-      { type: 'crate', x: -50, y: 87 },
-      { type: 'crate', x: -32, y: 121 },
-      { type: 'cauldron', x: -43, y: 25 },
-      { type: 'rubble', x: -138, y: 24, tone: 0.7 },
-      { type: 'rubble', x: -113, y: -65, tone: 0.3 },
-      { type: 'rubble', x: -77, y: -92, tone: 0.6 },
-      { type: 'rubble', x: -34, y: -94, tone: 0.4 },
-      { type: 'standingStone', x: -57, y: -27 },
-      { type: 'standingStone', x: -69, y: -10 },
-      { type: 'standingStone', x: -90, y: -16 },
-      { type: 'standingStone', x: -90, y: -38 },
-      { type: 'standingStone', x: -69, y: -44 },
-      { type: 'lantern', x: 0, y: 155 },
-      { type: 'lantern', x: -78, y: 134 },
-      { type: 'lantern', x: -134, y: 78 },
-      { type: 'lantern', x: -155, y: 0 },
-      { type: 'lantern', x: -134, y: -78 },
-      { type: 'lantern', x: -78, y: -134 },
+      { type: 'landingDeck', x: -90, y: -90 },
+      { type: 'airship', x: -117, y: -117 },
+      { type: 'flag', x: -65, y: -115 },
+      { type: 'lantern', x: -42, y: -42 },
+      { type: 'lantern', x: 83, y: 143 },
+      { type: 'crate', x: -75, y: -70 },
+      { type: 'crate', x: -110, y: -95 },
+      { type: 'crate', x: -60, y: -115 },
+      { type: 'cauldron', x: -33, y: 12 },
+      { type: 'rubble', x: 22, y: -154, tone: 0.7 },
+      { type: 'rubble', x: 51, y: -157, tone: 0.4 },
+      { type: 'rubble', x: 68, y: -134, tone: 0.6 },
+      { type: 'rubble', x: 70, y: -127, tone: 0.3 },
+      { type: 'standingStone', x: 53, y: -250 },
+      { type: 'standingStone', x: 89, y: -244 },
+      { type: 'standingStone', x: 117, y: -221 },
       { type: 'waterfall', x: -89, y: -154 }
     ],
     portal: { x: 650, y: 1126, height: 100, toZone: 'zone2', spawn: { x: 0, y: 120 }, triggerR: 50 }
