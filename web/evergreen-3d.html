@@ -242,7 +242,8 @@ const ASSET_DIR = 'assets/';
 function registerTex(name, tex, w, h, kind) { if (name) SPRITES[name] = { tex, w, h, kind }; return tex; }
 async function loadAssets() {
   let manifest;
-  try { const r = await fetch(ASSET_DIR + 'manifest.json', { cache: 'no-cache' }); if (!r.ok) return; manifest = await r.json(); } catch (e) { return; }
+  // manifest는 CDN·브라우저 캐시를 완전히 우회해 읽는다(에셋 교체 직후 옛 그림이 보이는 문제 방지). 그림 URL은 manifest.version으로 캐시가 갈린다.
+  try { const r = await fetch(ASSET_DIR + 'manifest.json?t=' + Date.now(), { cache: 'reload' }); if (!r.ok) return; manifest = await r.json(); } catch (e) { return; }
   const files = manifest.files || {};
   const ver = manifest.version ? '?v=' + manifest.version : '';
   let n = 0;
