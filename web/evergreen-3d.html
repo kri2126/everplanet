@@ -105,7 +105,7 @@
 <canvas id="c"></canvas>
 <div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단)·대화 <b>Z</b>공격 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도</div>
 <div id="fps"></div>
-<div id="mini"><canvas id="miniCv" width="150" height="150"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
+<div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
 <div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
@@ -158,13 +158,19 @@ const C = {
 
 // ── 렌더러 / 씬 ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// ── 성능 (2026-09-22 최적화) ─────────────────────────────────────────────────
+// 해상도 배율은 1.5 상한. 프레임이 느리면 1.0까지 자동으로 내리고, 넉넉하면 다시 올린다. ?dpr=1 로 고정 가능.
+const DPR_MAX = Math.min(devicePixelRatio || 1, 1.5);
+const DPR_FIXED = parseFloat(new URLSearchParams(location.search).get('dpr')) || 0;
+let dpr = DPR_FIXED || DPR_MAX;
+renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;   // Soft보다 훨씬 싸다 (그림자는 어차피 옅은 얼룩)
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.autoUpdate = false;   // 프레임당 한 번만(미니맵 렌더에서 다시 안 그리게)
 renderer.setClearColor(0xbfe7ff);
+renderer.info.autoReset = false;   // 프레임 단위로 직접 리셋 (미니맵 렌더까지 합산해 디버그에 보이게)
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(C.skyHorizon, 70, 230);
@@ -585,12 +591,32 @@ const planet = (() => {
   const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
   const patch = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, (p) => R + terrainH(p));
   paintTerrain(patch, true);
-  const pm = new THREE.Mesh(patch, terrainMat); pm.receiveShadow = true; pm.castShadow = true; scene.add(pm);
-  // 실루엣 외곽선: 같은 메시를 법선 방향으로 0.14 밀어낸 뒷면만 그린다 → 절벽 끝·단구 가장자리에 진한 선
-  const hull = new THREE.Mesh(patch, outlineMat(0.14, 0x3a2f1c));
-  hull.renderOrder = 1; scene.add(hull);
-  const hull2 = new THREE.Mesh(outer, outlineMat(0.14, 0x3a2f1c)); scene.add(hull2);
-  return pm;
+  // 고해상 패치는 정점 19만 개짜리 메시 하나였다. 카메라가 보는 건 늘 그 일부이므로
+  // 정점 버퍼는 공유한 채 인덱스만 6×8 타일로 나눠 메시 48개로 만든다 → 화면 밖 타일은 그리지 않는다(절두체 컬링).
+  // 법선은 나누기 전에 한 번에 계산돼 있어 타일 경계에 이음새가 없다.
+  const hullMat = outlineMat(0.14, 0x3a2f1c);
+  const TX = 6, TY = 8, pos = patch.attributes.position;
+  const tiles = [];
+  for (let tj = 0; tj < TY; tj++) for (let ti = 0; ti < TX; ti++) {
+    const i0 = Math.floor(nLon * ti / TX), i1 = Math.floor(nLon * (ti + 1) / TX);
+    const j0 = Math.floor(nLat * tj / TY), j1 = Math.floor(nLat * (tj + 1) / TY);
+    const idx = [];
+    for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const a = j * (nLon + 1) + i, b = a + 1, c = a + nLon + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
+    const tg = new THREE.BufferGeometry();
+    for (const name of ['position', 'normal', 'color', 'uv', 'rock']) tg.setAttribute(name, patch.attributes[name]);
+    tg.setIndex(idx);
+    // 경계 구는 이 타일의 정점만으로 (공유 버퍼 전체로 계산하면 컬링이 안 된다)
+    const c = new THREE.Vector3(); let n = 0;
+    for (let j = j0; j <= j1; j += (j1 - j0)) for (let i = i0; i <= i1; i += (i1 - i0)) { const k = j * (nLon + 1) + i; c.x += pos.getX(k); c.y += pos.getY(k); c.z += pos.getZ(k); n++; }
+    c.multiplyScalar(1 / n); let r2 = 0;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * (nLon + 1) + i; r2 = Math.max(r2, c.distanceToSquared(new THREE.Vector3(pos.getX(k), pos.getY(k), pos.getZ(k)))); }
+    tg.boundingSphere = new THREE.Sphere(c, Math.sqrt(r2) + 0.5);
+    const tm = new THREE.Mesh(tg, terrainMat); tm.receiveShadow = true; tm.castShadow = true; scene.add(tm); tiles.push(tm);
+    // 실루엣 외곽선: 같은 타일을 법선 방향으로 0.14 밀어낸 뒷면만 그린다 → 절벽 끝·단구 가장자리에 진한 선
+    const hull = new THREE.Mesh(tg, hullMat); hull.renderOrder = 1; scene.add(hull);
+  }
+  const hull2 = new THREE.Mesh(outer, hullMat); scene.add(hull2);
+  return tiles;
 })();
 
 // ── 물 ───────────────────────────────────────────────────────────────────────
@@ -598,7 +624,8 @@ const planet = (() => {
 const water = (() => {
   const step = 0.3;
   const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
-  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER);
+  // 지형이 수면보다 1.2 이상 높은 칸은 어차피 땅에 가려지므로 만들지 않는다 (정점·오버드로 절약)
+  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER, (lon, lat) => terrainH(dirFromLonLat(lon, lat)) > WATER + 1.2);
   const dirs = geo.userData.dirs;
   const shore = new Float32Array(dirs.length);
   for (let i = 0; i < dirs.length; i++) {
@@ -729,13 +756,13 @@ const hemi = new THREE.HemisphereLight(0xf2fbff, 0x9fd06a, 2.0);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff4d6, 0.9);   // 약하게 — 그림자가 옅은 얼룩 정도로만
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1536, 1536);
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 160;
 sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
 sun.shadow.camera.top = 34; sun.shadow.camera.bottom = -34;
 sun.shadow.bias = -0.0008;
 sun.shadow.normalBias = 0.03;
-sun.shadow.radius = 6;
+sun.shadow.radius = 3;
 scene.add(sun); scene.add(sun.target);
 
 // ── 빌보드 스프라이트 — "2D 그림을 3D에서" ─────────────────────────────────
@@ -1864,7 +1891,7 @@ loadAssets();
 const mapCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 220);
 mapCam.layers.enable(2);
 const _north = new THREE.Vector3(), _east = new THREE.Vector3();
-const miniEl = document.getElementById('mini'), miniMark = document.getElementById('miniMark'), miniCv = document.getElementById('miniCv'), zoneCv = document.getElementById('zoneCv');
+const miniEl = document.getElementById('mini'), miniMark = document.getElementById('miniMark'), zoneCv = document.getElementById('zoneCv');
 const zoneEl = document.getElementById('zonemap'), zoneDisc = document.getElementById('zoneDisc');
 const zoneLabels = document.getElementById('zoneLabels'), zoneMark = document.getElementById('zoneMark');
 const zoneCap = document.getElementById('zoneCap'), zoneTitle = document.getElementById('zoneTitle');
@@ -1881,7 +1908,8 @@ function headingDeg() {
   _east.crossVectors(_north, _up).normalize();
   return Math.atan2(player.fwd.dot(_east), player.fwd.dot(_north)) / DEG;
 }
-// 위에서 본 렌더를 렌더 타겟에 그리고, 픽셀을 읽어 2D 캔버스에 원형으로 옮긴다
+// 위에서 본 렌더를 렌더 타겟에 그린다. 미니맵은 GPU에서 바로 원형으로 화면에 찍고(픽셀 읽기 없음, 3프레임마다 갱신),
+// M 지도만 픽셀을 읽어 2D 캔버스에 옮긴다(지도가 열려 있을 땐 게임이 멈춰 있으니 괜찮다).
 const MAP_RT = 384;
 const mapRT = new THREE.WebGLRenderTarget(MAP_RT, MAP_RT, { depthBuffer: true });
 mapRT.texture.colorSpace = THREE.SRGBColorSpace;   // 화면과 같은 밝기로 읽히게
@@ -1889,7 +1917,7 @@ const mapPixels = new Uint8Array(MAP_RT * MAP_RT * 4);
 const mapTmp = document.createElement('canvas'); mapTmp.width = MAP_RT; mapTmp.height = MAP_RT;
 const mapTmpCtx = mapTmp.getContext('2d');
 const mapImg = mapTmpCtx.createImageData(MAP_RT, MAP_RT);
-function renderTopDown(cv, half) {
+function renderMapRT(half) {
   _north.set(0, 1, 0); tangentize(_north, _up);
   mapCam.left = -half; mapCam.right = half; mapCam.top = half; mapCam.bottom = -half;
   mapCam.updateProjectionMatrix();
@@ -1899,6 +1927,29 @@ function renderTopDown(cv, half) {
   mapCam.updateMatrixWorld();
   renderer.setRenderTarget(mapRT);
   renderer.render(scene, mapCam);
+  renderer.setRenderTarget(null);
+}
+// 미니맵 블릿: 렌더 타겟 텍스처를 화면 오른쪽 위 원 안에 찍는 아주 작은 씬
+const miniScene = new THREE.Scene(), miniCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+miniScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: { tMap: { value: mapRT.texture } }, depthTest: false, depthWrite: false, transparent: true,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: 'uniform sampler2D tMap; varying vec2 vUv; void main(){ vec2 d = vUv - 0.5; float r = length(d); if (r > 0.5) discard; vec4 c = texture2D(tMap, vUv); c.rgb *= 1.0 - 0.35 * smoothstep(0.36, 0.5, r); gl_FragColor = c; }',
+})));
+let mapFrame = 0;
+function drawMiniMap() {
+  if (mapFrame++ % 3 === 0) renderMapRT(24);          // 3프레임에 한 번만 다시 그린다
+  const rc = miniEl.getBoundingClientRect();
+  renderer.setViewport(rc.left, innerHeight - rc.bottom, rc.width, rc.height);
+  renderer.setScissor(rc.left, innerHeight - rc.bottom, rc.width, rc.height);
+  renderer.setScissorTest(true);
+  renderer.autoClear = false; renderer.render(miniScene, miniCam); renderer.autoClear = true;
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, innerWidth, innerHeight);
+}
+function renderTopDown(cv, half) {
+  renderMapRT(half);
+  renderer.setRenderTarget(mapRT);
   renderer.readRenderTargetPixels(mapRT, 0, 0, MAP_RT, MAP_RT, mapPixels);
   renderer.setRenderTarget(null);
   mapImg.data.set(mapPixels);
@@ -1925,7 +1976,7 @@ function drawMaps(t) {
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
-    renderTopDown(miniCv, 24);
+    if (!cut.on) drawMiniMap();
     miniMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
   } else if (mapView === 1) {
     const size = Math.min(W, H) * 0.7;
@@ -1959,16 +2010,30 @@ function drawMaps(t) {
   }
 }
 
+let frameNo = 0, perfAcc = 0, perfN = 0;
+function adaptQuality(ms) {
+  // 최근 90프레임 평균이 22ms(45fps)보다 느리면 해상도 배율을 0.25 내리고, 12ms보다 빠르면 상한까지 0.25 올린다
+  perfAcc += ms; perfN++;
+  if (perfN < 90) return;
+  const avg = perfAcc / perfN; perfAcc = 0; perfN = 0;
+  if (DPR_FIXED) return;
+  let next = dpr;
+  if (avg > 22 && dpr > 1.0) next = Math.max(1.0, dpr - 0.25);
+  else if (avg < 12 && dpr < DPR_MAX) next = Math.min(DPR_MAX, dpr + 0.25);
+  if (next !== dpr) { dpr = next; renderer.setPixelRatio(dpr); resize(); if (DEBUG) console.log('dpr →', dpr, 'avg', avg.toFixed(1), 'ms'); }
+}
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;   // 첫 rAF 시각이 모듈 실행 시각보다 앞설 수 있어 음수 방지
+  const t0 = performance.now(); renderer.info.reset();
   if (!mapView) step(dt); else { keys.clear(); }
-  renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.needsUpdate = (frameNo++ % 2 === 0);   // 그림자 맵은 2프레임에 한 번 (태양이 플레이어를 따라가므로 한 프레임 늦어도 안 보임)
   renderer.render(scene, camera);
   if (mapView === 0) updateLabels();
   drawMaps(now * 0.001);
+  adaptQuality(performance.now() - t0);
   if (DEBUG) {
     fpsAcc += dt; fpsN++;
-    if (fpsAcc >= 0.5) { fpsEl.textContent = `${(fpsN / fpsAcc).toFixed(0)} fps · z ${player.z.toFixed(2)}`; fpsAcc = 0; fpsN = 0; }
+    if (fpsAcc >= 0.5) { fpsEl.textContent = `${(fpsN / fpsAcc).toFixed(0)} fps · dpr ${dpr} · draw ${renderer.info.render.calls} · tri ${(renderer.info.render.triangles / 1000).toFixed(0)}k · z ${player.z.toFixed(2)}`; fpsAcc = 0; fpsN = 0; }
   }
   requestAnimationFrame(frame);
 }
@@ -2318,7 +2383,8 @@ if (DEBUG) {
     jump() { return tryJump(); },
     NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
     nearNpc() { return nearNpc; },
-    SPRITES,
+    SPRITES, planet,
+    perf() { return { dpr, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     exportSprites() {   // 등록된 캔버스 그림을 PNG dataURL로 (에셋 예시 뽑기용)
       const out = {}; for (const [k, s] of Object.entries(SPRITES)) { const im = s.tex.image; out[k] = { w: s.w, h: s.h, kind: s.kind, png: im.toDataURL ? im.toDataURL('image/png') : null }; } return out;
     },
