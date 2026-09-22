@@ -259,7 +259,8 @@ async function loadAssets() {
   await Promise.all(Object.entries(files).map(([name, file]) => new Promise((res) => {
     const s = SPRITES[name]; if (!s || !file) return res();
     const img = new Image();
-    img.onload = () => { s.tex.image = img; s.tex.needsUpdate = true; s.loaded = file; n++; res(); };
+    // dispose()로 GPU 텍스처를 버린 뒤 바꿔 끼운다 — 크기가 다른 그림(2배 해상도)은 기존 저장공간(texStorage2D)에 못 올라가 옛 그림이 그대로 남는다
+    img.onload = () => { s.tex.dispose(); s.tex.image = img; s.tex.needsUpdate = true; s.loaded = file; n++; res(); };
     img.onerror = () => { assetErrs.push(name); res(); };
     img.src = ASSET_DIR + file + ver;
   })));
