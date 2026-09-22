@@ -67,7 +67,6 @@
   #log { position: fixed; left: 12px; bottom: 12px; width: 320px; max-height: 118px; overflow: hidden; font-size: 12px; line-height: 1.5; color: #eef;
     background: rgba(10,14,24,.42); border-radius: 6px; padding: 6px 10px; pointer-events: none; }
   #log:empty { display: none; }
-  #gpuwarn { position: fixed; left: 50%; top: 48px; transform: translateX(-50%); background: rgba(160,30,30,.85); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 6px; z-index: 5; pointer-events: none; }
   #log div { text-shadow: 0 1px 2px rgba(0,0,0,.8); } #log .sys { color: #ffd166; } #log .npc { color: #9ad2ff; }
   #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .lb { position: absolute; transform: translate(-50%,-100%); white-space: nowrap; font: 700 12px 'Gowun Dodum', sans-serif; color: #fff;
@@ -161,15 +160,24 @@ const C = {
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 // ── 성능 (2026-09-22 최적화) ─────────────────────────────────────────────────
-// 화질 단계: 3 높음(배율 ≤1.5, 그림자 1536) · 2 중간(배율 1.0, 그림자 1024) · 1 낮음(배율 0.75, 그림자 512, 미니맵 6프레임마다).
+// 화질 단계: 3 높음(배율 ≤1.5, 그림자 1536) · 2 중간(1.0, 1024) · 1 낮음(0.75, 512, 미니맵 6프레임마다) · 0 최소(0.5, 그림자·지형 외곽선 끔, 미니맵 12프레임마다).
 // 기본은 자동 — 실제 프레임 간격(rAF)을 재서 느리면 한 단계 내리고, 충분히 빠르면(3구간 연속) 한 단계 올린다.
-// Q 키로 자동→높음→중간→낮음 순환(localStorage에 기억), ?q=high|mid|low 또는 ?dpr=1 로 고정.
+// 소프트웨어 WebGL(GPU 없이 그리는 브라우저)로 판정되면 낮음에서 시작한다.
+// Q 키로 자동→최소→낮음→중간→높음 순환(localStorage에 기억), ?q=min|low|mid|high 또는 ?dpr=1 로 고정.
 const QP = new URLSearchParams(location.search);
-const QUALITY = { 3: { name: '높음', dpr: Math.min(devicePixelRatio || 1, 1.5), shadow: 1536, mapEvery: 3 }, 2: { name: '중간', dpr: 1.0, shadow: 1024, mapEvery: 3 }, 1: { name: '낮음', dpr: 0.75, shadow: 512, mapEvery: 6 } };
+const QUALITY = {
+  3: { name: '높음', dpr: Math.min(devicePixelRatio || 1, 1.5), shadow: 1536, mapEvery: 3, hull: true },
+  2: { name: '중간', dpr: 1.0, shadow: 1024, mapEvery: 3, hull: true },
+  1: { name: '낮음', dpr: 0.75, shadow: 512, mapEvery: 6, hull: true },
+  0: { name: '최소', dpr: 0.5, shadow: 0, mapEvery: 12, hull: false },
+};
 const DPR_FIXED = parseFloat(QP.get('dpr')) || 0;
-let qualityMode = { high: 3, mid: 2, low: 1 }[QP.get('q')] || 0;   // 0 = 자동
-try { if (!qualityMode && !QP.get('q')) qualityMode = parseInt(localStorage.getItem('ep_quality') || '0') || 0; } catch (e) {}
-let quality = qualityMode || 3, dpr = DPR_FIXED || QUALITY[quality].dpr;
+const GPU_NAME = (() => { try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { return '?'; } })();
+const SOFTWARE_GL = /swiftshader|software|llvmpipe|mesa offscreen|basic render/i.test(GPU_NAME);
+let qualityMode = { high: 3, mid: 2, low: 1, min: 0 }[QP.get('q')] ?? -1;   // -1 = 자동
+try { if (qualityMode < 0 && !QP.get('q')) { const sv = localStorage.getItem('ep_quality'); if (sv !== null && sv !== '') qualityMode = parseInt(sv); } } catch (e) {}
+if (!(qualityMode >= 0 && qualityMode <= 3)) qualityMode = -1;
+let quality = qualityMode >= 0 ? qualityMode : (SOFTWARE_GL ? 1 : 3), dpr = DPR_FIXED || QUALITY[quality].dpr;
 renderer.setPixelRatio(dpr);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // Soft보다 훨씬 싸다 (그림자는 어차피 옅은 얼룩)
@@ -620,9 +628,9 @@ const planet = (() => {
     tg.boundingSphere = new THREE.Sphere(c, Math.sqrt(r2) + 0.5);
     const tm = new THREE.Mesh(tg, terrainMat); tm.receiveShadow = true; tm.castShadow = true; scene.add(tm); tiles.push(tm);
     // 실루엣 외곽선: 같은 타일을 법선 방향으로 0.14 밀어낸 뒷면만 그린다 → 절벽 끝·단구 가장자리에 진한 선
-    const hull = new THREE.Mesh(tg, hullMat); hull.renderOrder = 1; scene.add(hull);
+    const hull = new THREE.Mesh(tg, hullMat); hull.renderOrder = 1; hull.userData.isHull = true; hull.visible = QUALITY[quality].hull; scene.add(hull);
   }
-  const hull2 = new THREE.Mesh(outer, hullMat); scene.add(hull2);
+  const hull2 = new THREE.Mesh(outer, hullMat); hull2.userData.isHull = true; hull2.visible = QUALITY[quality].hull; scene.add(hull2);
   return tiles;
 })();
 
@@ -763,7 +771,8 @@ const hemi = new THREE.HemisphereLight(0xf2fbff, 0x9fd06a, 2.0);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff4d6, 0.9);   // 약하게 — 그림자가 옅은 얼룩 정도로만
 sun.castShadow = true;
-sun.shadow.mapSize.set(QUALITY[quality].shadow, QUALITY[quality].shadow);
+sun.shadow.mapSize.set(QUALITY[quality].shadow || 512, QUALITY[quality].shadow || 512);
+if (!QUALITY[quality].shadow) { renderer.shadowMap.enabled = false; sun.castShadow = false; }
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 160;
 sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
 sun.shadow.camera.top = 34; sun.shadow.camera.bottom = -34;
@@ -1888,22 +1897,22 @@ function resize() {
 addEventListener('resize', resize); resize();
 // 화질 단계 적용: 픽셀 배율·그림자 맵 크기 (그림자 맵은 버리면 다음 프레임에 새 크기로 다시 만들어진다)
 function applyQuality(q, why) {
-  q = Math.max(1, Math.min(3, q));
+  q = Math.max(0, Math.min(3, q));
   const cfg = QUALITY[q]; quality = q;
   dpr = DPR_FIXED || cfg.dpr; renderer.setPixelRatio(dpr); resize();
-  if (sun.shadow.mapSize.x !== cfg.shadow) { sun.shadow.mapSize.set(cfg.shadow, cfg.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  // 그림자 켜고 끄기: 재질이 그림자 코드 없이 다시 컴파일되도록 needsUpdate
+  const shadowOn = cfg.shadow > 0;
+  if (renderer.shadowMap.enabled !== shadowOn) { renderer.shadowMap.enabled = shadowOn; sun.castShadow = shadowOn; scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); }); }
+  if (shadowOn && sun.shadow.mapSize.x !== cfg.shadow) { sun.shadow.mapSize.set(cfg.shadow, cfg.shadow); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   renderer.shadowMap.needsUpdate = true;
-  if (typeof log === 'function') log(`화질 ${cfg.name}${qualityMode ? '' : ' (자동)'} — 배율 ${dpr}${why ? ' · ' + why : ''}`, 'sys');
+  scene.traverse((o) => { if (o.userData.isHull) o.visible = cfg.hull; });   // 최소에서는 지형 외곽선(지형을 한 번 더 그림)을 끈다
+  if (typeof log === 'function') log(`화질 ${cfg.name}${qualityMode >= 0 ? '' : ' (자동)'} — 배율 ${dpr}${why ? ' · ' + why : ''}`, 'sys');
 }
 function cycleQuality() {
-  qualityMode = (qualityMode + 1) % 4;   // 0 자동 → 1 낮음 → 2 중간 → 3 높음 → 0
+  qualityMode = qualityMode >= 3 ? -1 : qualityMode + 1;   // 자동 → 최소 → 낮음 → 중간 → 높음 → 자동
   try { localStorage.setItem('ep_quality', String(qualityMode)); } catch (e) {}
-  if (qualityMode) applyQuality(qualityMode, 'Q 키'); else { perfWin = []; perfGood = 0; log('화질 자동 — 프레임에 맞춰 조절합니다', 'sys'); }
+  if (qualityMode >= 0) applyQuality(qualityMode, 'Q 키'); else { perfWin = []; perfGood = 0; log('화질 자동 — 프레임에 맞춰 조절합니다', 'sys'); }
 }
-// 하드웨어 가속이 꺼진 브라우저(소프트웨어 WebGL)는 아무리 줄여도 느리다 — 알려 준다
-const GPU_NAME = (() => { try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { return '?'; } })();
-const SOFTWARE_GL = /swiftshader|software|llvmpipe|mesa offscreen|basic render/i.test(GPU_NAME);
-if (SOFTWARE_GL) { const w = document.createElement('div'); w.id = 'gpuwarn'; w.textContent = '⚠ 이 브라우저는 하드웨어 가속 없이(소프트웨어) 그리고 있어 느립니다. 브라우저 설정 → 시스템 → "그래픽 가속 사용"을 켜고 다시 열어 주세요.'; document.body.appendChild(w); }
 
 const fpsEl = document.getElementById('fps');
 if (DEBUG || QP.has('fps')) fpsEl.style.display = 'block';
@@ -2041,12 +2050,12 @@ let frameNo = 0, perfWin = [], perfGood = 0, perfStart = performance.now();
 let frameMs = 16.7;   // 최근 프레임 간격(rAF 기준 — GPU가 느린 것까지 잡힌다)
 function adaptQuality(dtMs) {
   frameMs = frameMs * 0.9 + dtMs * 0.1;
-  if (qualityMode || DPR_FIXED) return;                      // 수동 고정이면 건드리지 않음
+  if (qualityMode >= 0 || DPR_FIXED) return;                 // 수동 고정이면 건드리지 않음
   if (performance.now() - perfStart < 4000) return;            // 처음 4초(텍스처 올리기·컴파일)는 안 잰다
   perfWin.push(dtMs);
   if (perfWin.length < 120) return;
   const sorted = perfWin.slice().sort((a, b) => a - b); const med = sorted[sorted.length >> 1]; perfWin = [];
-  if (med > 21 && quality > 1) { perfGood = 0; applyQuality(quality - 1, `프레임 ${med.toFixed(0)}ms`); }
+  if (med > 21 && quality > 0) { perfGood = 0; applyQuality(quality - 1, `프레임 ${med.toFixed(0)}ms`); }
   else if (med < 9 && quality < 3) { if (++perfGood >= 3) { perfGood = 0; applyQuality(quality + 1, `프레임 ${med.toFixed(0)}ms`); } }
   else perfGood = 0;
 }
@@ -2054,14 +2063,14 @@ function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;   // 첫 rAF 시각이 모듈 실행 시각보다 앞설 수 있어 음수 방지
   const t0 = performance.now(); renderer.info.reset();
   if (!mapView) step(dt); else { keys.clear(); }
-  renderer.shadowMap.needsUpdate = (frameNo++ % (quality === 1 ? 4 : 2) === 0);   // 그림자 맵은 2프레임(낮음: 4)에 한 번 (태양이 플레이어를 따라가므로 한 프레임 늦어도 안 보임)
+  renderer.shadowMap.needsUpdate = (frameNo++ % (quality <= 1 ? 4 : 2) === 0);   // 그림자 맵은 2프레임(낮음: 4)에 한 번 (태양이 플레이어를 따라가므로 한 프레임 늦어도 안 보임)
   renderer.render(scene, camera);
   if (mapView === 0) updateLabels();
   drawMaps(now * 0.001);
   adaptQuality(dt * 1000);
   if (DEBUG || fpsEl.style.display === 'block') {
     fpsAcc += dt; fpsN++;
-    if (fpsAcc >= 0.5) { fpsEl.textContent = `${(fpsN / fpsAcc).toFixed(0)} fps · ${frameMs.toFixed(1)}ms · 화질 ${QUALITY[quality].name}${qualityMode ? '' : '(자동)'} dpr ${dpr} · ${innerWidth}×${innerHeight} · draw ${renderer.info.render.calls} · tri ${(renderer.info.render.triangles / 1000).toFixed(0)}k · ${GPU_NAME.slice(0, 60)}`; fpsAcc = 0; fpsN = 0; }
+    if (fpsAcc >= 0.5) { fpsEl.textContent = `${(fpsN / fpsAcc).toFixed(0)} fps · ${frameMs.toFixed(1)}ms · 화질 ${QUALITY[quality].name}${qualityMode >= 0 ? '' : '(자동)'} dpr ${dpr} · ${innerWidth}×${innerHeight} · draw ${renderer.info.render.calls} · tri ${(renderer.info.render.triangles / 1000).toFixed(0)}k · ${GPU_NAME.slice(0, 60)}`; fpsAcc = 0; fpsN = 0; }
   }
   requestAnimationFrame(frame);
 }
