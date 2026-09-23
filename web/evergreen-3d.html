@@ -52,11 +52,15 @@
   .orb.mp { background: radial-gradient(circle at 35% 30%, #9ad2ff, #2f7fe2 55%, #0f2f7d); }
   .orb span { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font: 700 13px monospace; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
   .orb b { position: absolute; left: 0; right: 0; top: -18px; text-align: center; font: 700 11px sans-serif; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
-  #skills { display: grid; grid-template-columns: repeat(8, 34px); gap: 4px; padding: 6px; background: rgba(40,28,18,.72);
+  /* 작업 B: 스킬바를 원작처럼 Z·X·C·V 네 칸으로 */
+  #skills { display: grid; grid-template-columns: repeat(4, 42px); gap: 5px; padding: 6px; background: rgba(40,28,18,.72);
     border: 2px solid #c99354; border-radius: 8px; box-shadow: 0 0 0 2px #5a3a1c, 0 4px 10px rgba(0,0,0,.4); }
-  #skills i { width: 34px; height: 34px; border-radius: 5px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,220,170,.25); position: relative; display: block; }
-  #skills i::after { content: attr(data-k); position: absolute; right: 3px; bottom: 1px; font: 700 9px monospace; color: rgba(255,240,210,.75); font-style: normal; }
+  #skills i { width: 42px; height: 42px; border-radius: 5px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,220,170,.25); position: relative; display: block; }
+  #skills i::after { content: attr(data-k); position: absolute; right: 3px; bottom: 1px; font: 700 10px monospace; color: rgba(255,240,210,.75); font-style: normal; }
   #skills i.f { background: radial-gradient(circle at 50% 40%, #ffd166, #d9781c 70%, #7a3a0a); }
+  #skills i.locked { opacity: .55; }
+  #skills i.locked::before { content: '🔒'; position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  #skills i .cd { position: absolute; inset: 0; border-radius: 5px; background: conic-gradient(rgba(10,10,10,.72) calc(var(--p,0) * 360deg), transparent 0); pointer-events: none; }
   #exp { position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%); width: 440px; height: 5px; background: rgba(0,0,0,.55); border-radius: 3px; overflow: hidden; pointer-events: none; }
   #exp i { display: block; height: 100%; width: 12%; background: linear-gradient(#9cf07a, #3ea83a); transition: width .4s; }
   #quest { position: fixed; right: 14px; top: 212px; width: 190px; font-size: 12px; line-height: 1.45; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.7);
@@ -96,6 +100,12 @@
   #cut .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; } #cut .top { top: 0; } #cut .bot { bottom: 0; }
   #cut .skip { position: absolute; right: 18px; bottom: 11%; font-size: 12px; opacity: .85; text-shadow: 0 1px 2px #000; }
   #cut .skip b { display: inline-block; padding: 0 5px; border-radius: 3px; background: rgba(255,255,255,.9); color: #223; }
+  /* 작업 C: 피격 비네트·사망 페이드 */
+  #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 0 rgba(220,20,20,0); transition: box-shadow .08s ease-out; z-index: 5; }
+  #vignette.hit { box-shadow: inset 0 0 90px 20px rgba(220,20,20,.65); }
+  #deathFade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1s ease; z-index: 6; }
+  #deathFade.on { opacity: .82; transition: opacity .3s ease; }
+  .lb.target { color: #ffd166; font: 900 16px sans-serif; text-shadow: 0 0 4px rgba(0,0,0,.8); }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -103,13 +113,15 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단)·대화 <b>Z</b>공격 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
 <div id="fps"></div>
 <div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
 <div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
-<div id="hud"><div class="orb hp"><b>HP</b><span>100</span></div><div id="skills"></div><div class="orb mp"><b>MP</b><span>50</span></div></div>
+<div id="hud"><div class="orb hp"><b>HP</b><span id="hpNum">100</span></div><div id="skills"></div><div class="orb mp"><b>MP</b><span id="mpNum">50</span></div></div>
+<div id="vignette"></div>
+<div id="deathFade"></div>
 <div id="exp"><i></i></div>
 <div id="quest"><b id="questTitle"></b><div id="questObj"></div></div>
 <div id="log"></div>
@@ -184,6 +196,7 @@ renderer.shadowMap.type = THREE.PCFShadowMap;   // Soft보다 훨씬 싸다 (그
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.autoUpdate = false;   // 프레임당 한 번만(미니맵 렌더에서 다시 안 그리게)
 renderer.setClearColor(0xbfe7ff);
+renderer.localClippingEnabled = true;   // 작업 B: 헤엄칠 때 캐릭터 판을 수면에서 자른다
 renderer.info.autoReset = false;   // 프레임 단위로 직접 리셋 (미니맵 렌더까지 합산해 디버그에 보이게)
 
 const scene = new THREE.Scene();
@@ -465,7 +478,11 @@ function pathMask(p) {
   return m;
 }
 
-// 걷기 판정 높이: 지형 + 구조물(데크·경사로·다리)
+// 작업 B: 점프로 올라설 수 있는 소품(상자 0.9 · 선돌 1.6 · 바위 0.7) — walkH가 반경 안이면 소품 윗면 높이를 준다
+const climbProps = [];
+function addClimb(dir, radius, heightAboveGround) { climbProps.push({ dir, radius, top: terrainH(dir) + heightAboveGround }); }   // 소품이 놓인 그 자리 지형 높이 + 소품 자체 높이
+
+// 걷기 판정 높이: 지형 + 구조물(데크·경사로·다리) + 오를 수 있는 소품
 function walkH(p) {
   let h = terrainH(p);
   const dD = angDeg(p, T.deck);
@@ -474,6 +491,7 @@ function walkH(p) {
   if (dR < 0.55 && _o.t > 0 && _o.t < 1) h = Math.max(h, 1.2 * (1 - _o.t));
   const dB = T.bridge.dist(p, _o);
   if (dB < 0.8 && _o.t >= 0 && _o.t <= 1) h = Math.max(h, 2.5 + 0.35 * Math.sin(Math.PI * _o.t));
+  for (const c of climbProps) { if (angDeg(p, c.dir) * DEG * R < c.radius) h = Math.max(h, c.top); }
   return h;
 }
 
@@ -985,6 +1003,9 @@ const player = {
   safe: dirFromLonLat(START[0], START[1]), safeFwd: new THREE.Vector3(0, 1, 0),
   safeNext: dirFromLonLat(START[0], START[1]), safeNextFwd: new THREE.Vector3(0, 1, 0), safeT: 0,
   mesh: makeBillboard(charTex, 1.25, 1.7), view: 0, frame: 0,
+  swimming: false, swimT: 0,                                      // 작업 B: 수영
+  hp: 100, maxHp: 100, mp: 50, maxMp: 50,                          // 작업 C: 체력·마나
+  hurtT: 0, dead: false, deadT: 0, target: null,
 };
 scene.add(player.mesh);
 charTex.offset.set(0, 0);
@@ -993,7 +1014,9 @@ charTex.offset.set(0, 0);
 const _np = new THREE.Vector3(), _nd = new THREE.Vector3(), _try = new THREE.Vector3();
 function canStand(dirUnit) {
   const h = walkH(dirUnit);
-  if (h - player.z > STEP_UP) return false;
+  // 땅 위를 걸을 땐 STEP_UP(0.45)보다 높은 턱을 못 넘는다. 공중(점프 중)이면 옆/위로 지나갈 수 있게 풀어 주고,
+  // 실제로 올라서는지는 수직 낙하 판정(step()의 ground 스냅)이 소품 높이에 닿아야만 결정한다 — 그래서 2단 점프라야 선돌(1.6)에 닿는다.
+  if (h - player.z > STEP_UP && player.grounded) return false;
   for (const t of trees) {                      // 나무 기둥 충돌
     const dd = angDeg(dirUnit, t.userData.dir) * DEG * R;
     if (dd < t.userData.radius + 0.35) return false;
@@ -1017,6 +1040,7 @@ function tryMove(dir, dist) {
 }
 // 점프: 땅(또는 코요테 시간 안)에서 1단, 공중에서 2단. 착지 직전 입력은 잠시 저장했다가 닿는 순간 뛴다.
 function tryJump() {
+  if (player.swimming || player.dead) return false;   // 작업 B/C: 헤엄칠 땐 점프 불가, 사망 중엔 조작 없음
   if (player.grounded || player.coyoteT > 0) { player.vz = JUMP_V; player.grounded = false; player.coyoteT = 0; player.jumps = 1; return true; }
   if (player.jumps < 2) { player.vz = JUMP2_V; player.jumps = 2; puff(); return true; }
   player.jumpBufT = JUMP_BUF;
@@ -1058,9 +1082,9 @@ const decor = [];
   // 갈대 — 물가(단구 가장자리·다리 양끝·슬라임 초원 남쪽)에 다발로
   const reeds = [[-7.4, 12], [7.6, 12.5], [-7.9, 18.5], [8, 19], [-2.6, 22.6], [2.7, 22.8], [-3, 30.2], [3.2, 30.4], [-6, 30.8], [6.5, 31], [-9, 34.5], [10.5, 36], [-12, 40], [-2.2, 21.9], [2.3, 29.6]];
   reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
-  // 돌덩이·유적 조각
+  // 돌덩이·유적 조각 — 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-6.5, 6.5], [8.2, 3.2], [-4, 32.5], [6.8, 38], [-9.5, 41.5], [11.5, 39.5], [-3.8, 17.8], [5.5, 14.2]];
-  stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); });
+  stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); addClimb(st.userData.dir, 0.5, 0.7); });
 }
 
 
@@ -1244,12 +1268,14 @@ const airship = addProp(airshipTex, 6.4, 4.8, -6.6, 4.9, { lift: 0.35 }); airshi
 addProp(signTex, 1.3, 1.75, 2.4, -1.6);
 addProp(lanternTex, 1.1, 1.5, -4.4, 2.6);
 addProp(starTex, 1.9, 1.9, 7.2, -4.6);
-// 계단 위 선돌 2기
-addProp(stoneTallTex, 1.3, 2.2, -1.7, 11.7); addProp(stoneTallTex, 1.2, 2.0, 1.7, 11.7);
-// 단구 야영지: 텐트·가마솥·상자
+// 계단 위 선돌 2기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6)
+[addProp(stoneTallTex, 1.3, 2.2, -1.7, 11.7), addProp(stoneTallTex, 1.2, 2.0, 1.7, 11.7)]
+  .forEach(m => addClimb(m.userData.dir, 0.5, 1.6));
+// 단구 야영지: 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
 addProp(tentTex, 4.4, 4.4, 3.6, 16.2);
 addProp(cauldronTex, 1.2, 1.2, 1.9, 15.3);
-addProp(crateTex, 1.0, 1.0, 4.9, 17.6); addProp(crateTex, 0.9, 0.9, 5.4, 16.9); addProp(crateTex, 0.9, 0.9, -1.2, 14.6);
+[addProp(crateTex, 1.0, 1.0, 4.9, 17.6), addProp(crateTex, 0.9, 0.9, 5.4, 16.9), addProp(crateTex, 0.9, 0.9, -1.2, 14.6)]
+  .forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
 addProp(lanternTex, 1.1, 1.5, 1.4, 22.7);
 // 다리 건너 돌 아치 (가운데가 비어 캐릭터가 지나간다)
 addProp(archTex, 5.6, 4.9, 0, 30.1);
@@ -1532,11 +1558,22 @@ function advanceQuest() {
   const q = QUESTS[quest.i];
   if ((q.kills && quest.kills >= q.kills) || (q.stars && quest.stars >= q.stars)) advanceQuest();
 }
-// 스킬바 16칸 (첫 칸 = 기본 공격 Z)
+// 작업 B: 스킬바 Z·X·C·V 네 칸 — Z는 기본 공격 고정, X·C·V는 로드맵 7 D에서 무직 스킬을 배우기 전까지 잠김
+const SKILL_KEYS = ['Z', 'X', 'C', 'V'];
+const skillEls = {};
 {
   const sk = document.getElementById('skills');
-  for (let i = 0; i < 16; i++) { const s = document.createElement('i'); if (i === 0) { s.className = 'f'; s.dataset.k = 'Z'; } else if (i < 8) s.dataset.k = String(i + 1); sk.appendChild(s); }
+  for (const key of SKILL_KEYS) {
+    const s = document.createElement('i'); s.dataset.k = key;
+    if (key === 'Z') s.className = 'f'; else s.className = 'locked';
+    sk.appendChild(s); skillEls[key] = s;
+  }
   const inv = document.querySelector('#inv .grid'); for (let i = 0; i < 30; i++) inv.appendChild(document.createElement('i'));
+}
+function skillSlot(k) {   // X·C·V — 아직 배운 스킬이 없다(작업 D에서 채워짐)
+  const key = k.toUpperCase();
+  if (key === 'Z') { attack(); return; }
+  log('아직 배운 스킬이 없다 — 스킬창(K)은 다음 로드맵에서.', 'sys');
 }
 updateQuestUI();
 
@@ -1568,11 +1605,14 @@ function updateTutArrows(nowS) {
 }
 
 // 슬라임 8마리 — 슬라임 초원(§3), 집 반경 3 안을 배회, 6 안에 들어오면 다가온다
+// 작업 C: 몬스터 2종 — 파란 슬라임(근접 돌진) · 가시 슬라임(내려찍기, 재해석 §11)
 const SLIME_HOMES = [[-6, 34.5], [-8.5, 37.5], [-4, 39.5], [5.5, 35.5], [7.5, 38.5], [4, 41.5], [-2, 43], [9, 42.5]];
 const slimes = SLIME_HOMES.map(([lon, lat], i) => {
   const home = dirFromLonLat(lon, lat);
   const m = makeBillboard(slimeTex[0], 1.1, 0.95); scene.add(m);
-  const s = { home, dir: home.clone(), mesh: m, alive: true, hp: 45, hopT: i * 1.3, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '슬라임 Lv.1'), flip: 1 };
+  const s = { home, dir: home.clone(), mesh: m, kind: 'blue', alive: true, hp: 30, maxHp: 30, exp: 12,
+    hopT: i * 1.3, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '슬라임 Lv.1'), flip: 1,
+    atkT: 0, engageT: 0, flashT: 0 };
   return s;
 });
 const _sd = new THREE.Vector3(), _sn = new THREE.Vector3();
@@ -1581,14 +1621,15 @@ function updateSlimes(dt) {
   for (const s of slimes) {
     if (!s.alive) {
       s.respawnT -= dt;
-      if (s.respawnT <= 0) { s.alive = true; s.hp = 45; s.dir.copy(s.home); s.mesh.visible = true; s.label.style.display = 'block'; }
+      if (s.respawnT <= 0) { s.alive = true; s.hp = s.maxHp; s.dir.copy(s.home); s.mesh.visible = true; s.label.style.display = 'block'; }
       else continue;
     }
     s.hopT += dt * 4.2;
     const dp = angDeg(s.dir, pdir) * DEG * R;
+    const detect = dp < 4;   // 작업 C: 감지 반경 4
     let target = null;
-    if (dp < 6 && dp > 1.05) target = pdir;
-    else {
+    if (detect && dp > 1.05) target = pdir;
+    else if (!detect) {
       s.wanderT -= dt;
       if (s.wanderT <= 0) { s.wanderT = 1.5 + Math.random() * 2.5; const a = Math.random() * Math.PI * 2; _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize(); s.wander.copy(_bn).multiplyScalar(Math.cos(a)).addScaledVector(_be, Math.sin(a)); if (Math.random() < 0.35) s.wander.set(0, 0, 0); }
       if (s.wander.lengthSq() > 0) target = _sn.copy(s.dir).addScaledVector(s.wander, 0.05).normalize();
@@ -1605,33 +1646,141 @@ function updateSlimes(dt) {
         const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
       }
     }
+    // 근접 돌진: 1.2 안에 0.6초 머물면 몸통 박치기(데미지 8, 쿨 1.5초)
+    s.atkT = Math.max(0, s.atkT - dt);
+    if (detect && dp < 1.2 && !player.dead) s.engageT += dt; else s.engageT = 0;
+    if (s.engageT > 0.6 && s.atkT <= 0) { s.atkT = 1.5; s.engageT = 0; hitPlayer(8, s.dir); }
     s.mesh.position.copy(s.dir).multiplyScalar(R + terrainH(s.dir) + 0.02 + hop * 0.35);
     orientBillboard(s.mesh, s.dir); s.mesh.userData.dir = s.dir;
     s.mesh.material.map = slimeTex[hop > 0.05 ? 0 : 1]; s.mesh.scale.x = s.flip;
+    if (s.flashT > 0) { s.mesh.material.color.setScalar(3); s.flashT -= dt; } else s.mesh.material.color.setHex(0xffffff);
   }
 }
-// 기본 공격 (Z / 클릭): 앞 1.4 안의 슬라임에 데미지, 3대면 소멸 → 10초 뒤 재생성
+// 가시 슬라임 — 슬라임 초원 안쪽 3마리. 근접하면 안 때리고, 거리 2.5~4에서 튀어 내려찍기(0.5초 그림자 예고 → 착지 반경 1.2, 데미지 14, 쿨 3초)
+const SPIKE_HOMES = [[0, 39.5], [-3.5, 36.5], [3.5, 43]];
+const spikeSlimes = SPIKE_HOMES.map(([lon, lat], i) => {
+  const home = dirFromLonLat(lon, lat);
+  const m = makeBillboard(slimeTex[0], 1.25, 1.05); scene.add(m); m.material = m.material.clone();
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(1.2, 18), new THREE.MeshBasicMaterial({ color: 0x1a0a22, transparent: true, opacity: 0.4, depthWrite: false }));
+  shadowMesh.visible = false; scene.add(shadowMesh);
+  return { home, dir: home.clone(), mesh: m, kind: 'spike', alive: true, hp: 45, maxHp: 45, exp: 20,
+    hopT: i * 1.7, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '가시 슬라임 Lv.2'), flip: 1,
+    atkT: 0, telegraphT: 0, slamDir: home.clone(), flashT: 0, shadowMesh };
+});
+function updateSpikes(dt) {
+  const pdir = _up;
+  for (const s of spikeSlimes) {
+    if (!s.alive) {
+      s.respawnT -= dt;
+      if (s.respawnT <= 0) { s.alive = true; s.hp = s.maxHp; s.dir.copy(s.home); s.mesh.visible = true; s.label.style.display = 'block'; }
+      else continue;
+    }
+    const dp = angDeg(s.dir, pdir) * DEG * R;
+    const detect = dp < 5;
+    if (s.telegraphT > 0) {
+      s.telegraphT -= dt;
+      if (s.telegraphT <= 0) {
+        s.shadowMesh.visible = false; s.dir.copy(s.slamDir); s.hopT = 0;
+        const stillIn = angDeg(s.dir, pdir) * DEG * R < 1.2;
+        if (stillIn && !player.dead) hitPlayer(14, s.dir);
+      }
+    } else {
+      s.hopT += dt * 3.6;
+      let target = null;
+      if (detect && dp > 2.6) target = pdir;   // 근접(<2.5)하면 다가가지도, 때리지도 않는다
+      else if (!detect) {
+        s.wanderT -= dt;
+        if (s.wanderT <= 0) { s.wanderT = 1.6 + Math.random() * 2.4; const a = Math.random() * Math.PI * 2; _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize(); s.wander.copy(_bn).multiplyScalar(Math.cos(a)).addScaledVector(_be, Math.sin(a)); if (Math.random() < 0.35) s.wander.set(0, 0, 0); }
+        if (s.wander.lengthSq() > 0) target = _sn.copy(s.dir).addScaledVector(s.wander, 0.05).normalize();
+      }
+      const hop = Math.max(0, Math.sin(s.hopT));
+      if (target && hop > 0) {
+        _sd.copy(target).sub(s.dir); tangentize(_sd, s.dir);
+        if (_sd.lengthSq() > 1e-8) {
+          _sd.normalize();
+          _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.1 : 0.8) * dt / R).normalize();
+          const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
+          if (th > WATER + 0.4 && fromHome < (target === pdir ? 6 : 3)) s.dir.copy(_sn);
+          _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
+          const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
+        }
+      }
+      s.atkT = Math.max(0, s.atkT - dt);
+      if (detect && dp >= 2.5 && dp <= 4 && s.atkT <= 0 && !player.dead) {
+        s.atkT = 3; s.telegraphT = 0.5; s.slamDir.copy(pdir);
+        s.shadowMesh.visible = true; s.shadowMesh.position.copy(pdir).multiplyScalar(R + terrainH(pdir) + 0.03);
+        s.shadowMesh.quaternion.setFromUnitVectors(_ringN, pdir);
+      }
+    }
+    const hop = s.telegraphT > 0 ? 0.9 : Math.max(0, Math.sin(s.hopT));
+    s.mesh.position.copy(s.dir).multiplyScalar(R + terrainH(s.dir) + 0.02 + hop * 0.35);
+    orientBillboard(s.mesh, s.dir); s.mesh.userData.dir = s.dir;
+    s.mesh.material.map = slimeTex[hop > 0.05 ? 0 : 1]; s.mesh.scale.x = s.flip;
+    if (s.flashT > 0) { s.mesh.material.color.setScalar(3); s.flashT -= dt; } else s.mesh.material.color.setHex(0xcf7bd6);
+  }
+}
+function allMonsters() { return slimes.concat(spikeSlimes); }
+// 몬스터끼리 겹치지 않게 서로 밀어냄
+function separateMonsters() {
+  const all = allMonsters().filter(s => s.alive);
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i], b = all[j], d = angDeg(a.dir, b.dir) * DEG * R;
+    if (d > 1e-4 && d < 0.9) {
+      _sd.copy(a.dir).sub(b.dir); tangentize(_sd, a.dir);
+      if (_sd.lengthSq() > 1e-8) { _sd.normalize(); const push = (0.9 - d) * 0.5 / R; a.dir.addScaledVector(_sd, push).normalize(); b.dir.addScaledVector(_sd, -push).normalize(); }
+    }
+  }
+}
+// 대상 조준: Tab으로 감지된 몬스터를 순환, 없으면 공격 시 가장 가까운 쪽으로 자동으로 돈다
+function cycleTarget() {
+  const mons = allMonsters().filter(s => s.alive && angDeg(s.dir, _up) * DEG * R < 8);
+  if (!mons.length) { player.target = null; return; }
+  mons.sort((a, b) => angDeg(a.dir, _up) - angDeg(b.dir, _up));
+  const idx = player.target ? mons.indexOf(player.target) : -1;
+  player.target = mons[(idx + 1) % mons.length];
+}
+function nearestMonster(maxD) {
+  let best = null, bd = maxD;
+  for (const s of allMonsters()) { if (!s.alive) continue; const d = angDeg(s.dir, _up) * DEG * R; if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+// 기본 공격 (Z / 클릭): 전방 부채꼴(약 120°) 안 가까운 순 최대 3마리
 const slash = makeBillboard(slashTex, 1.6, 1.2, { shadow: false }); slash.visible = false; scene.add(slash);
 let attackT = 0, slashT = 0;
 const dmgPops = [];
+function dealDamage(s, dmg) {
+  s.hp -= dmg; s.hopT = Math.PI * 0.5; s.flashT = 0.14;
+  const el = makeLabel('dmg', String(dmg)); dmgPops.push({ el, pos: s.mesh.position.clone(), dir: s.dir.clone(), t: 0 });
+  _sd.copy(s.dir).sub(_up); tangentize(_sd, _up);   // 넉백
+  if (_sd.lengthSq() > 1e-8) { _sd.normalize(); s.dir.addScaledVector(_sd, 0.6 / R).normalize(); }
+  if (s.hp <= 0) {
+    s.alive = false; s.respawnT = 12; s.mesh.visible = false; s.label.style.display = 'none';
+    if (s.kind === 'spike') { s.shadowMesh.visible = false; s.telegraphT = 0; }
+    if (player.target === s) player.target = null;
+    exp = Math.min(1, exp + (s.kind === 'blue' ? 0.05 : 0.08));
+    if (s.kind === 'blue') {
+      quest.kills++; log('파란 슬라임을 쓰러뜨렸다.');
+      if (QUESTS[quest.i].kills && quest.kills >= QUESTS[quest.i].kills) { log('슬라임 3마리 처치 완료! 수문장 벨라에게 돌아가자.', 'sys'); advanceQuest(); }
+    } else log('가시 슬라임을 쓰러뜨렸다.');
+    updateQuestUI();
+  }
+}
 function attack() {
-  if (attackT > 0 || dialog.open || cut.on) return;
+  if (attackT > 0 || dialog.open || cut.on || player.dead) return;
   attackT = 0.38; slashT = 0.16;
+  const aim = (player.target && player.target.alive && angDeg(player.target.dir, _up) * DEG * R < 6) ? player.target : nearestMonster(6);
+  if (aim) { _sd.copy(aim.dir).sub(_up); tangentize(_sd, _up); if (_sd.lengthSq() > 1e-8) { _sd.normalize(); player.fwd.copy(_sd); } }
   slash.visible = true; slash.position.copy(player.pos).addScaledVector(player.fwd, 0.9).addScaledVector(_up, 0.2); orientBillboard(slash, _up); slash.userData.dir = _up.clone();
-  for (const s of slimes) {
+  const candidates = [];
+  for (const s of allMonsters()) {
     if (!s.alive) continue;
     const d = angDeg(s.dir, _up) * DEG * R; if (d > 1.5) continue;
-    _sd.copy(s.dir).sub(_up); tangentize(_sd, _up); if (_sd.dot(player.fwd) < 0) continue;
-    const dmg = 12 + Math.floor(Math.random() * 7);
-    s.hp -= dmg; s.hopT = Math.PI * 0.5;
-    const el = makeLabel('dmg', String(dmg)); dmgPops.push({ el, pos: s.mesh.position.clone(), dir: s.dir.clone(), t: 0 });
-    if (s.hp <= 0) {
-      s.alive = false; s.respawnT = 10; s.mesh.visible = false; s.label.style.display = 'none';
-      quest.kills++; exp = Math.min(1, exp + 0.05); log('파란 슬라임을 쓰러뜨렸다.');
-      if (QUESTS[quest.i].kills && quest.kills >= QUESTS[quest.i].kills) { log('슬라임 3마리 처치 완료! 수문장 벨라에게 돌아가자.', 'sys'); advanceQuest(); }
-      updateQuestUI();
-    }
+    _sn.copy(s.dir).sub(_up); tangentize(_sn, _up); if (_sn.lengthSq() < 1e-8) continue; _sn.normalize();
+    if (_sn.dot(player.fwd) < 0.5) continue;   // 전방 약 ±60°
+    candidates.push({ s, d });
   }
+  candidates.sort((a, b) => a.d - b.d);
+  for (const { s } of candidates.slice(0, 3)) dealDamage(s, 12 + Math.floor(Math.random() * 7));
 }
 function updateCombat(dt) {
   attackT = Math.max(0, attackT - dt);
@@ -1641,6 +1790,20 @@ function updateCombat(dt) {
     if (p.t > 0.85) { p.el.remove(); dmgPops.splice(i, 1); continue; }
     _headPos.copy(p.pos).addScaledVector(p.dir, 0.9 + p.t * 1.4); placeLabel(p.el, _headPos); p.el.style.opacity = String(1 - p.t / 0.85);
   }
+  // 사망·부활, 자연 회복(5초 안 맞으면 HP 초당 2, MP 초당 1)
+  if (player.dead) {
+    player.deadT += dt;
+    if (player.deadT > 2) {
+      player.dead = false; deathFadeEl.classList.remove('on');
+      respawn(); player.hp = Math.round(player.maxHp * 0.5); player.hurtT = 5;
+      log('마지막 안전 지점에서 다시 일어났다.', 'sys');
+    }
+  } else {
+    player.hurtT += dt;
+    if (player.hurtT > 5 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + 2 * dt);
+    if (player.mp < player.maxMp) player.mp = Math.min(player.maxMp, player.mp + 1 * dt);
+  }
+  updateHUD();
 }
 
 // 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
@@ -1651,6 +1814,21 @@ const puffTex = spriteTex(96, 48, (g, W, H) => { g.strokeStyle = 'rgba(255,255,2
 const puffMesh = makeBillboard(puffTex, 1.4, 0.7, { shadow: false }); puffMesh.material.transparent = true; puffMesh.material.alphaTest = 0.1; puffMesh.visible = false; scene.add(puffMesh); let puffT = 0;
 function puff() { puffT = 0.3; puffMesh.visible = true; puffMesh.position.copy(player.pos).addScaledVector(_up, 0.05); orientBillboard(puffMesh, _up); puffMesh.scale.set(1, 1, 1); }
 function updatePuff(dt) { if (puffT <= 0) return; puffT -= dt; const k = 1 - puffT / 0.3; puffMesh.scale.set(1 + k * 0.8, 1 + k * 0.8, 1); puffMesh.material.opacity = 1 - k; if (puffT <= 0) puffMesh.visible = false; }
+// 작업 B: 헤엄칠 때 발치의 물결 링 (그림 없이 평평한 링 메시로 — 물 위에 눕혀 퍼졌다 사라진다)
+const _ringN = new THREE.Vector3(0, 0, 1);
+const swimClipPlane = new THREE.Plane();
+const rippleMesh = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.5, 20), new THREE.MeshBasicMaterial({ color: 0xdff3ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, fog: true }));
+rippleMesh.visible = false; scene.add(rippleMesh); let rippleT = 0;
+function swimRipple() { rippleT = 0; }
+function updateRipple(dt) {
+  if (!player.swimming) { rippleMesh.visible = false; return; }
+  rippleT += dt; const cyc = 0.9, k = (rippleT % cyc) / cyc;
+  rippleMesh.visible = true;
+  rippleMesh.position.copy(player.pos).addScaledVector(_up, 0.38);   // player.z는 수면보다 0.35 낮게 고정돼 있으므로 그만큼 올려 수면에 맞춘다
+  rippleMesh.quaternion.setFromUnitVectors(_ringN, _up);
+  rippleMesh.scale.setScalar(0.6 + k * 1.8);
+  rippleMesh.material.opacity = 0.5 * (1 - k);
+}
 function updateStars(dt) {
   for (const st of STARS) {
     if (st.found) continue;
@@ -1669,8 +1847,9 @@ function updateStars(dt) {
 const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null };
 const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt');
 let nearNpc = null;
-const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>Space Bar</b>대화하기'; tipEl.style.display = 'none';
+const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';
 const myLabel = makeLabel('me', '탐사자');
+const targetLabel = makeLabel('target', '▾'); targetLabel.style.display = 'none';   // 작업 C: Tab으로 고른 대상 표시
 function openDialog(n) {
   const q = QUESTS[quest.i];
   let lines, onEnd = null;
@@ -1689,6 +1868,23 @@ function advanceDialog() {
 }
 // 인벤토리 (I)
 const invEl = document.getElementById('inv'); let invOpen = false;
+// 작업 C: HP/MP HUD·피격 비네트·사망 페이드
+const hpNumEl = document.getElementById('hpNum'), mpNumEl = document.getElementById('mpNum');
+const vignetteEl = document.getElementById('vignette'), deathFadeEl = document.getElementById('deathFade');
+function updateHUD() { hpNumEl.textContent = Math.round(player.hp); mpNumEl.textContent = Math.round(player.mp); }
+function hitPlayer(dmg, fromDir) {
+  if (player.dead) return;
+  player.hp = Math.max(0, player.hp - dmg); player.hurtT = 0;
+  vignetteEl.classList.add('hit'); setTimeout(() => vignetteEl.classList.remove('hit'), 200);
+  _sd.copy(_up).sub(fromDir); tangentize(_sd, _up);
+  if (_sd.lengthSq() > 1e-8) { _sd.normalize(); const nd = _sn.copy(_up).addScaledVector(_sd, 0.4 / R).normalize(); if (canStand(nd)) player.pos.copy(nd).multiplyScalar(R + player.z); }
+  updateHUD();
+  if (player.hp <= 0) startDeath();
+}
+function startDeath() {
+  player.dead = true; player.deadT = 0; keys.clear(); player.moving = false;
+  deathFadeEl.classList.add('on'); log('쓰러졌다...', 'sys');
+}
 function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) keys.clear(); }
 
 // 시작 컷신 (1:30~1:40): 높은 곳에서 내려오는 카메라, 비행정 하강·착지, 캐릭터 등 뒤로 붙음, 지역명
@@ -1697,7 +1893,7 @@ const cutEl = document.getElementById('cut');
 const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _cn = new THREE.Vector3(), _ce = new THREE.Vector3();
 const easeOut = (x) => 1 - Math.pow(1 - x, 3), smooth = (x) => x * x * (3 - 2 * x);
 function startCutscene() { cut.on = true; cut.t = 0; cutEl.style.display = 'block'; player.mesh.visible = false; myLabel.style.display = 'none'; }
-function endCutscene() { cut.on = false; cutEl.style.display = 'none'; player.mesh.visible = true; airship.userData.alt = 0; zoneShown = true; showZoneName(); log('별내림 천문대에 도착했다. 항해사 미르에게 말을 걸어 보자 (Space Bar).', 'sys'); }
+function endCutscene() { cut.on = false; cutEl.style.display = 'none'; player.mesh.visible = true; airship.userData.alt = 0; zoneShown = true; showZoneName(); log('별내림 천문대에 도착했다. 항해사 미르에게 말을 걸어 보자 (F 키).', 'sys'); }
 function updateCutscene(dt) {
   cut.t += dt;
   const base = airship.userData.base, bd = base.clone().normalize();
@@ -1725,7 +1921,9 @@ function updateLabels() {
     if (angDeg(n.dir, _up) * DEG * R > LABEL_DIST) { n.label.style.display = 'none'; continue; }
     placeLabel(n.label, headOf(n.mesh, 1.95)); n.label.classList.toggle('q', QUESTS[quest.i].npc === n.id);
   }
-  for (const s of slimes) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R > LABEL_DIST) s.label.style.display = 'none'; else placeLabel(s.label, headOf(s.mesh, 1.15)); }
+  for (const s of allMonsters()) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R > LABEL_DIST) s.label.style.display = 'none'; else placeLabel(s.label, headOf(s.mesh, 1.15)); }
+  if (player.target && player.target.alive && angDeg(player.target.dir, _up) * DEG * R < LABEL_DIST) placeLabel(targetLabel, headOf(player.target.mesh, 1.75));
+  else targetLabel.style.display = 'none';
 }
 
 // ── 입력 ─────────────────────────────────────────────────────────────────────
@@ -1742,9 +1940,14 @@ addEventListener('keydown', (e) => {
   if (k === 'q') { cycleQuality(); return; }
   if (dialog.open) { if (k === ' ') { e.preventDefault(); advanceDialog(); } return; }
   if (invOpen) return;
+  if (player.dead) return;   // 작업 C: 주저앉아 있는 동안엔 조작 없음
   keys.add(k);
-  if (k === ' ') { e.preventDefault(); if (nearNpc) openDialog(nearNpc); else tryJump(); }
+  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·채집·이슬·포탈), Z~V가 공격·스킬
+  if (k === ' ') { e.preventDefault(); tryJump(); }
+  if (k === 'f') { if (nearNpc) openDialog(nearNpc); }
   if (k === 'z') attack();
+  if (k === 'x' || k === 'c' || k === 'v') skillSlot(k);
+  if (k === 'tab') { e.preventDefault(); cycleTarget(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
@@ -1782,7 +1985,7 @@ function step(dt) {
   if (keys.has('s') || keys.has('arrowdown')) iy -= 1;
   if (keys.has('d') || keys.has('arrowright')) ix += 1;
   if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
-  if (cut.on || dialog.open || invOpen) { ix = 0; iy = 0; }   // 컷신·대화·가방 중엔 안 움직인다
+  if (cut.on || dialog.open || invOpen || player.dead) { ix = 0; iy = 0; }   // 컷신·대화·가방·사망 중엔 안 움직인다
   player.moving = (ix !== 0 || iy !== 0);
   if (player.moving) {
     _dir.copy(cam.fwd).multiplyScalar(iy).addScaledVector(_right, ix).normalize();
@@ -1792,9 +1995,9 @@ function step(dt) {
     const maxT = TURN * dt;
     d = Math.max(-maxT, Math.min(maxT, d));
     rotateAround(player.fwd, _up, -d);
-    const speed = WALK * (player.inShallow ? 0.55 : 1);
+    const speed = WALK * (player.inShallow || player.swimming ? 0.55 : 1);
     tryMove(_dir, speed * dt);
-    player.walkT += dt * (player.inShallow ? 6 : 9);
+    player.walkT += dt * (player.inShallow || player.swimming ? 6 : 9);
   }
 
   // 수직: 중력 / 착지 / 내리막 붙기
@@ -1812,20 +2015,31 @@ function step(dt) {
   tangentize(player.fwd, _up);
   cam.fwd.set(0, 1, 0); tangentize(cam.fwd, _up);
 
-  // 물: 얕으면 느리게, 깊으면 마지막 육지로 복귀 (로드맵 5 B 규칙 그대로)
+  // 물: 얕으면 느리게, 깊으면(수면보다 1.2 아래 바닥) 헤엄친다 — 작업 B, 로드맵 5 B의 즉시 복귀를 대체
   const th = terrainH(_up);
   const onStructure = ground > th + 0.3;
-  player.inShallow = !onStructure && player.grounded && th < WATER + 0.25 && th > WATER - 0.9;
-  if (!onStructure && player.grounded && th <= WATER - 0.9) {
-    respawn();
-  } else if (player.grounded && th > WATER + 0.3) {
-    // 안전 지점은 0.8초마다 갱신 — 절벽 끝이 아니라 그 조금 전 자리로 돌아오게
-    player.safeT += dt;
-    if (player.safeT > 0.8) { player.safeT = 0; player.safe.copy(player.safeNext); player.safeFwd.copy(player.safeNextFwd); player.safeNext.copy(_up); player.safeNextFwd.copy(player.fwd); }
+  const wasSwimming = player.swimming;
+  player.swimming = !onStructure && th <= WATER - 1.2;
+  player.inShallow = !onStructure && !player.swimming && player.grounded && th < WATER + 0.25 && th > WATER - 1.2;
+  if (player.swimming) {
+    if (!wasSwimming) { player.swimT = 0; swimRipple(); player.mesh.material.clippingPlanes = [swimClipPlane]; }
+    player.swimT += dt;
+    player.z = WATER - 0.35; player.vz = 0; player.grounded = false; player.jumps = 2;   // 머리만 수면 위 — 점프 불가(jumps 소진 처리)
+    player.pos.copy(_up).multiplyScalar(R + player.z);
+    swimClipPlane.setFromNormalAndCoplanarPoint(_up, _up.clone().multiplyScalar(R + WATER + 0.12));   // 캐릭터 판을 수면에서 자른다(머리만 보이게)
+    if (player.swimT > 8) { respawn(); player.swimming = false; }   // 나갈 곳 없는 물(절벽 아래 웅덩이 등) — 마지막 물가로
+  } else {
+    if (wasSwimming) player.mesh.material.clippingPlanes = [];
+    if (player.grounded && th > WATER + 0.3) {
+      // 안전 지점은 0.8초마다 갱신 — 절벽 끝이 아니라 그 조금 전 자리로 돌아오게
+      player.safeT += dt;
+      if (player.safeT > 0.8) { player.safeT = 0; player.safe.copy(player.safeNext); player.safeFwd.copy(player.safeNextFwd); player.safeNext.copy(_up); player.safeNextFwd.copy(player.fwd); }
+    }
   }
 
   // 캐릭터 스프라이트: 진행 방향에 따라 뒤/앞/옆 그림, 걷는 동안 2프레임 교대
   player.mesh.position.copy(player.pos);
+  if (player.dead) player.mesh.position.addScaledVector(_up, -0.3);   // 작업 C: 주저앉음(그림 추가 없이 판을 낮춘다)
   orientBillboard(player.mesh, _up);
   {
     _right.crossVectors(cam.fwd, _up).normalize();
@@ -1848,7 +2062,7 @@ function step(dt) {
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     for (const b of beams) b.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
-    updateSlimes(dt); updateCombat(dt); updateStars(dt); updatePuff(dt);
+    updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt);
     updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
     nearNpc = null; let best = 2.4;
     for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
@@ -2423,6 +2637,11 @@ if (DEBUG) {
     jump() { return tryJump(); },
     NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
     nearNpc() { return nearNpc; },
+    // 작업 B/C 검증용
+    spikeSlimes, allMonsters, climbProps, hitPlayer, dealDamage, cycleTarget, skillSlot,
+    target() { return player.target; },
+    respawn, startDeath,
+    swim() { return { swimming: player.swimming, swimT: player.swimT, z: player.z }; },
     SPRITES, planet,
     perf() { return { dpr, quality, qualityMode, frameMs, gpu: GPU_NAME, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     setQuality(q) { qualityMode = q; applyQuality(q, 'debug'); },
