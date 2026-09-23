@@ -143,6 +143,22 @@
   #questWin .row .info b { color: #ffd166; }
   #questWin .row .info .d { opacity: .75; font-size: 11px; }
   #questWin .foot { margin-top: 4px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .85; }
+  /* 작업 F: 캐릭터·모험 기록 창(P) — 퀘스트창과 같은 양피지 스타일 */
+  #charWin { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14;
+    border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); width: 320px; max-height: 80vh; overflow-y: auto; }
+  #charWin h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
+  #charWin .row { padding: 7px 8px; margin-bottom: 5px; background: #4a3219; border: 1px solid #2f1e0c; border-radius: 6px; }
+  #charWin .row.sel { outline: 2px solid #ffd166; }
+  #charWin .row .info { font-size: 12px; color: #fdf4de; line-height: 1.4; }
+  #charWin .row .info b { color: #ffd166; }
+  #charWin .row .info .d { opacity: .75; font-size: 11px; }
+  #charWin .foot { margin-top: 4px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .85; }
+  /* 작업 F: 채집 진행 바 */
+  #forageBar { position: fixed; left: 50%; bottom: 172px; transform: translateX(-50%); width: 160px; height: 14px; background: rgba(16,20,30,.75);
+    border: 1px solid rgba(255,255,255,.35); border-radius: 7px; display: none; z-index: 4; }
+  #forageBar .track { width: 100%; height: 100%; overflow: hidden; border-radius: 6px; }
+  #forageBar i { display: block; height: 100%; width: 0%; background: #ffe066; }
+  #forageBar span { position: absolute; left: 50%; top: -18px; transform: translateX(-50%); font-size: 11px; color: #fdf4de; text-shadow: 0 1px 2px #000; white-space: nowrap; }
   #cut { position: fixed; inset: 0; display: none; pointer-events: none; }
   #cut .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; } #cut .top { top: 0; } #cut .bot { bottom: 0; }
   #cut .skip { position: absolute; right: 18px; bottom: 11%; font-size: 12px; opacity: .85; text-shadow: 0 1px 2px #000; }
@@ -162,7 +178,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용(길게: 채집) <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>P</b>기록 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
 <div id="fps"></div>
 <div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
@@ -181,6 +197,8 @@
 <div id="inv"><h3>인벤토리</h3><div class="grid"></div><div class="foot">I 닫기</div></div>
 <div id="skillWin"><h3>무직 스킬</h3><div class="rows"></div><div class="foot">K 닫기</div></div>
 <div id="questWin"><h3>퀘스트</h3><div class="rows"></div><div class="foot">J 닫기</div></div>
+<div id="charWin"><h3>모험 기록</h3><div class="rows"></div><div class="foot">P 닫기</div></div>
+<div id="forageBar"><div class="track"><i></i></div><span id="forageLabel"></span></div>
 <div id="cut"><div class="bar top"></div><div class="bar bot"></div><div class="skip"><b>Space</b> 건너뛰기</div></div>
 
 <script type="module">
@@ -1062,8 +1080,8 @@ const player = {
   level: 1, xp: 0, sp: 0,                                          // 작업 D: 레벨·경험치·스킬 포인트
   stamina: 100, staminaMax: 100,                                    // 작업 D: 기력
   skillLv: { stomp: 0, spin: 0, heal: 0 }, slotSkill: { X: null, C: null, V: null },
-  seeds: 0, inv: { jelly: 0, spike: 0, hpPot: 0, mpPot: 0 },
-  potCdHp: 0, potCdMp: 0, restCd: 0,
+  seeds: 0, inv: { jelly: 0, spike: 0, hpPot: 0, mpPot: 0, dew: 0, forage: 0, milk: 0, veg: 0 },
+  potCdHp: 0, potCdMp: 0, restCd: 0, cowCd: 0,   // 작업 F: 소 착유 쿨다운
 };
 scene.add(player.mesh);
 charTex.offset.set(0, 0);
@@ -1113,6 +1131,7 @@ function respawn() {
 
 const trees = [];
 const decor = [];
+const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길게 눌러 채집)
 {
   // 좌표 직접 배치(§10 원칙). 초원 가장자리 링, 단구 야영지 구석, 슬라임 초원, 벽 바깥 언덕.
   const spots = [
@@ -1134,9 +1153,11 @@ const decor = [];
   const bushes = [[-6, -3.5], [7, -2.5], [-3.5, 8.2], [4, 10], [-7.5, 13], [8, 14.5], [-6, 33], [7.5, 35], [-3, 41], [5, 42.5]];
   bushes.forEach(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); });
   const flowers = [[-2.5, -4.5, 'yellow'], [-3.5, -5.2, 'yellow'], [3, -5, 'white'], [-5, 2.5, 'yellow'], [5.5, 3, 'yellow'], [6.2, 2.4, 'white'], [-2, 12.5, 'yellow'], [2.5, 17, 'white'], [-4.5, 31, 'yellow'], [3, 34, 'yellow'], [-7, 37, 'white'], [8, 40, 'yellow']];
-  flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f); });
+  flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
+    if (c === 'white') forageNodes.push({ mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 }); });   // 작업 F: 흰 꽃은 채집 대상
   const mush = [[-4.2, 1.2, 'blue'], [-4.8, 0.6, 'blue'], [6, -1, 'red'], [-8.5, -1, 'red'], [9, 8.5, 'red'], [-9.5, 35, 'red'], [10, 42, 'red']];
-  mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m); });
+  mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
+    forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 작업 F: 버섯은 전부 채집 대상
   // 갈대 — 물가(단구 가장자리·다리 양끝·슬라임 초원 남쪽)에 다발로
   const reeds = [[-7.4, 12], [7.6, 12.5], [-7.9, 18.5], [8, 19], [-2.6, 22.6], [2.7, 22.8], [-3, 30.2], [3.2, 30.4], [-6, 30.8], [6.5, 31], [-9, 34.5], [10.5, 36], [-12, 40], [-2.2, 21.9], [2.3, 29.6]];
   reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
@@ -1301,6 +1322,52 @@ function drawChevronTex(g, W, H) {
   g.fillStyle = 'rgba(255,215,60,0.85)'; g.strokeStyle = 'rgba(160,110,10,0.7)'; g.lineWidth = 4;
   g.beginPath(); g.moveTo(W * 0.5, H * 0.08); g.lineTo(W * 0.92, H * 0.6); g.lineTo(W * 0.72, H * 0.6); g.lineTo(W * 0.5, H * 0.34); g.lineTo(W * 0.28, H * 0.6); g.lineTo(W * 0.08, H * 0.6); g.closePath(); g.fill(); g.stroke();
 }
+// ── 작업 F: 생활·기록 — 이슬·소·밭 placeholder 그림 (정식 에셋은 로드맵 8로 미룸, §11 원칙과 동일) ──
+function drawDewSprite(g, W, H) {
+  const cx = W / 2;
+  g.fillStyle = 'rgba(160,220,255,0.85)'; g.strokeStyle = 'rgba(60,140,200,0.8)'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(cx, H * 0.1); g.quadraticCurveTo(cx + W * 0.38, H * 0.55, cx, H * 0.92); g.quadraticCurveTo(cx - W * 0.38, H * 0.55, cx, H * 0.1); g.closePath(); g.fill(); g.stroke();
+  blob(g, cx - W * 0.1, H * 0.42, W * 0.09, H * 0.06, 'rgba(255,255,255,0.75)');
+}
+const dewTex = spriteTex(48, 64, drawDewSprite, 'dew');
+function drawCowSprite(g, W, H) {
+  const cx = W / 2, line = '#3a2a1a';
+  // 다리
+  g.fillStyle = '#f4efe4'; g.strokeStyle = line; g.lineWidth = 2.5;
+  for (const dx of [-0.28, -0.1, 0.1, 0.28]) { g.beginPath(); g.roundRect(cx + dx * W - 5, H * 0.72, 10, H * 0.24, 3); g.fill(); g.stroke(); }
+  // 몸통
+  blob(g, cx, H * 0.58, W * 0.42, H * 0.24, '#fbf8f0', line, 3.5);
+  // 검은 무늬
+  g.fillStyle = '#3a2f28';
+  blob(g, cx - W * 0.14, H * 0.5, W * 0.13, H * 0.11, '#3a2f28');
+  blob(g, cx + W * 0.2, H * 0.62, W * 0.1, H * 0.08, '#3a2f28');
+  // 머리
+  blob(g, cx + W * 0.34, H * 0.42, W * 0.18, H * 0.16, '#fbf8f0', line, 3);
+  blob(g, cx + W * 0.4, H * 0.46, W * 0.06, H * 0.05, '#ffd9c0');   // 코
+  // 귀·뿔
+  blob(g, cx + W * 0.24, H * 0.3, W * 0.06, H * 0.05, '#f4efe4', line, 2);
+  g.strokeStyle = '#d8c9a8'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx + W * 0.3, H * 0.28); g.lineTo(cx + W * 0.32, H * 0.18); g.stroke();
+  // 꼬리
+  g.strokeStyle = '#c9b896'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx - W * 0.4, H * 0.5); g.quadraticCurveTo(cx - W * 0.5, H * 0.68, cx - W * 0.44, H * 0.8); g.stroke();
+}
+const cowTex = spriteTex(160, 112, drawCowSprite, 'cow');
+function drawFarmSprite(g, W, H, stage) {
+  const cx = W / 2;
+  // 흙 이랑(공통)
+  g.fillStyle = '#7a5a34'; g.strokeStyle = '#4a331c'; g.lineWidth = 2.5;
+  g.beginPath(); g.roundRect(cx - W * 0.46, H * 0.6, W * 0.92, H * 0.34, 6); g.fill(); g.stroke();
+  g.strokeStyle = 'rgba(50,32,14,0.5)'; g.lineWidth = 1.5;
+  for (let i = 0; i < 4; i++) { const x = cx - W * 0.36 + i * W * 0.24; g.beginPath(); g.moveTo(x, H * 0.64); g.lineTo(x, H * 0.9); g.stroke(); }
+  if (stage === 1) {   // 자라는 중 — 새싹
+    for (const dx of [-0.26, -0.04, 0.2]) blob(g, cx + dx * W, H * 0.56, W * 0.05, H * 0.1, '#5cbf38', '#2f7a22', 2);
+  } else if (stage === 2) {   // 다 자람 — 열매
+    for (const dx of [-0.26, -0.02, 0.24]) {
+      blob(g, cx + dx * W, H * 0.42, W * 0.06, H * 0.14, '#5cbf38', '#2f7a22', 2);
+      blob(g, cx + dx * W, H * 0.34, W * 0.09, H * 0.08, '#e8622f', '#8a3010', 2);
+    }
+  }
+}
+const farmTex = [0, 1, 2].map(stage => spriteTex(128, 72, (g, W, H) => drawFarmSprite(g, W, H, stage), 'farm_' + stage));
 const airshipTex = spriteTex(256, 192, drawAirshipSprite, 'airship');
 const tentTex = spriteTex(192, 192, drawTentSprite, 'tent');
 const cauldronTex = spriteTex(96, 96, drawCauldronSprite, 'cauldron');
@@ -1335,6 +1402,11 @@ addProp(cauldronTex, 1.2, 1.2, 1.9, 15.3);
 const campCrates = [addProp(crateTex, 1.0, 1.0, 4.9, 17.6), addProp(crateTex, 0.9, 0.9, 5.4, 16.9), addProp(crateTex, 0.9, 0.9, -1.2, 14.6)];   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
 campCrates.forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
 addProp(lanternTex, 1.1, 1.5, 1.4, 22.7);
+// 작업 F: 소·밭 — 원작 로드맵 5(2D)에만 있던 생활 요소, 3D 재구축본엔 없어 이번에 새로 배치한다(§11 신규 배치 원칙)
+// 근접 판정 반경(각 1.6)이 겹치지 않도록 넉넉히 띄워 배치 — F 힌트가 항상 소 쪽으로만 뜨는 걸 막는다
+const cowProp = addProp(cowTex, 2.4, 1.7, 6.6, 17.6);
+const farmProp = addProp(farmTex[0], 2.6, 1.5, 8.0, 14.3, { shadow: false });
+let farmStage = 0, farmTimer = 0;   // 0=빈 밭, 1=자라는 중, 2=수확 가능
 // 다리 건너 돌 아치 (가운데가 비어 캐릭터가 지나간다)
 addProp(archTex, 5.6, 4.9, 0, 30.1);
 // 슬라임 초원: 표지판·별 받침대
@@ -1347,12 +1419,19 @@ const waterfall = (() => {
   const dir = dirFromLonLat(-9.4, 15.5);
   const m = makeBillboard(waterfallTex, 2.4, 5.2, { shadow: false });
   m.material.transparent = true; m.material.alphaTest = 0.1; m.material.opacity = 0.95;
-  m.position.copy(dir).multiplyScalar(R + WATER - 0.2); orientBillboard(m, dir);
+  m.position.copy(dir).multiplyScalar(R + WATER - 0.2); orientBillboard(m, dir); m.userData.dir = dir;   // 작업 F: 근접 판정(도달 기록)용
   m.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -0.55)); scene.add(m);
   const foam = makeBillboard(foamTex, 3.6, 1.1, { shadow: false }); foam.material.alphaTest = 0.1;
   foam.position.copy(dirFromLonLat(-9.5, 15.5)).multiplyScalar(R + WATER + 0.05); orientBillboard(foam, dirFromLonLat(-9.5, 15.5)); scene.add(foam);
   return m;
 })();
+// 작업 F: 이슬 수집 지점 2곳 — ①폭포 옆 물보라 자리, ②"샘물/개울 상류 여울"은 3D 재구축본에 해당 지형이 없어
+// 다리 북단 갈대숲(원문에서 가장 가까운 물가 지형)으로 대신한다(§11 재해석 원칙)
+const dewNodes = [[-9.7, 15.8], [-2.4, 22.2]].map(([lon, lat]) => {
+  const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
+  scene.add(m);
+  return { mesh: m, dir: m.userData.dir, avail: true, cd: 0 };
+});
 // 떨어진 별 빛기둥
 function addBeam(lon, lat) {
   const dir = dirFromLonLat(lon, lat);
@@ -1646,8 +1725,8 @@ function deliverStar() {
   updateQuestUI();
 }
 
-// 작업 E: 일반 퀘스트(NPC 사연) — 행성 퀘스트 수락 후에만 제안됨. 4번째(미르의 "이슬 한 모금")는
-// 이슬 수집 메커니즘 자체가 아직 없어(작업 F 몫) 이번엔 넣지 않음 — §11 재해석·이연 원칙과 동일하게 처리
+// 작업 E: 일반 퀘스트(NPC 사연) — 행성 퀘스트 수락 후에만 제안됨.
+// 작업 F: 4번째(미르의 "이슬 한 모금") — 작업 E에서 이슬 수집 메커니즘이 없어 미뤘던 것을, 이번에 이슬이 생겨 추가한다.
 const SIDE_QUESTS = [
   { id: 'cargo', npc: 'sailor', title: '비행정 부품 점검', target: 3,
     offer: ['착륙할 때 덜컹거리더니 부품 몇 개가 빠진 것 같아.', '야영지 근처 상자 세 개에 나눠 실어놨는데, 가서 살펴보고 부품이 있는지 확인해 줄래? 상자 앞에서 F로 조사하면 돼.'],
@@ -1664,14 +1743,26 @@ const SIDE_QUESTS = [
     idle: ['가시 세 개, 다리 밑에서 찾을 수 있을 거야.'],
     turnin: ['치워줘서 고맙다. 덕분에 다리가 한결 안전해졌어.'],
     rewardExp: 30, rewardSeeds: 15, rewardPot: 'mpPot' },
+  { id: 'dew', npc: 'sailor', title: '이슬 한 모금', item: 'dew', target: 3,
+    offer: ['요즘 자꾸 목이 마르더라고 — 신선한 이슬을 마시면 좀 낫다던데.', '이슬방울 세 개만 모아다 줄 수 있겠어? 폭포 근처나 새벽 갈대숲에 몽글몽글 맺혀 있을 거야.'],
+    idle: ['이슬 세 방울, 잊지 않았지?'],
+    turnin: ['고마워, 이제 좀 살겠다. 목이 덜 마르니 비행정 정비도 수월하겠어.'],
+    rewardExp: 25, rewardSeeds: 15 },
 ];
-const sq = { cargo: { accepted: false, done: false, inspected: new Set() }, stew: { accepted: false, done: false }, thorns: { accepted: false, done: false } };
+const sq = { cargo: { accepted: false, done: false, inspected: new Set() }, stew: { accepted: false, done: false }, thorns: { accepted: false, done: false }, dew: { accepted: false, done: false } };
 function sideState(id) {
   const s = sq[id], def = SIDE_QUESTS.find(x => x.id === id);
   if (s.done) return 'done';
   if (!s.accepted) return 'offer';
   const have = id === 'cargo' ? s.inspected.size : (player.inv[def.item] || 0);
   return have >= def.target ? 'ready' : 'active';
+}
+// 작업 F: 미르(sailor)에게 side quest 2개(화물 점검·이슬 한 모금)가 걸려 있어, NPC당 하나만 돌려주던 기존
+// buildDialog/npcMarker를 "완료 가능 > 진행 중 > 미수락" 우선순위로 그 NPC의 퀘스트 중 하나를 고르도록 일반화한다.
+function sideQuestsForNpc(npcId) { return SIDE_QUESTS.filter(s => s.npc === npcId); }
+function pickSideDef(npcId) {
+  const defs = sideQuestsForNpc(npcId).filter(d => sideState(d.id) !== 'done');
+  return defs.find(d => sideState(d.id) === 'ready') || defs.find(d => sideState(d.id) === 'active') || defs.find(d => sideState(d.id) === 'offer') || null;
 }
 function acceptSide(id) {
   sq[id].accepted = true;
@@ -1700,7 +1791,7 @@ function inspectCrate(idx) {
 }
 function npcMarker(id) {
   if (!mq.done) { const st = MAIN_QUEST.stages[mq.stage]; if (st && st.npc === id) return 'give'; }
-  const def = SIDE_QUESTS.find(s => s.npc === id);
+  const def = pickSideDef(id);
   if (def && mq.accepted) {
     const state = sideState(def.id);
     if (state === 'offer') return 'give';
@@ -1710,7 +1801,7 @@ function npcMarker(id) {
   return null;
 }
 
-const ITEM_NAMES = { jelly: '슬라임 젤리', spike: '가시', hpPot: 'HP 포션', mpPot: 'MP 포션' };
+const ITEM_NAMES = { jelly: '슬라임 젤리', spike: '가시', hpPot: 'HP 포션', mpPot: 'MP 포션', dew: '이슬' };
 function npcNameById(id) { const n = NPCS.find(x => x.id === id); return n ? n.name : id; }
 function sideProgressText(def) {
   if (def.id === 'cargo') return `상자 조사 (${sq.cargo.inspected.size}/${def.target})`;
@@ -1764,7 +1855,7 @@ function renderQuestWin() {
 function toggleQuestWin(force) {
   questWinOpen = force === undefined ? !questWinOpen : force;
   questWinEl.style.display = questWinOpen ? 'block' : 'none';
-  if (questWinOpen) { keys.clear(); toggleInv(false); toggleSkillWin(false); renderQuestWin(); }
+  if (questWinOpen) { keys.clear(); toggleInv(false); toggleSkillWin(false); toggleCharWin(false); renderQuestWin(); }
 }
 // 완료 배너
 const questBannerEl = document.getElementById('questBanner'), qbTitleEl = document.getElementById('qbTitle'), qbRewardEl = document.getElementById('qbReward');
@@ -1857,7 +1948,7 @@ function renderSkillWin() {
 function toggleSkillWin(force) {
   skillWinOpen = force === undefined ? !skillWinOpen : force;
   skillWinEl.style.display = skillWinOpen ? 'block' : 'none';
-  if (skillWinOpen) { keys.clear(); toggleInv(false); toggleQuestWin(false); renderSkillWin(); } else selectedSkill = null;
+  if (skillWinOpen) { keys.clear(); toggleInv(false); toggleQuestWin(false); toggleCharWin(false); renderSkillWin(); } else selectedSkill = null;
 }
 function bindSkillSlot(key) {
   if (!selectedSkill || player.skillLv[selectedSkill] <= 0) { log('먼저 스킬을 배워야 등록할 수 있다.', 'sys'); return; }
@@ -1901,6 +1992,11 @@ function updateCooldowns(dt) {
   if (player.potCdHp > 0) player.potCdHp = Math.max(0, player.potCdHp - dt);
   if (player.potCdMp > 0) player.potCdMp = Math.max(0, player.potCdMp - dt);
   if (player.restCd > 0) player.restCd = Math.max(0, player.restCd - dt);
+  // 작업 F: 이슬·채집 재생성, 소 쿨다운, 밭 생장 타이머
+  if (player.cowCd > 0) player.cowCd = Math.max(0, player.cowCd - dt);
+  for (const n of dewNodes) { if (!n.avail) { n.cd -= dt; if (n.cd <= 0) { n.avail = true; n.mesh.visible = true; } } }
+  for (const n of forageNodes) { if (!n.avail) { n.cd -= dt; if (n.cd <= 0) { n.avail = true; n.mesh.visible = true; } } }
+  if (farmStage === 1) { farmTimer -= dt; if (farmTimer <= 0) { farmStage = 2; farmTimer = 0; farmProp.material.map = farmTex[2]; farmProp.material.needsUpdate = true; log('밭의 작물이 다 자랐다 — F로 수확할 수 있다.', 'sys'); } }
   for (const key of SKILL_KEYS) {
     if (key === 'Z') continue;
     const id = player.slotSkill[key]; const el = skillEls[key];
@@ -2140,9 +2236,11 @@ function dealDamage(s, dmg) {
     rollDrop(s.kind);
     if (s.kind === 'blue') {
       log('파란 슬라임을 쓰러뜨렸다.');
+      stats.slimeKills++;   // 작업 F: 모험 기록용 누적치(퀘스트 진행 mq.kills와는 별개)
       if (mqHuntActive()) { mq.kills++; mqCheckHunt(); }
     } else {
       log('가시 슬라임을 쓰러뜨렸다.');
+      stats.spikeKills++;
       if (mqHuntActive()) { mq.spikeKills++; mqCheckHunt(); }
     }
     updateQuestUI();
@@ -2226,18 +2324,132 @@ function updateStars(dt) {
   if (sparkleT > 0) { sparkleT -= dt; sparkle.scale.setScalar(1 + Math.sin(sparkleT * 9) * 0.15); if (sparkleT <= 0) sparkle.visible = false; }
 }
 
+// ── 작업 F: 생활·기록 ────────────────────────────────────────────────────────
+// 누적 통계 — 퀘스트 진행과 별개로 "모험 기록"(도전과제) 판정에 쓴다
+const stats = { slimeKills: 0, spikeKills: 0, forageCount: 0, dewCollected: 0, milkCollected: 0, cropHarvested: 0, reachedCamp: false, reachedWaterfall: false };
+
+// 이슬: F로 즉시 수집, 90초 재생성. 인벤토리에 쌓였다가 클릭으로 기력 +25.
+function collectDew(idx) {
+  const n = dewNodes[idx]; if (!n.avail) return;
+  n.avail = false; n.mesh.visible = false; n.cd = 90;
+  player.inv.dew = (player.inv.dew || 0) + 1; stats.dewCollected++;
+  updateInvUI();
+  log('이슬을 모았다.', 'sys');
+}
+function useDew() {
+  if ((player.inv.dew || 0) <= 0) { log('모은 이슬이 없다.', 'sys'); return; }
+  player.inv.dew--; player.stamina = Math.min(player.staminaMax, player.stamina + 25); updateStaminaUI();
+  updateInvUI();
+  log('이슬을 마셨다 — 기력 +25.', 'sys');
+}
+
+// 채집: 흰 꽃·버섯 앞에서 F를 1.2초 누르고 있으면 채집(진행 바), 120초 재생성.
+// 원문은 "버섯 6개·흰 꽃 6개"였으나 실제 3D 재구축본엔 버섯 7개(2청+5적)·흰 꽃 4개뿐이라 있는 그대로 전부 채집 대상으로 삼는다(§11).
+// 종류를 나누지 않고 공용 "채집 재료"(forage) 1종으로 합친 것도 사양 대비 단순화이며, 추기에 밝힌다.
+const FORAGE_HOLD = 1.2;
+let forageProgress = 0, forageActiveIdx = null;
+const forageBarEl = document.getElementById('forageBar'), forageBarFillEl = forageBarEl ? forageBarEl.querySelector('i') : null, forageLabelEl = document.getElementById('forageLabel');
+function updateForage(dt) {
+  let best = null, bestD = 1.7;
+  for (let i = 0; i < forageNodes.length; i++) {
+    const n = forageNodes[i]; if (!n.avail) continue;
+    const d = angDeg(n.dir, _up) * DEG * R;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  nearForageIdx = best;
+  const blocked = dialog.open || cut.on || mapView || invOpen || skillWinOpen || questWinOpen || charWinOpen || player.dead;
+  if (best != null && !blocked && keys.has('f')) {
+    if (forageActiveIdx !== best) { forageActiveIdx = best; forageProgress = 0; }
+    forageProgress += dt;
+    if (forageBarEl) {
+      forageBarEl.style.display = 'block';
+      forageBarFillEl.style.width = Math.min(100, forageProgress / FORAGE_HOLD * 100).toFixed(0) + '%';
+      forageLabelEl.textContent = (forageNodes[best].kind === 'mush' ? '버섯' : '꽃') + ' 채집 중... F';
+    }
+    if (forageProgress >= FORAGE_HOLD) { harvestForage(best); forageActiveIdx = null; forageProgress = 0; if (forageBarEl) forageBarEl.style.display = 'none'; }
+  } else {
+    forageActiveIdx = null; forageProgress = 0;
+    if (forageBarEl) forageBarEl.style.display = 'none';
+  }
+}
+function harvestForage(idx) {
+  const n = forageNodes[idx]; if (!n.avail) return;
+  n.avail = false; n.mesh.visible = false; n.cd = 120;
+  player.inv.forage = (player.inv.forage || 0) + 1; stats.forageCount++;
+  updateInvUI();
+  log((n.kind === 'mush' ? '버섯을' : '흰 꽃을') + ' 채집했다.', 'sys');
+}
+
+// 소: F로 착유, 실시간 600초(10분) 쿨다운.
+function milkCow() {
+  if (player.cowCd > 0) { log('아직 짤 우유가 없다 — 잠시 뒤에.', 'sys'); return; }
+  player.cowCd = 600; player.inv.milk = (player.inv.milk || 0) + 1; stats.milkCollected++;
+  updateInvUI();
+  log('소젖을 짰다.', 'sys');
+}
+// 밭: 빈 밭에 이슬 1개로 물을 주면 600초(10분) 뒤 수확 가능. 원문의 "소·밭"은 3D 재구축본에 아예 없던
+// 신규 요소라 로드맵 5(2D)의 취지만 가져와 배치했음을 추기에서 밝힌다.
+function interactFarm() {
+  if (farmStage === 0) {
+    if ((player.inv.dew || 0) <= 0) { log('밭에 줄 이슬이 없다.', 'sys'); return; }
+    player.inv.dew--; updateInvUI();
+    farmStage = 1; farmTimer = 600;
+    farmProp.material.map = farmTex[1]; farmProp.material.needsUpdate = true;
+    log('밭에 이슬을 주었다 — 작물이 자라기 시작했다.', 'sys');
+  } else if (farmStage === 1) {
+    log(`아직 자라는 중이다 (${Math.ceil(farmTimer)}초 남음).`, 'sys');
+  } else if (farmStage === 2) {
+    farmStage = 0; farmTimer = 0;
+    farmProp.material.map = farmTex[0]; farmProp.material.needsUpdate = true;
+    player.inv.veg = (player.inv.veg || 0) + 1; stats.cropHarvested++;
+    updateInvUI();
+    log('작물을 수확했다.', 'sys');
+  }
+}
+
+// 모험 기록(도전과제) 10종 — 원문의 "별 조각 14개 전부 발견"은 이 3D 재구축본엔 별 2개뿐이라 2/2로 재해석.
+// "죽지 않고 완료" 조건은 넣지 않고 단순화했음을 추기에서 밝힌다.
+const ACHIEVEMENTS = [
+  { id: 'stars', title: '별 조각 수집가', desc: '떨어진 별 조각을 모두 찾았다', cond: () => STARS.every(s => s.found) },
+  { id: 'slime50', title: '슬라임 사냥꾼', desc: '슬라임을 50마리 처치했다', cond: () => stats.slimeKills >= 50 },
+  { id: 'spike20', title: '가시 사냥꾼', desc: '가시 슬라임을 20마리 처치했다', cond: () => stats.spikeKills >= 20 },
+  { id: 'forage30', title: '숲의 채집가', desc: '버섯과 꽃을 30회 채집했다', cond: () => stats.forageCount >= 30 },
+  { id: 'dew10', title: '이슬 모으기', desc: '이슬을 10회 모았다', cond: () => stats.dewCollected >= 10 },
+  { id: 'milk5', title: '목장 일꾼', desc: '소젖을 5회 짰다', cond: () => stats.milkCollected >= 5 },
+  { id: 'crop5', title: '농부', desc: '작물을 5회 수확했다', cond: () => stats.cropHarvested >= 5 },
+  { id: 'camp', title: '야영지 도착', desc: '단구 야영지에 올랐다', cond: () => stats.reachedCamp },
+  { id: 'waterfall', title: '물놀이', desc: '폭포 근처를 찾았다', cond: () => stats.reachedWaterfall },
+  { id: 'allquests', title: '별내림 천문대의 영웅', desc: '행성 퀘스트와 모든 일반 퀘스트를 완료했다', cond: () => mq.done && sq.cargo.done && sq.stew.done && sq.thorns.done && sq.dew.done },
+];
+const achieved = new Set();
+function updateAchievements() {
+  if (!stats.reachedCamp && angDeg(tentProp.userData.dir, _up) * DEG * R < 4) stats.reachedCamp = true;
+  if (!stats.reachedWaterfall && angDeg(waterfall.userData.dir, _up) * DEG * R < 4) stats.reachedWaterfall = true;
+  for (const a of ACHIEVEMENTS) {
+    if (achieved.has(a.id)) continue;
+    if (a.cond()) {
+      achieved.add(a.id);
+      player.seeds += 20; updateSeedsUI();
+      log(`🏅 모험 기록 달성: ${a.title}`, 'sys');
+      showQuestBanner('모험 기록: ' + a.title, '별씨앗 +20');
+      if (charWinOpen) renderCharWin();
+    }
+  }
+}
+
 // 대화창
 const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null, choices: null, choicesShown: false };
 const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt'), dlgChoicesEl = document.getElementById('dlgChoices'), dlgNextEl = document.querySelector('#dialog .next');
 let nearNpc = null;
 let nearCrateIdx = null, nearPedestal = false;   // 작업 E
+let nearDewIdx = null, nearForageIdx = null, nearCow = false, nearFarm = false;   // 작업 F
 const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';
 const myLabel = makeLabel('me', 'Lv.1 탐사자');
 const targetLabel = makeLabel('target', '▾'); targetLabel.style.display = 'none';   // 작업 C: Tab으로 고른 대상 표시
 function buildDialog(n) {
   const main = mainDialogFor(n);
   if (main) return main;
-  const def = SIDE_QUESTS.find(s => s.npc === n.id);
+  const def = pickSideDef(n.id);
   if (def && mq.accepted) {
     const state = sideState(def.id);
     if (state === 'offer') return { lines: def.offer, choices: [
@@ -2289,8 +2501,8 @@ function advanceDialog() {
 // 인벤토리 (I) — 작업 D: 드롭 4종(젤리·가시·HP포션·MP포션)을 앞 4칸에 표시, 포션은 클릭으로도 사용
 const invEl = document.getElementById('inv'); let invOpen = false;
 const invGridEl = document.querySelector('#inv .grid'), invFootEl = document.querySelector('#inv .foot');
-const invSlotOrder = ['jelly', 'spike', 'hpPot', 'mpPot'];
-const invIcon = { jelly: '젤', spike: '시', hpPot: 'HP', mpPot: 'MP' };
+const invSlotOrder = ['jelly', 'spike', 'hpPot', 'mpPot', 'dew', 'forage', 'milk', 'veg'];
+const invIcon = { jelly: '젤', spike: '시', hpPot: 'HP', mpPot: 'MP', dew: '이', forage: '채', milk: '우', veg: '작' };
 const invCells = {};
 for (let i = 0; i < 30; i++) {
   const cell = document.createElement('i');
@@ -2298,13 +2510,14 @@ for (let i = 0; i < 30; i++) {
     const id = invSlotOrder[i]; cell.dataset.item = id;
     cell.innerHTML = `<span class="ic">${invIcon[id]}</span><span class="ct">0</span>`;
     if (id === 'hpPot' || id === 'mpPot') cell.addEventListener('click', () => usePotion(id === 'hpPot' ? 'hp' : 'mp'));
+    if (id === 'dew') cell.addEventListener('click', () => useDew());   // 작업 F: 이슬 클릭 → 기력 +25
     invCells[id] = cell;
   }
   invGridEl.appendChild(cell);
 }
 function updateInvUI() {
   for (const id of invSlotOrder) { const c = player.inv[id] || 0; invCells[id].querySelector('.ct').textContent = c; invCells[id].classList.toggle('has', c > 0); }
-  invFootEl.textContent = 'I 닫기 · 포션은 클릭 또는 숫자키 1(HP)·2(MP)로 사용';
+  invFootEl.textContent = 'I 닫기 · 포션·이슬은 클릭 또는 숫자키 1(HP)·2(MP)·3(이슬)로 사용';
 }
 updateInvUI();
 // 작업 C: HP/MP HUD·피격 비네트·사망 페이드
@@ -2324,7 +2537,32 @@ function startDeath() {
   player.dead = true; player.deadT = 0; keys.clear(); player.moving = false;
   deathFadeEl.classList.add('on'); log('쓰러졌다...', 'sys');
 }
-function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) { keys.clear(); toggleSkillWin(false); toggleQuestWin(false); updateInvUI(); } }
+function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) { keys.clear(); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); updateInvUI(); } }
+// 작업 F: 캐릭터·모험 기록 창(P) — 스탯 요약과 도전과제 10종 진행도
+let charWinOpen = false;
+const charWinEl = document.getElementById('charWin'), charRowsEl = charWinEl ? charWinEl.querySelector('.rows') : null, charFootEl = charWinEl ? charWinEl.querySelector('.foot') : null;
+function renderCharWin() {
+  if (!charRowsEl) return;
+  charRowsEl.innerHTML = '';
+  const statRow = document.createElement('div'); statRow.className = 'row';
+  statRow.innerHTML = `<div class="info"><b>Lv.${player.level} 탐사자</b><br><span class="d">HP ${Math.round(player.hp)}/${player.maxHp} · MP ${Math.round(player.mp)}/${player.maxMp} · 기력 ${Math.round(player.stamina)}/${player.staminaMax} · 별씨앗 ${player.seeds}</span></div>`;
+  charRowsEl.appendChild(statRow);
+  const invRow = document.createElement('div'); invRow.className = 'row';
+  invRow.innerHTML = `<div class="info"><b>보유물</b><br><span class="d">이슬 ${player.inv.dew || 0} · 채집물 ${player.inv.forage || 0} · 우유 ${player.inv.milk || 0} · 작물 ${player.inv.veg || 0}</span></div>`;
+  charRowsEl.appendChild(invRow);
+  for (const a of ACHIEVEMENTS) {
+    const done = achieved.has(a.id);
+    const row = document.createElement('div'); row.className = 'row' + (done ? ' sel' : '');
+    row.innerHTML = `<div class="info"><b>${done ? '✓ ' : ''}${a.title}</b><br><span class="d">${a.desc}</span></div>`;
+    charRowsEl.appendChild(row);
+  }
+  if (charFootEl) charFootEl.textContent = `모험 기록 ${achieved.size}/${ACHIEVEMENTS.length} · P 닫기`;
+}
+function toggleCharWin(force) {
+  charWinOpen = force === undefined ? !charWinOpen : force;
+  if (charWinEl) charWinEl.style.display = charWinOpen ? 'block' : 'none';
+  if (charWinOpen) { keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); renderCharWin(); }
+}
 
 // 시작 컷신 (1:30~1:40): 높은 곳에서 내려오는 카메라, 비행정 하강·착지, 캐릭터 등 뒤로 붙음, 지역명
 const cut = { on: !DEBUG && !new URLSearchParams(location.search).has('nocut'), t: 0, dur: 8, land: 5.4 };
@@ -2355,8 +2593,9 @@ if (cut.on) startCutscene(); else { player.mesh.visible = true; }
 const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너머로 비쳐 보이지 않게)
 function updateLabels() {
   placeLabel(myLabel, headOf(player.mesh, 1.95));
-  if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal) && !dialog.open && !cut.on) {
-    tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : nearCrateIdx != null ? '<b>F</b>상자 조사' : nearPedestal ? '<b>F</b>별 조각 바치기' : '<b>F</b>휴식(기력 회복)';
+  if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal || nearDewIdx != null || nearCow || nearFarm) && !dialog.open && !cut.on) {
+    tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : nearCrateIdx != null ? '<b>F</b>상자 조사' : nearPedestal ? '<b>F</b>별 조각 바치기'
+      : nearDewIdx != null ? '<b>F</b>이슬 모으기' : nearCow ? '<b>F</b>소젖 짜기' : nearFarm ? '<b>F</b>밭 살피기' : '<b>F</b>휴식(기력 회복)';
     placeLabel(tipEl, headOf(player.mesh, 1.95));
   } else tipEl.style.display = 'none';
   for (const n of NPCS) {
@@ -2379,12 +2618,13 @@ let mapView = 0;
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
-  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); e.preventDefault(); return; }
-  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); return; }
+  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); e.preventDefault(); return; }
+  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); return; }
   if (mapView) return;
   if (k === 'i') { toggleInv(); return; }
   if (k === 'k') { toggleSkillWin(); return; }
   if (k === 'j') { toggleQuestWin(); return; }
+  if (k === 'p') { toggleCharWin(); return; }   // 작업 F: 캐릭터·모험 기록 창
   if (k === 'q') { cycleQuality(); return; }
   if (dialog.open) {
     if (dialog.choicesShown) { const idx = parseInt(k, 10) - 1; if (!isNaN(idx)) pickChoice(idx); return; }
@@ -2394,16 +2634,26 @@ addEventListener('keydown', (e) => {
   if (skillWinOpen) { if (k === 'x' || k === 'c' || k === 'v') bindSkillSlot(k.toUpperCase()); return; }
   if (questWinOpen) return;
   if (invOpen) return;
+  if (charWinOpen) return;
   if (player.dead) return;   // 작업 C: 주저앉아 있는 동안엔 조작 없음
   keys.add(k);
-  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·상자 조사·봉헌·휴식), Z~V가 공격·스킬
+  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·상자 조사·봉헌·휴식·이슬·소·밭), Z~V가 공격·스킬
   if (k === ' ') { e.preventDefault(); tryJump(); }
-  if (k === 'f') { if (nearNpc) openDialog(nearNpc); else if (nearCrateIdx != null) inspectCrate(nearCrateIdx); else if (nearPedestal) deliverStar(); else if (nearTent) restAtTent(); }
+  if (k === 'f') {
+    if (nearNpc) openDialog(nearNpc);
+    else if (nearCrateIdx != null) inspectCrate(nearCrateIdx);
+    else if (nearPedestal) deliverStar();
+    else if (nearDewIdx != null) collectDew(nearDewIdx);
+    else if (nearCow) milkCow();
+    else if (nearFarm) interactFarm();
+    else if (nearTent) restAtTent();
+  }
   if (k === 'z') attack();
   if (k === 'x' || k === 'c' || k === 'v') skillSlot(k);
   if (k === 'tab') { e.preventDefault(); cycleTarget(); }
   if (k === '1') usePotion('hp');   // 작업 D: 포션 사용
   if (k === '2') usePotion('mp');
+  if (k === '3') useDew();          // 작업 F: 이슬 사용(기력 +25)
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
@@ -2414,7 +2664,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
   if (cut.on) { cut.t = cut.dur; return; }
   if (dialog.open) { advanceDialog(); return; }
-  if (invOpen || skillWinOpen || questWinOpen) return;
+  if (invOpen || skillWinOpen || questWinOpen || charWinOpen) return;
   attack();   // 클릭도 기본 공격
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2519,6 +2769,7 @@ function step(dt) {
     for (const b of beams) b.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
     updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt); updateCooldowns(dt); updateQuestBanner(dt);
+    updateForage(dt); updateAchievements();   // 작업 F
     updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
     nearNpc = null; let best = 2.4;
     for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
@@ -2530,6 +2781,10 @@ function step(dt) {
       campCrates.forEach((m, idx) => { if (sq.cargo.inspected.has(idx)) return; const d = angDeg(m.userData.dir, _up) * DEG * R; if (d < bestC) { bestC = d; nearCrateIdx = idx; } });
     }
     nearPedestal = (mq.stage === 4 && !mq.done) && angDeg(pedestalDir, _up) * DEG * R < 2.4;
+    // 작업 F: 이슬·소·밭 근접 판정
+    nearDewIdx = null; { let bestW = 2.0; dewNodes.forEach((n, idx) => { if (!n.avail) return; const d = angDeg(n.dir, _up) * DEG * R; if (d < bestW) { bestW = d; nearDewIdx = idx; } }); }
+    nearCow = angDeg(cowProp.userData.dir, _up) * DEG * R < 1.6;
+    nearFarm = angDeg(farmProp.userData.dir, _up) * DEG * R < 1.6;
   }
 
   // 카메라
@@ -3068,7 +3323,7 @@ function drawWorldMap(viewW, viewH, t) {
   // 한 줄 캡션 — 제목·진행도·안내를 모아 패널 맨 아래에 둔다.
   // (상단에 두면 HUD 조작 칩과, 명판 옆에 두면 명판과 겹치는 창 비율이 있다)
   const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
-  const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}`;
+  const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}  ·  모험 기록 ${achieved.size}/${ACHIEVEMENTS.length}`;
   const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
   const lockTxt = small ? '🔒 미구현' : '🔒 표시는 아직 만들지 않은 지역';
   ctx.textAlign = 'center';
@@ -3115,6 +3370,12 @@ if (DEBUG) {
     acceptSide, completeSide, inspectCrate, sideState, npcMarker, pickChoice,
     questWinOpen() { return questWinOpen; }, nearCrateIdx() { return nearCrateIdx; }, nearPedestal() { return nearPedestal; },
     setTracked(id) { trackedQuest = id; updateQuestUI(); },
+    // 작업 F 검증용
+    dewNodes, forageNodes, stats, ACHIEVEMENTS, achieved,
+    collectDew, useDew, harvestForage, milkCow, interactFarm,
+    nearDewIdx() { return nearDewIdx; }, nearForageIdx() { return nearForageIdx; }, nearCow() { return nearCow; }, nearFarm() { return nearFarm; },
+    farmStage() { return farmStage; }, farmTimer() { return farmTimer; },
+    charWinOpen() { return charWinOpen; }, toggleCharWin, forageProgress() { return forageProgress; },
     SPRITES, planet,
     perf() { return { dpr, quality, qualityMode, frameMs, gpu: GPU_NAME, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     setQuality(q) { qualityMode = q; applyQuality(q, 'debug'); },
