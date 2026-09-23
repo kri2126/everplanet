@@ -76,6 +76,11 @@
   #quest b { display: block; color: #ffd166; font-size: 12px; margin-bottom: 2px; }
   #quest .obj::before { content: '◦ '; color: #9ad2ff; }
   #quest .obj.done { opacity: .7; }
+  /* 작업 E: 퀘스트 완료 배너 */
+  #questBanner { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; transition: opacity .5s; }
+  #questBanner b { display: block; font: 900 20px 'Gowun Dodum', sans-serif; color: #ffd166; text-shadow: 0 2px 6px rgba(0,0,0,.6); letter-spacing: .05em; }
+  #questBanner span { display: block; margin-top: 4px; font: 700 13px monospace; color: #fdf4de; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  #questBanner.on { opacity: 1; }
   #log { position: fixed; left: 12px; bottom: 12px; width: 320px; max-height: 118px; overflow: hidden; font-size: 12px; line-height: 1.5; color: #eef;
     background: rgba(10,14,24,.42); border-radius: 6px; padding: 6px 10px; pointer-events: none; }
   #log:empty { display: none; }
@@ -84,7 +89,9 @@
   .lb { position: absolute; transform: translate(-50%,-100%); white-space: nowrap; font: 700 12px 'Gowun Dodum', sans-serif; color: #fff;
     text-shadow: 0 1px 2px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.5); text-align: center; }
   .lb.npc { color: #ffe9a8; }
-  .lb.npc.q::before { content: '!'; display: block; color: #ffd166; font: 900 22px sans-serif; line-height: 18px; animation: bob .7s ease-in-out infinite alternate; }
+  .lb.npc.give::before { content: '!'; display: block; color: #ffd166; font: 900 22px sans-serif; line-height: 18px; animation: bob .7s ease-in-out infinite alternate; }
+  .lb.npc.ask::before { content: '?'; display: block; color: #9ad2ff; font: 900 22px sans-serif; line-height: 18px; animation: bob .7s ease-in-out infinite alternate; }
+  .lb.npc.wait::before { color: #8a8a8a; animation: none; }
   .lb.slime { color: #bfe3ff; font-size: 11px; }
   .lb.tip { background: rgba(20,24,34,.8); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 3px 8px; font-weight: 600; font-size: 12px;
     transform: translate(-50%,-100%) translateY(-22px); }
@@ -98,6 +105,12 @@
   #dialog .next { text-align: right; font-size: 11px; opacity: .85; margin-top: 6px; animation: blink 1.1s infinite; }
   #dialog .next b { display: inline-block; padding: 0 5px; margin-right: 4px; border-radius: 3px; background: #fff; color: #223; }
   @keyframes blink { 50% { opacity: .35; } }
+  /* 작업 E: 대화 선택지 */
+  #dialog .choices { display: none; margin-top: 8px; pointer-events: auto; }
+  #dialog .choices.on { display: block; }
+  #dialog .choices .c { padding: 6px 10px; margin-top: 4px; background: rgba(255,255,255,.08); border-radius: 5px; cursor: pointer; font-size: 13px; }
+  #dialog .choices .c:hover { background: rgba(255,255,255,.2); }
+  #dialog .choices .c b { display: inline-block; padding: 0 5px; margin-right: 6px; border-radius: 3px; background: #fff; color: #223; }
   #inv { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14;
     border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); pointer-events: none; }
   #inv h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
@@ -120,6 +133,16 @@
   #skillWin .row .info .d { opacity: .75; font-size: 11px; }
   #skillWin .row .slot { width: 22px; height: 22px; border-radius: 4px; background: rgba(0,0,0,.35); font: 700 11px monospace; color: #9ad2ff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   #skillWin .foot { margin-top: 4px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .85; }
+  /* 작업 E: 퀘스트창(J) */
+  #questWin { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14;
+    border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); width: 300px; }
+  #questWin h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
+  #questWin .row { display: flex; align-items: center; padding: 7px 8px; margin-bottom: 5px; background: #4a3219; border: 1px solid #2f1e0c; border-radius: 6px; cursor: pointer; }
+  #questWin .row.sel { outline: 2px solid #ffd166; }
+  #questWin .row .info { flex: 1; font-size: 12px; color: #fdf4de; line-height: 1.4; }
+  #questWin .row .info b { color: #ffd166; }
+  #questWin .row .info .d { opacity: .75; font-size: 11px; }
+  #questWin .foot { margin-top: 4px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .85; }
   #cut { position: fixed; inset: 0; display: none; pointer-events: none; }
   #cut .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; } #cut .top { top: 0; } #cut .bot { bottom: 0; }
   #cut .skip { position: absolute; right: 18px; bottom: 11%; font-size: 12px; opacity: .85; text-shadow: 0 1px 2px #000; }
@@ -139,7 +162,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
 <div id="fps"></div>
 <div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
@@ -151,11 +174,13 @@
 <div id="exp"><b id="lvNum">Lv.1</b><div class="bar"><i></i></div></div>
 <div id="seedsHUD">별씨앗 0</div>
 <div id="quest"><b id="questTitle"></b><div id="questObj"></div></div>
+<div id="questBanner"><b id="qbTitle"></b><span id="qbReward"></span></div>
 <div id="log"></div>
 <div id="labels"></div>
-<div id="dialog"><div class="who" id="dlgWho"></div><div class="txt" id="dlgTxt"></div><div class="next"><b>Space Bar</b>다음</div></div>
+<div id="dialog"><div class="who" id="dlgWho"></div><div class="txt" id="dlgTxt"></div><div class="choices" id="dlgChoices"></div><div class="next"><b>Space Bar</b>다음</div></div>
 <div id="inv"><h3>인벤토리</h3><div class="grid"></div><div class="foot">I 닫기</div></div>
 <div id="skillWin"><h3>무직 스킬</h3><div class="rows"></div><div class="foot">K 닫기</div></div>
+<div id="questWin"><h3>퀘스트</h3><div class="rows"></div><div class="foot">J 닫기</div></div>
 <div id="cut"><div class="bar top"></div><div class="bar bot"></div><div class="skip"><b>Space</b> 건너뛰기</div></div>
 
 <script type="module">
@@ -1307,8 +1332,8 @@ addProp(starTex, 1.9, 1.9, 7.2, -4.6);
 // 단구 야영지: 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
 const tentProp = addProp(tentTex, 4.4, 4.4, 3.6, 16.2);   // 작업 D: 텐트 앞 F로 휴식(기력 회복)
 addProp(cauldronTex, 1.2, 1.2, 1.9, 15.3);
-[addProp(crateTex, 1.0, 1.0, 4.9, 17.6), addProp(crateTex, 0.9, 0.9, 5.4, 16.9), addProp(crateTex, 0.9, 0.9, -1.2, 14.6)]
-  .forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
+const campCrates = [addProp(crateTex, 1.0, 1.0, 4.9, 17.6), addProp(crateTex, 0.9, 0.9, 5.4, 16.9), addProp(crateTex, 0.9, 0.9, -1.2, 14.6)];   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
+campCrates.forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
 addProp(lanternTex, 1.1, 1.5, 1.4, 22.7);
 // 다리 건너 돌 아치 (가운데가 비어 캐릭터가 지나간다)
 addProp(archTex, 5.6, 4.9, 0, 30.1);
@@ -1540,18 +1565,14 @@ function log(text, cls = '') {
   while (logEl.children.length > 6) logEl.removeChild(logEl.firstChild);
 }
 
-// NPC 3 — 좌표 직접 배치 (§8)
+// NPC 3 — 좌표 직접 배치 (§8). 대사는 buildDialog()가 행성/일반 퀘스트 상태에 따라 고른다(작업 E)
 const NPCS = [
   { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -2.3, lat: 4.6, lift: 0.78,
-    quest: ['별내림 천문대에 온 걸 환영해. 비행정은 여기 세워 둘게.', '북쪽 돌계단을 오르면 야영지가 있어. 도토가 기다리고 있을 거야.', '길바닥의 노란 화살표를 따라가면 돼. 물에 빠지면 마지막 자리로 돌아오니까 겁먹지 말고.'],
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
   { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: 2.2, lat: 17.4, lift: 0,
-    quest: ['잘 왔어! 가마솥에 국을 끓이는 중이야.', '북쪽 나무다리를 건너면 수문장 벨라가 있어. 슬라임 때문에 골치라더라.'],
-    idle: '국이 아직 덜 됐어. 조금만 기다려.' },
+    idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
   { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 1.2, lat: 32.8, lift: 0,
-    quest: ['다리를 건너왔군. 이 초원엔 파란 슬라임이 자꾸 늘어.', 'Z 키로 공격할 수 있어. 세 마리만 정리해 주겠나?'],
-    after: ['고맙다. 그리고 하늘에서 떨어진 별 조각이 두 개 있다던데 — 하나는 착륙 초원 동쪽, 하나는 이 초원 동쪽이야.'],
-    idle: '슬라임은 세 대면 쓰러진다.' },
+    idle: '이 근방 슬라임들, 방심하면 안 돼.' },
 ];
 for (const n of NPCS) {
   n.dir = dirFromLonLat(n.lon, n.lat);
@@ -1561,36 +1582,201 @@ for (const n of NPCS) {
   mapDot(n.dir, 0.5, 0xffd166);
 }
 
-// 퀘스트 (한 줄짜리 진행)
-const QUESTS = [
-  { title: '별내림 천문대 도착', obj: '항해사 미르와 이야기하기', npc: 'sailor' },
-  { title: '야영지로', obj: '돌계단을 올라 야영지 지기 도토 만나기', npc: 'keeper' },
-  { title: '다리 건너', obj: '나무다리를 건너 수문장 벨라 만나기', npc: 'knight' },
-  { title: '슬라임 퇴치', obj: '파란 슬라임 3마리 처치', npc: null, kills: 3 },
-  { title: '별을 찾아서', obj: '떨어진 별 조각 2개 찾기', npc: null, stars: 2 },
-  { title: '탐사 완료', obj: '별내림 천문대의 목표를 모두 마쳤다', npc: null },
+// 작업 E: 행성 퀘스트(메인, 5단계 — 수락→진행→완료→보상)
+const MAIN_QUEST = {
+  title: '별내림 천문대에 떨어진 별을 되찾아라',
+  acceptLines: [
+    '별내림 천문대에 온 걸 환영해. 비행정은 여기 세워 둘게.',
+    '방금 관측소에서 연락이 왔어 — 지난밤 하늘에서 별 조각이 떨어지는 걸 봤다는군.',
+    '떨어진 별을 그대로 두면 이 위성의 기운이 옅어진다고 해. 자네가 찾아서 별 받침대에 되돌려 줬으면 하는데.',
+    '북쪽 돌계단을 오르면 야영지가 있어. 도토가 사정을 더 알고 있을 거야 — 맡아 주겠나?',
+  ],
+  stages: [
+    { npc: 'sailor', obj: '항해사 미르와 이야기하기' },
+    { npc: 'keeper', obj: '돌계단을 올라 야영지 지기 도토 만나기',
+      lines: ['잘 왔어! 가마솥에 국을 끓이는 중이야.', '별 조각이라면 나도 봤어 — 어젯밤 하늘이 번쩍하더니 초원 쪽으로 떨어지더라고.', '수문장 벨라가 그쪽을 지키고 있으니 가서 물어봐. 요즘 슬라임이 부쩍 늘어서 조심해야 해.'] },
+    { npc: 'knight', obj: '나무다리를 건너 수문장 벨라 만나기',
+      lines: ['다리를 건너왔군. 별 조각을 찾는다고 들었어.', '슬라임들이 별 조각의 기운에 홀려서 자꾸 삼키려 든다더군 — 몇 마리는 배 속에 품고 있을지도 몰라.', '이 초원의 슬라임과 가시 슬라임을 정리해 주게. 그리고 근처에 떨어진 조각도 직접 찾아봐야 할 거야. Z로 공격, 배운 스킬은 X·C·V로.'] },
+    { obj: '슬라임 5마리·가시 슬라임 2마리 처치, 별 조각 3개 회수', kills: 5, spikeKills: 2, fieldStars: 2 },
+    { obj: '별 받침대(F)에 별 조각 올리기', deliver: true },
+  ],
+  rewardExp: 120, rewardSeeds: 50,
+};
+const mq = { accepted: false, stage: 0, done: false, kills: 0, spikeKills: 0, fieldStars: 0 };
+function mainDialogFor(n) {
+  if (mq.done) return null;
+  const st = MAIN_QUEST.stages[mq.stage];
+  if (!st || st.npc !== n.id) return null;
+  if (mq.stage === 0) {
+    return { lines: MAIN_QUEST.acceptLines, choices: [
+      { label: '수락한다', run: acceptMainQuest },
+      { label: '나중에', run: () => log('나중에 다시 이야기하자.', 'sys') },
+    ] };
+  }
+  return { lines: st.lines, onEnd: advanceMainStage };
+}
+function acceptMainQuest() {
+  mq.accepted = true;
+  log(`행성 퀘스트 수락: "${MAIN_QUEST.title}"`, 'sys');
+  advanceMainStage();
+}
+function advanceMainStage() {
+  mq.stage = Math.min(mq.stage + 1, MAIN_QUEST.stages.length - 1);
+  const st = MAIN_QUEST.stages[mq.stage];
+  log(`행성 퀘스트: ${st.obj}`, 'sys');
+  updateQuestUI();
+}
+function mqHuntActive() { return mq.accepted && !mq.done && mq.stage === 3; }
+function mqCheckHunt() {
+  if (!mqHuntActive()) return;
+  const st = MAIN_QUEST.stages[3];
+  if (mq.kills >= st.kills && mq.spikeKills >= st.spikeKills && mq.fieldStars >= st.fieldStars) {
+    log('필요한 만큼 처치하고 별 조각도 모았다 — 별 받침대로 가자.', 'sys');
+    advanceMainStage();
+  }
+}
+function deliverStar() {
+  if (mq.stage !== 4 || mq.done) return;
+  mq.done = true;
+  sparkle.visible = true; sparkleT = 2.4; sparkle.position.copy(pedestalDir).multiplyScalar(R + terrainH(pedestalDir) + 1.2); orientBillboard(sparkle, pedestalDir);
+  beams[1].scale.setScalar(1.6);
+  gainExp(MAIN_QUEST.rewardExp); player.seeds += MAIN_QUEST.rewardSeeds; updateSeedsUI();
+  log(`별이 다시 빛나기 시작했다! 행성 퀘스트 완료 — 경험치 +${MAIN_QUEST.rewardExp}·별씨앗 +${MAIN_QUEST.rewardSeeds}`, 'sys');
+  showQuestBanner(MAIN_QUEST.title, `경험치 +${MAIN_QUEST.rewardExp} · 별씨앗 +${MAIN_QUEST.rewardSeeds}`);
+  updateQuestUI();
+}
+
+// 작업 E: 일반 퀘스트(NPC 사연) — 행성 퀘스트 수락 후에만 제안됨. 4번째(미르의 "이슬 한 모금")는
+// 이슬 수집 메커니즘 자체가 아직 없어(작업 F 몫) 이번엔 넣지 않음 — §11 재해석·이연 원칙과 동일하게 처리
+const SIDE_QUESTS = [
+  { id: 'cargo', npc: 'sailor', title: '비행정 부품 점검', target: 3,
+    offer: ['착륙할 때 덜컹거리더니 부품 몇 개가 빠진 것 같아.', '야영지 근처 상자 세 개에 나눠 실어놨는데, 가서 살펴보고 부품이 있는지 확인해 줄래? 상자 앞에서 F로 조사하면 돼.'],
+    idle: ['상자 세 개, 잊지 않았지?'],
+    turnin: ['오, 다 찾았구나! 이걸로 비행정을 마저 손볼 수 있겠어. 고마워.'],
+    rewardExp: 30, rewardSeeds: 15 },
+  { id: 'stew', npc: 'keeper', title: '야영지 저녁', item: 'jelly', target: 4,
+    offer: ['슬라임 젤리를 국에 넣으면 걸쭉하고 든든해져.', '네 개만 모아다 줄래? 슬라임을 잡다 보면 자연히 나올 거야.'],
+    idle: ['젤리 네 개, 잊지 않았지?'],
+    turnin: ['좋았어! 이걸로 오늘 저녁은 훌륭하겠군. 이거 받아.'],
+    rewardExp: 35, rewardSeeds: 20, rewardPot: 'hpPot' },
+  { id: 'thorns', npc: 'knight', title: '다리 밑 가시', item: 'spike', target: 3,
+    offer: ['다리 밑에 가시 슬라임이 떨어뜨린 가시가 잔뜩 걸려 있어.', '지나다니기 위험하니 세 개만 치워주겠나?'],
+    idle: ['가시 세 개, 다리 밑에서 찾을 수 있을 거야.'],
+    turnin: ['치워줘서 고맙다. 덕분에 다리가 한결 안전해졌어.'],
+    rewardExp: 30, rewardSeeds: 15, rewardPot: 'mpPot' },
 ];
-const quest = { i: 0, kills: 0, stars: 0 };
+const sq = { cargo: { accepted: false, done: false, inspected: new Set() }, stew: { accepted: false, done: false }, thorns: { accepted: false, done: false } };
+function sideState(id) {
+  const s = sq[id], def = SIDE_QUESTS.find(x => x.id === id);
+  if (s.done) return 'done';
+  if (!s.accepted) return 'offer';
+  const have = id === 'cargo' ? s.inspected.size : (player.inv[def.item] || 0);
+  return have >= def.target ? 'ready' : 'active';
+}
+function acceptSide(id) {
+  sq[id].accepted = true;
+  const def = SIDE_QUESTS.find(x => x.id === id);
+  log(`일반 퀘스트 수락: ${def.title}`, 'sys');
+  updateQuestUI();
+}
+function completeSide(id) {
+  const def = SIDE_QUESTS.find(x => x.id === id), s = sq[id];
+  if (id !== 'cargo') { player.inv[def.item] = Math.max(0, (player.inv[def.item] || 0) - def.target); updateInvUI(); }
+  s.done = true;
+  gainExp(def.rewardExp); player.seeds += def.rewardSeeds; updateSeedsUI();
+  if (def.rewardPot) { player.inv[def.rewardPot] = (player.inv[def.rewardPot] || 0) + 1; updateInvUI(); }
+  const potTxt = def.rewardPot ? ` · ${def.rewardPot === 'hpPot' ? 'HP' : 'MP'}포션 +1` : '';
+  log(`퀘스트 완료: ${def.title} — 경험치 +${def.rewardExp}·별씨앗 +${def.rewardSeeds}${potTxt}`, 'sys');
+  showQuestBanner(def.title, `경험치 +${def.rewardExp} · 별씨앗 +${def.rewardSeeds}${potTxt}`);
+  updateQuestUI();
+}
+function inspectCrate(idx) {
+  if (!sq.cargo.accepted || sq.cargo.done) return;
+  if (sq.cargo.inspected.has(idx)) { log('이미 살펴본 상자다.', 'sys'); return; }
+  sq.cargo.inspected.add(idx);
+  const done3 = sq.cargo.inspected.size >= 3;
+  log(`상자를 살펴봤다 (${sq.cargo.inspected.size}/3)` + (done3 ? ' — 부품을 다 찾았다. 미르에게 돌아가자.' : ''), 'sys');
+  updateQuestUI();
+}
+function npcMarker(id) {
+  if (!mq.done) { const st = MAIN_QUEST.stages[mq.stage]; if (st && st.npc === id) return 'give'; }
+  const def = SIDE_QUESTS.find(s => s.npc === id);
+  if (def && mq.accepted) {
+    const state = sideState(def.id);
+    if (state === 'offer') return 'give';
+    if (state === 'ready') return 'ask';
+    if (state === 'active') return 'wait';
+  }
+  return null;
+}
+
+const ITEM_NAMES = { jelly: '슬라임 젤리', spike: '가시', hpPot: 'HP 포션', mpPot: 'MP 포션' };
+function npcNameById(id) { const n = NPCS.find(x => x.id === id); return n ? n.name : id; }
+function sideProgressText(def) {
+  if (def.id === 'cargo') return `상자 조사 (${sq.cargo.inspected.size}/${def.target})`;
+  const have = Math.min(player.inv[def.item] || 0, def.target);
+  return `${ITEM_NAMES[def.item]} (${have}/${def.target})`;
+}
+let trackedQuest = 'main';
 const questTitle = document.getElementById('questTitle'), questObj = document.getElementById('questObj');
 const expEl = document.querySelector('#exp .bar i'), lvNumEl = document.getElementById('lvNum');
 function updateQuestUI() {
-  const q = QUESTS[quest.i];
-  questTitle.textContent = q.title;
-  let o = q.obj;
-  if (q.kills) o += ` (${Math.min(quest.kills, q.kills)}/${q.kills})`;
-  if (q.stars) o += ` (${Math.min(quest.stars, q.stars)}/${q.stars})`;
-  questObj.innerHTML = `<div class="obj${quest.i >= QUESTS.length - 1 ? ' done' : ''}">${o}</div>`;
+  let title, obj, done = false;
+  if (trackedQuest === 'main') {
+    title = MAIN_QUEST.title;
+    if (mq.done) { obj = '완료!'; done = true; }
+    else if (!mq.accepted) { obj = `${npcNameById('sailor')}와 이야기하기`; }
+    else {
+      const st = MAIN_QUEST.stages[mq.stage];
+      obj = st.obj;
+      if (st.kills != null) obj += ` (처치 ${Math.min(mq.kills, st.kills)}/${st.kills}·가시 ${Math.min(mq.spikeKills, st.spikeKills)}/${st.spikeKills}·별조각 ${Math.min(mq.fieldStars, st.fieldStars)}/${st.fieldStars})`;
+    }
+  } else {
+    const def = SIDE_QUESTS.find(s => s.id === trackedQuest);
+    const state = sideState(trackedQuest);
+    title = def.title;
+    if (state === 'offer') obj = `${npcNameById(def.npc)}에게 이야기하기`;
+    else if (state === 'active') obj = sideProgressText(def);
+    else if (state === 'ready') obj = `${npcNameById(def.npc)}에게 돌아가기`;
+    else { obj = '완료!'; done = true; }
+  }
+  questTitle.textContent = title;
+  questObj.innerHTML = `<div class="obj${done ? ' done' : ''}">${obj}</div>`;
   lvNumEl.textContent = `Lv.${player.level}`;
   expEl.style.width = player.level >= 10 ? '100%' : (Math.min(1, player.xp / XP_TO_NEXT(player.level)) * 100).toFixed(1) + '%';
 }
-function advanceQuest() {
-  if (quest.i >= QUESTS.length - 1) return;
-  quest.i++; gainExp(15);   // 작업 D: 퀘스트 진행 보너스 경험치(본격 보상은 작업 E)
-  log(`퀘스트: ${QUESTS[quest.i].title} — ${QUESTS[quest.i].obj}`, 'sys');
-  updateQuestUI();
-  // 먼저 해 둔 목표(별·슬라임)는 바로 넘어간다
-  const q = QUESTS[quest.i];
-  if ((q.kills && quest.kills >= q.kills) || (q.stars && quest.stars >= q.stars)) advanceQuest();
+// 퀘스트창(J)
+const questWinEl = document.getElementById('questWin'), questRowsEl = questWinEl.querySelector('.rows'), questFootEl = questWinEl.querySelector('.foot');
+let questWinOpen = false;
+const SIDE_STATUS_LABEL = { offer: '미수락', active: '진행 중', ready: '완료 가능', done: '완료' };
+function renderQuestWin() {
+  questRowsEl.innerHTML = '';
+  const rows = [{ id: 'main', title: MAIN_QUEST.title, status: mq.done ? '완료' : (mq.accepted ? '진행 중' : '미수락') }]
+    .concat(SIDE_QUESTS.map(s => ({ id: s.id, title: s.title, status: SIDE_STATUS_LABEL[sideState(s.id)] })));
+  for (const r of rows) {
+    const row = document.createElement('div'); row.className = 'row' + (trackedQuest === r.id ? ' sel' : '');
+    row.innerHTML = `<div class="info"><b>${r.title}</b><br><span class="d">${r.status}</span></div>`;
+    row.addEventListener('click', () => { trackedQuest = r.id; renderQuestWin(); updateQuestUI(); });
+    questRowsEl.appendChild(row);
+  }
+  questFootEl.textContent = 'J 닫기 · 클릭해 추적할 목표 선택';
+}
+function toggleQuestWin(force) {
+  questWinOpen = force === undefined ? !questWinOpen : force;
+  questWinEl.style.display = questWinOpen ? 'block' : 'none';
+  if (questWinOpen) { keys.clear(); toggleInv(false); toggleSkillWin(false); renderQuestWin(); }
+}
+// 완료 배너
+const questBannerEl = document.getElementById('questBanner'), qbTitleEl = document.getElementById('qbTitle'), qbRewardEl = document.getElementById('qbReward');
+let questBannerT = 0;
+function showQuestBanner(title, rewardText) {
+  qbTitleEl.textContent = `퀘스트 완료: ${title}`; qbRewardEl.textContent = rewardText;
+  questBannerT = 3.2; questBannerEl.classList.add('on');
+}
+function updateQuestBanner(dt) {
+  if (questBannerT <= 0) return;
+  questBannerT -= dt;
+  if (questBannerT <= 0) questBannerEl.classList.remove('on');
 }
 // 작업 B: 스킬바 Z·X·C·V 네 칸 — Z는 기본 공격 고정, X·C·V는 로드맵 7 D에서 무직 스킬을 배우기 전까지 잠김
 const SKILL_KEYS = ['Z', 'X', 'C', 'V'];
@@ -1671,7 +1857,7 @@ function renderSkillWin() {
 function toggleSkillWin(force) {
   skillWinOpen = force === undefined ? !skillWinOpen : force;
   skillWinEl.style.display = skillWinOpen ? 'block' : 'none';
-  if (skillWinOpen) { keys.clear(); toggleInv(false); renderSkillWin(); } else selectedSkill = null;
+  if (skillWinOpen) { keys.clear(); toggleInv(false); toggleQuestWin(false); renderSkillWin(); } else selectedSkill = null;
 }
 function bindSkillSlot(key) {
   if (!selectedSkill || player.skillLv[selectedSkill] <= 0) { log('먼저 스킬을 배워야 등록할 수 있다.', 'sys'); return; }
@@ -1771,14 +1957,21 @@ const questBeam = (() => {
   const m = new THREE.Mesh(geo, mat); scene.add(m); return m;
 })();
 function updateQuestBeam() {
-  const q = QUESTS[quest.i]; const n = q.npc && NPCS.find(x => x.id === q.npc);
+  let targetNpcId = null;
+  if (trackedQuest === 'main') {
+    if (!mq.done) { const st = MAIN_QUEST.stages[mq.stage]; if (st.npc) targetNpcId = st.npc; }
+  } else {
+    const def = SIDE_QUESTS.find(s => s.id === trackedQuest);
+    if (def) { const state = sideState(trackedQuest); if (state === 'offer' || state === 'ready') targetNpcId = def.npc; }
+  }
+  const n = targetNpcId && NPCS.find(x => x.id === targetNpcId);
   questBeam.visible = !!n;
   if (n) { questBeam.position.copy(n.dir).multiplyScalar(R + terrainH(n.dir) + n.lift + 0.1); questBeam.quaternion.setFromUnitVectors(_y, n.dir); }
 }
 // 튜토리얼 파란 화살표 2개 — 첫 NPC 좌우에서 안쪽으로 통통
 const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35, { shadow: false }); m.userData.side = s; scene.add(m); return m; });
 function updateTutArrows(nowS) {
-  const n = NPCS[0]; const show = quest.i === 0;
+  const n = NPCS[0]; const show = !mq.accepted;
   for (const a of tutArrows) {
     a.visible = show; if (!show) continue;
     _bn.set(0, 1, 0); tangentize(_bn, n.dir); _be.crossVectors(_bn, n.dir).normalize();
@@ -1946,9 +2139,12 @@ function dealDamage(s, dmg) {
     player.stamina = Math.max(0, player.stamina - s.exp * 0.5); updateStaminaUI();
     rollDrop(s.kind);
     if (s.kind === 'blue') {
-      quest.kills++; log('파란 슬라임을 쓰러뜨렸다.');
-      if (QUESTS[quest.i].kills && quest.kills >= QUESTS[quest.i].kills) { log('슬라임 3마리 처치 완료! 수문장 벨라에게 돌아가자.', 'sys'); advanceQuest(); }
-    } else log('가시 슬라임을 쓰러뜨렸다.');
+      log('파란 슬라임을 쓰러뜨렸다.');
+      if (mqHuntActive()) { mq.kills++; mqCheckHunt(); }
+    } else {
+      log('가시 슬라임을 쓰러뜨렸다.');
+      if (mqHuntActive()) { mq.spikeKills++; mqCheckHunt(); }
+    }
     updateQuestUI();
   }
 }
@@ -1995,6 +2191,7 @@ function updateCombat(dt) {
 
 // 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
 const STARS = [[7.2, -4.6], [10, 40]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));
+const pedestalDir = STARS[1].dir;   // 작업 E: 별 받침대(슬라임 초원) — 행성 퀘스트 마지막 단계에서 F로 봉헌
 const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
 // 2단 점프 발치의 흰 고리
 const puffTex = spriteTex(96, 48, (g, W, H) => { g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 6; g.beginPath(); g.ellipse(W / 2, H / 2, W * 0.42, H * 0.34, 0, 0, Math.PI * 2); g.stroke(); }, 'puff');
@@ -2020,37 +2217,73 @@ function updateStars(dt) {
   for (const st of STARS) {
     if (st.found) continue;
     if (angDeg(st.dir, _up) * DEG * R < 2.0) {
-      st.found = true; quest.stars++; exp = Math.min(1, exp + 0.08);
+      st.found = true;
       sparkle.visible = true; sparkleT = 1.4; sparkle.position.copy(st.dir).multiplyScalar(R + terrainH(st.dir) + 1.2); orientBillboard(sparkle, st.dir);
-      log(`✦ 떨어진 별 조각을 찾았다 (${quest.stars}/2)`, 'sys');
-      if (QUESTS[quest.i].stars && quest.stars >= QUESTS[quest.i].stars) { log('별 조각을 모두 찾았다. 탐사 완료!', 'sys'); advanceQuest(); }
-      updateQuestUI();
+      log('✦ 떨어진 별 조각을 찾았다.', 'sys');
+      if (mqHuntActive()) { mq.fieldStars++; mqCheckHunt(); updateQuestUI(); }
     }
   }
   if (sparkleT > 0) { sparkleT -= dt; sparkle.scale.setScalar(1 + Math.sin(sparkleT * 9) * 0.15); if (sparkleT <= 0) sparkle.visible = false; }
 }
 
 // 대화창
-const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null };
-const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt');
+const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null, choices: null, choicesShown: false };
+const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt'), dlgChoicesEl = document.getElementById('dlgChoices'), dlgNextEl = document.querySelector('#dialog .next');
 let nearNpc = null;
+let nearCrateIdx = null, nearPedestal = false;   // 작업 E
 const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';
 const myLabel = makeLabel('me', 'Lv.1 탐사자');
 const targetLabel = makeLabel('target', '▾'); targetLabel.style.display = 'none';   // 작업 C: Tab으로 고른 대상 표시
+function buildDialog(n) {
+  const main = mainDialogFor(n);
+  if (main) return main;
+  const def = SIDE_QUESTS.find(s => s.npc === n.id);
+  if (def && mq.accepted) {
+    const state = sideState(def.id);
+    if (state === 'offer') return { lines: def.offer, choices: [
+      { label: '돕겠다', run: () => acceptSide(def.id) },
+      { label: '나중에', run: () => log('나중에 다시 이야기하자.', 'sys') },
+    ] };
+    if (state === 'active') return { lines: def.idle };
+    if (state === 'ready') return { lines: def.turnin, onEnd: () => completeSide(def.id) };
+  }
+  return { lines: [n.idle] };
+}
 function openDialog(n) {
-  const q = QUESTS[quest.i];
-  let lines, onEnd = null;
-  if (q.npc === n.id) { lines = n.quest; onEnd = advanceQuest; }
-  else if (n.after && quest.i === 4 && !n.afterSaid) { lines = n.after; onEnd = () => { n.afterSaid = true; }; }
-  else lines = [n.idle];
-  dialog.open = true; dialog.npc = n; dialog.lines = lines; dialog.i = 0; dialog.onEnd = onEnd;
-  dlgWho.textContent = n.name; dlgTxt.textContent = lines[0]; dlgEl.style.display = 'block';
+  const built = buildDialog(n);
+  dialog.open = true; dialog.npc = n; dialog.lines = built.lines; dialog.i = 0;
+  dialog.onEnd = built.onEnd || null; dialog.choices = built.choices || null; dialog.choicesShown = false;
+  dlgWho.textContent = n.name; dlgTxt.textContent = built.lines[0]; dlgEl.style.display = 'block';
+  dlgChoicesEl.classList.remove('on'); dlgChoicesEl.innerHTML = ''; dlgNextEl.style.display = '';
   keys.clear(); player.moving = false;
-  log(`${n.name}: ${lines[0]}`, 'npc');
+  log(`${n.name}: ${built.lines[0]}`, 'npc');
+}
+function showChoices(list) {
+  dialog.choicesShown = true;
+  dlgNextEl.style.display = 'none';
+  dlgChoicesEl.innerHTML = '';
+  list.forEach((c, idx) => {
+    const row = document.createElement('div'); row.className = 'c';
+    row.innerHTML = `<b>${idx + 1}</b>${c.label}`;
+    row.addEventListener('click', () => pickChoice(idx));
+    dlgChoicesEl.appendChild(row);
+  });
+  dlgChoicesEl.classList.add('on');
+}
+function pickChoice(idx) {
+  const list = dialog.choices; if (!list || !list[idx]) return;
+  dlgChoicesEl.classList.remove('on'); dialog.choicesShown = false;
+  dialog.open = false; dlgEl.style.display = 'none';
+  dialog.choices = null;
+  list[idx].run();
 }
 function advanceDialog() {
+  if (dialog.choicesShown) return;
   dialog.i++;
-  if (dialog.i >= dialog.lines.length) { dialog.open = false; dlgEl.style.display = 'none'; if (dialog.onEnd) dialog.onEnd(); return; }
+  if (dialog.i >= dialog.lines.length) {
+    if (dialog.choices && dialog.choices.length) { showChoices(dialog.choices); return; }
+    dialog.open = false; dlgEl.style.display = 'none'; if (dialog.onEnd) dialog.onEnd(); return;
+  }
   dlgTxt.textContent = dialog.lines[dialog.i]; log(`${dialog.npc.name}: ${dialog.lines[dialog.i]}`, 'npc');
 }
 // 인벤토리 (I) — 작업 D: 드롭 4종(젤리·가시·HP포션·MP포션)을 앞 4칸에 표시, 포션은 클릭으로도 사용
@@ -2091,7 +2324,7 @@ function startDeath() {
   player.dead = true; player.deadT = 0; keys.clear(); player.moving = false;
   deathFadeEl.classList.add('on'); log('쓰러졌다...', 'sys');
 }
-function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) { keys.clear(); toggleSkillWin(false); updateInvUI(); } }
+function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) { keys.clear(); toggleSkillWin(false); toggleQuestWin(false); updateInvUI(); } }
 
 // 시작 컷신 (1:30~1:40): 높은 곳에서 내려오는 카메라, 비행정 하강·착지, 캐릭터 등 뒤로 붙음, 지역명
 const cut = { on: !DEBUG && !new URLSearchParams(location.search).has('nocut'), t: 0, dur: 8, land: 5.4 };
@@ -2122,11 +2355,17 @@ if (cut.on) startCutscene(); else { player.mesh.visible = true; }
 const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너머로 비쳐 보이지 않게)
 function updateLabels() {
   placeLabel(myLabel, headOf(player.mesh, 1.95));
-  if ((nearNpc || nearTent) && !dialog.open && !cut.on) { tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : '<b>F</b>휴식(기력 회복)'; placeLabel(tipEl, headOf(player.mesh, 1.95)); }
-  else tipEl.style.display = 'none';
+  if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal) && !dialog.open && !cut.on) {
+    tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : nearCrateIdx != null ? '<b>F</b>상자 조사' : nearPedestal ? '<b>F</b>별 조각 바치기' : '<b>F</b>휴식(기력 회복)';
+    placeLabel(tipEl, headOf(player.mesh, 1.95));
+  } else tipEl.style.display = 'none';
   for (const n of NPCS) {
     if (angDeg(n.dir, _up) * DEG * R > LABEL_DIST) { n.label.style.display = 'none'; continue; }
-    placeLabel(n.label, headOf(n.mesh, 1.95)); n.label.classList.toggle('q', QUESTS[quest.i].npc === n.id);
+    placeLabel(n.label, headOf(n.mesh, 1.95));
+    const mk = npcMarker(n.id);
+    n.label.classList.toggle('give', mk === 'give');
+    n.label.classList.toggle('ask', mk === 'ask' || mk === 'wait');
+    n.label.classList.toggle('wait', mk === 'wait');
   }
   for (const s of allMonsters()) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R > LABEL_DIST) s.label.style.display = 'none'; else placeLabel(s.label, headOf(s.mesh, 1.15)); }
   if (player.target && player.target.alive && angDeg(player.target.dir, _up) * DEG * R < LABEL_DIST) placeLabel(targetLabel, headOf(player.target.mesh, 1.75));
@@ -2140,20 +2379,26 @@ let mapView = 0;
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
-  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); e.preventDefault(); return; }
-  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); return; }
+  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); e.preventDefault(); return; }
+  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); return; }
   if (mapView) return;
   if (k === 'i') { toggleInv(); return; }
   if (k === 'k') { toggleSkillWin(); return; }
+  if (k === 'j') { toggleQuestWin(); return; }
   if (k === 'q') { cycleQuality(); return; }
-  if (dialog.open) { if (k === ' ') { e.preventDefault(); advanceDialog(); } return; }
+  if (dialog.open) {
+    if (dialog.choicesShown) { const idx = parseInt(k, 10) - 1; if (!isNaN(idx)) pickChoice(idx); return; }
+    if (k === ' ') { e.preventDefault(); advanceDialog(); }
+    return;
+  }
   if (skillWinOpen) { if (k === 'x' || k === 'c' || k === 'v') bindSkillSlot(k.toUpperCase()); return; }
+  if (questWinOpen) return;
   if (invOpen) return;
   if (player.dead) return;   // 작업 C: 주저앉아 있는 동안엔 조작 없음
   keys.add(k);
-  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·채집·이슬·포탈), Z~V가 공격·스킬
+  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·상자 조사·봉헌·휴식), Z~V가 공격·스킬
   if (k === ' ') { e.preventDefault(); tryJump(); }
-  if (k === 'f') { if (nearNpc) openDialog(nearNpc); else if (nearTent) restAtTent(); }
+  if (k === 'f') { if (nearNpc) openDialog(nearNpc); else if (nearCrateIdx != null) inspectCrate(nearCrateIdx); else if (nearPedestal) deliverStar(); else if (nearTent) restAtTent(); }
   if (k === 'z') attack();
   if (k === 'x' || k === 'c' || k === 'v') skillSlot(k);
   if (k === 'tab') { e.preventDefault(); cycleTarget(); }
@@ -2169,7 +2414,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
   if (cut.on) { cut.t = cut.dur; return; }
   if (dialog.open) { advanceDialog(); return; }
-  if (invOpen || skillWinOpen) return;
+  if (invOpen || skillWinOpen || questWinOpen) return;
   attack();   // 클릭도 기본 공격
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2273,11 +2518,18 @@ function step(dt) {
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     for (const b of beams) b.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
-    updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt); updateCooldowns(dt);
+    updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt); updateCooldowns(dt); updateQuestBanner(dt);
     updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
     nearNpc = null; let best = 2.4;
     for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
     nearTent = angDeg(tentProp.userData.dir, _up) * DEG * R < 2.6;   // 작업 D: 텐트 근처면 F로 휴식
+    // 작업 E: 조사할 상자(미르의 "비행정 부품 점검")·별 받침대 봉헌 근접 판정
+    nearCrateIdx = null;
+    if (sq.cargo.accepted && !sq.cargo.done) {
+      let bestC = 2.0;
+      campCrates.forEach((m, idx) => { if (sq.cargo.inspected.has(idx)) return; const d = angDeg(m.userData.dir, _up) * DEG * R; if (d < bestC) { bestC = d; nearCrateIdx = idx; } });
+    }
+    nearPedestal = (mq.stage === 4 && !mq.done) && angDeg(pedestalDir, _up) * DEG * R < 2.4;
   }
 
   // 카메라
@@ -2847,7 +3099,7 @@ if (DEBUG) {
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { return tryJump(); },
-    NPCS, slimes, quest, QUESTS, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
+    NPCS, slimes, cut, dialog, STARS, attack, openDialog, advanceDialog, startCutscene, toggleInv,
     nearNpc() { return nearNpc; },
     // 작업 B/C 검증용
     spikeSlimes, allMonsters, climbProps, hitPlayer, dealDamage, cycleTarget, skillSlot,
@@ -2858,6 +3110,11 @@ if (DEBUG) {
     gainExp, XP_TO_NEXT, rollDrop, usePotion, SKILLS, selectOrLearnSkill, bindSkillSlot, toggleSkillWin, castSkillById,
     restAtTent, nearTent() { return nearTent; },
     skillWinOpen() { return skillWinOpen; }, invOpen() { return invOpen; },
+    // 작업 E 검증용
+    MAIN_QUEST, mq, SIDE_QUESTS, sq, acceptMainQuest, advanceMainStage, deliverStar, mqHuntActive,
+    acceptSide, completeSide, inspectCrate, sideState, npcMarker, pickChoice,
+    questWinOpen() { return questWinOpen; }, nearCrateIdx() { return nearCrateIdx; }, nearPedestal() { return nearPedestal; },
+    setTracked(id) { trackedQuest = id; updateQuestUI(); },
     SPRITES, planet,
     perf() { return { dpr, quality, qualityMode, frameMs, gpu: GPU_NAME, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     setQuality(q) { qualityMode = q; applyQuality(q, 'debug'); },
