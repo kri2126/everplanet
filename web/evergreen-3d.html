@@ -61,8 +61,16 @@
   #skills i.locked { opacity: .55; }
   #skills i.locked::before { content: '🔒'; position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; }
   #skills i .cd { position: absolute; inset: 0; border-radius: 5px; background: conic-gradient(rgba(10,10,10,.72) calc(var(--p,0) * 360deg), transparent 0); pointer-events: none; }
-  #exp { position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%); width: 440px; height: 5px; background: rgba(0,0,0,.55); border-radius: 3px; overflow: hidden; pointer-events: none; }
-  #exp i { display: block; height: 100%; width: 12%; background: linear-gradient(#9cf07a, #3ea83a); transition: width .4s; }
+  /* 작업 D: 기력 게이지(HP·MP 오브 사이) */
+  #stamina { width: 10px; height: 68px; border-radius: 5px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,220,170,.3); overflow: hidden; display: flex; align-items: flex-end; margin-bottom: 2px; }
+  #stamina i { display: block; width: 100%; background: linear-gradient(#bff28a, #4a9c3a); height: 100%; transition: height .3s; }
+  #exp { position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%); width: 460px; height: 14px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+  #exp b { font: 700 11px monospace; color: #ffe9a8; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+  #exp .bar { flex: 1; height: 5px; background: rgba(0,0,0,.55); border-radius: 3px; overflow: hidden; }
+  #exp .bar i { display: block; height: 100%; width: 12%; background: linear-gradient(#9cf07a, #3ea83a); transition: width .4s; }
+  /* 작업 D: 오른쪽 아래 별씨앗 — 최종 배치·스타일은 작업 H 몫, 지금은 기능만 */
+  #seedsHUD { position: fixed; right: 14px; bottom: 14px; font: 700 13px monospace; color: #ffe9a8; text-shadow: 0 1px 2px rgba(0,0,0,.8);
+    background: rgba(30,22,14,.45); padding: 4px 10px; border-radius: 6px; pointer-events: none; }
   #quest { position: fixed; right: 14px; top: 212px; width: 190px; font-size: 12px; line-height: 1.45; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.7);
     background: rgba(30,22,14,.45); border-left: 3px solid #ffd166; padding: 6px 8px; border-radius: 0 6px 6px 0; pointer-events: none; }
   #quest b { display: block; color: #ffd166; font-size: 12px; margin-bottom: 2px; }
@@ -94,8 +102,24 @@
     border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); pointer-events: none; }
   #inv h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
   #inv .grid { display: grid; grid-template-columns: repeat(5, 44px); gap: 5px; }
-  #inv .grid i { width: 44px; height: 44px; display: block; background: #4a3219; border: 1px solid #2f1e0c; box-shadow: inset 0 1px 0 rgba(255,220,170,.15); border-radius: 4px; }
+  #inv .grid i { width: 44px; height: 44px; display: block; background: #4a3219; border: 1px solid #2f1e0c; box-shadow: inset 0 1px 0 rgba(255,220,170,.15); border-radius: 4px; position: relative; }
+  #inv .grid i[data-item] { pointer-events: auto; cursor: pointer; }
+  #inv .grid i.has { background: #5a3d22; }
+  #inv .grid i .ic { position: absolute; top: 3px; left: 0; right: 0; text-align: center; font: 700 11px monospace; color: #e8d5b5; }
+  #inv .grid i .ct { position: absolute; bottom: 2px; right: 4px; font: 700 10px monospace; color: #ffe9a8; }
   #inv .foot { margin-top: 8px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .8; }
+  /* 작업 D: 스킬창(K) — 인벤토리와 같은 양피지 스타일, 클릭 가능 */
+  #skillWin { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14;
+    border-radius: 10px; padding: 10px 14px 12px; box-shadow: 0 10px 40px rgba(0,0,0,.55); width: 300px; }
+  #skillWin h3 { margin: 0 0 8px; font: 700 15px 'Gowun Dodum', sans-serif; color: #fdf4de; text-align: center; letter-spacing: .1em; }
+  #skillWin .row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; margin-bottom: 5px; background: #4a3219; border: 1px solid #2f1e0c; border-radius: 6px; cursor: pointer; }
+  #skillWin .row.sel { outline: 2px solid #ffd166; }
+  #skillWin .row .ic { width: 30px; height: 30px; border-radius: 5px; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; font: 700 14px sans-serif; color: #ffe9a8; flex-shrink: 0; }
+  #skillWin .row .info { flex: 1; font-size: 12px; color: #fdf4de; line-height: 1.4; }
+  #skillWin .row .info b { color: #ffd166; }
+  #skillWin .row .info .d { opacity: .75; font-size: 11px; }
+  #skillWin .row .slot { width: 22px; height: 22px; border-radius: 4px; background: rgba(0,0,0,.35); font: 700 11px monospace; color: #9ad2ff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  #skillWin .foot { margin-top: 4px; font-size: 11px; color: #e8d5b5; text-align: center; opacity: .85; }
   #cut { position: fixed; inset: 0; display: none; pointer-events: none; }
   #cut .bar { position: absolute; left: 0; right: 0; height: 9%; background: #000; } #cut .top { top: 0; } #cut .bot { bottom: 0; }
   #cut .skip { position: absolute; right: 18px; bottom: 11%; font-size: 12px; opacity: .85; text-shadow: 0 1px 2px #000; }
@@ -106,6 +130,8 @@
   #deathFade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1s ease; z-index: 6; }
   #deathFade.on { opacity: .82; transition: opacity .3s ease; }
   .lb.target { color: #ffd166; font: 900 16px sans-serif; text-shadow: 0 0 4px rgba(0,0,0,.8); }
+  /* 작업 D: 회복 데미지팝(초록) */
+  .lb.dmg.heal { color: #baffb0; -webkit-text-stroke: 1px #1f6b1a; }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -113,21 +139,23 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용 <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>M</b>지도 <b>M M</b>전경도 <b>Q</b>화질</div>
 <div id="fps"></div>
 <div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
 <div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
-<div id="hud"><div class="orb hp"><b>HP</b><span id="hpNum">100</span></div><div id="skills"></div><div class="orb mp"><b>MP</b><span id="mpNum">50</span></div></div>
+<div id="hud"><div class="orb hp"><b>HP</b><span id="hpNum">100</span></div><div id="stamina"><i></i></div><div id="skills"></div><div class="orb mp"><b>MP</b><span id="mpNum">50</span></div></div>
 <div id="vignette"></div>
 <div id="deathFade"></div>
-<div id="exp"><i></i></div>
+<div id="exp"><b id="lvNum">Lv.1</b><div class="bar"><i></i></div></div>
+<div id="seedsHUD">별씨앗 0</div>
 <div id="quest"><b id="questTitle"></b><div id="questObj"></div></div>
 <div id="log"></div>
 <div id="labels"></div>
 <div id="dialog"><div class="who" id="dlgWho"></div><div class="txt" id="dlgTxt"></div><div class="next"><b>Space Bar</b>다음</div></div>
-<div id="inv"><h3>인벤토리</h3><div class="grid"></div><div class="foot">I 닫기 · 아직 담긴 물건이 없다</div></div>
+<div id="inv"><h3>인벤토리</h3><div class="grid"></div><div class="foot">I 닫기</div></div>
+<div id="skillWin"><h3>무직 스킬</h3><div class="rows"></div><div class="foot">K 닫기</div></div>
 <div id="cut"><div class="bar top"></div><div class="bar bot"></div><div class="skip"><b>Space</b> 건너뛰기</div></div>
 
 <script type="module">
@@ -1006,6 +1034,11 @@ const player = {
   swimming: false, swimT: 0,                                      // 작업 B: 수영
   hp: 100, maxHp: 100, mp: 50, maxMp: 50,                          // 작업 C: 체력·마나
   hurtT: 0, dead: false, deadT: 0, target: null,
+  level: 1, xp: 0, sp: 0,                                          // 작업 D: 레벨·경험치·스킬 포인트
+  stamina: 100, staminaMax: 100,                                    // 작업 D: 기력
+  skillLv: { stomp: 0, spin: 0, heal: 0 }, slotSkill: { X: null, C: null, V: null },
+  seeds: 0, inv: { jelly: 0, spike: 0, hpPot: 0, mpPot: 0 },
+  potCdHp: 0, potCdMp: 0, restCd: 0,
 };
 scene.add(player.mesh);
 charTex.offset.set(0, 0);
@@ -1272,7 +1305,7 @@ addProp(starTex, 1.9, 1.9, 7.2, -4.6);
 [addProp(stoneTallTex, 1.3, 2.2, -1.7, 11.7), addProp(stoneTallTex, 1.2, 2.0, 1.7, 11.7)]
   .forEach(m => addClimb(m.userData.dir, 0.5, 1.6));
 // 단구 야영지: 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
-addProp(tentTex, 4.4, 4.4, 3.6, 16.2);
+const tentProp = addProp(tentTex, 4.4, 4.4, 3.6, 16.2);   // 작업 D: 텐트 앞 F로 휴식(기력 회복)
 addProp(cauldronTex, 1.2, 1.2, 1.9, 15.3);
 [addProp(crateTex, 1.0, 1.0, 4.9, 17.6), addProp(crateTex, 0.9, 0.9, 5.4, 16.9), addProp(crateTex, 0.9, 0.9, -1.2, 14.6)]
   .forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
@@ -1539,7 +1572,7 @@ const QUESTS = [
 ];
 const quest = { i: 0, kills: 0, stars: 0 };
 const questTitle = document.getElementById('questTitle'), questObj = document.getElementById('questObj');
-const expEl = document.querySelector('#exp i'); let exp = 0.12;
+const expEl = document.querySelector('#exp .bar i'), lvNumEl = document.getElementById('lvNum');
 function updateQuestUI() {
   const q = QUESTS[quest.i];
   questTitle.textContent = q.title;
@@ -1547,11 +1580,12 @@ function updateQuestUI() {
   if (q.kills) o += ` (${Math.min(quest.kills, q.kills)}/${q.kills})`;
   if (q.stars) o += ` (${Math.min(quest.stars, q.stars)}/${q.stars})`;
   questObj.innerHTML = `<div class="obj${quest.i >= QUESTS.length - 1 ? ' done' : ''}">${o}</div>`;
-  expEl.style.width = (Math.min(1, exp) * 100).toFixed(1) + '%';
+  lvNumEl.textContent = `Lv.${player.level}`;
+  expEl.style.width = player.level >= 10 ? '100%' : (Math.min(1, player.xp / XP_TO_NEXT(player.level)) * 100).toFixed(1) + '%';
 }
 function advanceQuest() {
   if (quest.i >= QUESTS.length - 1) return;
-  quest.i++; exp = Math.min(1, exp + 0.14);
+  quest.i++; gainExp(15);   // 작업 D: 퀘스트 진행 보너스 경험치(본격 보상은 작업 E)
   log(`퀘스트: ${QUESTS[quest.i].title} — ${QUESTS[quest.i].obj}`, 'sys');
   updateQuestUI();
   // 먼저 해 둔 목표(별·슬라임)는 바로 넘어간다
@@ -1568,12 +1602,162 @@ const skillEls = {};
     if (key === 'Z') s.className = 'f'; else s.className = 'locked';
     sk.appendChild(s); skillEls[key] = s;
   }
-  const inv = document.querySelector('#inv .grid'); for (let i = 0; i < 30; i++) inv.appendChild(document.createElement('i'));
 }
-function skillSlot(k) {   // X·C·V — 아직 배운 스킬이 없다(작업 D에서 채워짐)
+// 작업 D: 성장 — 레벨·경험치·기력·스킬 포인트·무직 스킬 3종·드롭·포션·별씨앗
+function XP_TO_NEXT(lv) { return 60 + (lv - 1) * 40; }
+const lvRing = (() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.62, 24), new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })); m.visible = false; scene.add(m); return m; })();
+let lvRingT = 0;
+function gainExp(amt) {
+  if (amt <= 0 || player.level >= 10) { updateQuestUI(); return; }
+  player.xp += amt;
+  while (player.level < 10 && player.xp >= XP_TO_NEXT(player.level)) {
+    player.xp -= XP_TO_NEXT(player.level); player.level++;
+    player.sp++; player.hp = player.maxHp; player.mp = player.maxMp;
+    lvRingT = 0; lvRing.visible = true; lvRing.material.opacity = 0.9;
+    myLabel.textContent = `Lv.${player.level} 탐사자`;
+    log(`레벨 업! Lv.${player.level} — 스킬 포인트 +1${player.level === 10 ? ' (상한 도달, 에버그린 항구에서 전직 가능)' : ''}`, 'sys');
+  }
+  updateHUD(); updateQuestUI();
+}
+function updateLvRing(dt) {
+  if (!lvRing.visible) return;
+  lvRingT += dt;
+  lvRing.position.copy(player.pos).addScaledVector(_up, 0.05);
+  lvRing.quaternion.setFromUnitVectors(_ringN, _up);
+  const k = lvRingT / 0.9;
+  lvRing.scale.setScalar(1 + k * 2.2); lvRing.material.opacity = Math.max(0, 0.9 * (1 - k));
+  if (lvRingT > 0.9) lvRing.visible = false;
+}
+// 기력: 최대 100, 사냥 경험치 1당 0.5 감소, 남아있으면 그 사냥 경험치 3배(원작 "2배 더"의 재해석, §11)
+const staminaEl = document.querySelector('#stamina i');
+function updateStaminaUI() { staminaEl.style.height = (Math.max(0, player.stamina) / player.staminaMax * 100).toFixed(1) + '%'; }
+let nearTent = false;
+function restAtTent() {
+  if (player.restCd > 0) { log('아직 쉴 수 없다 — 잠시 뒤에.', 'sys'); return; }
+  player.restCd = 60; player.stamina = Math.min(player.staminaMax, player.stamina + 20); updateStaminaUI();
+  log('텐트 앞에서 5초간 쉬었다 — 기력 +20.', 'sys');
+}
+// 무직 스킬 3종(재해석, §11) — 스킬창(K)에서 SP로 배우고 X·C·V에 등록해야 쓸 수 있다
+const SKILLS = {
+  stomp: { name: '내려찍기', icon: '찍', dmg: [25, 32, 40], mp: 10, cd: 4, desc: '공중에서 — 착지 반경 1.8 전체 피해' },
+  spin: { name: '회전 베기', icon: '회', dmg: [18, 24, 30], mp: 8, cd: 3, desc: '주변 반경 1.5 전체 피해' },
+  heal: { name: '응급 처치', icon: '치', heal: [25, 35, 50], mp: 15, cd: 12, desc: '자신의 HP 회복' },
+};
+let skillWinOpen = false, selectedSkill = null;
+const skillWinEl = document.getElementById('skillWin'), skillRowsEl = skillWinEl.querySelector('.rows'), skillFootEl = skillWinEl.querySelector('.foot');
+const skillRowEls = {};
+for (const id in SKILLS) {
+  const sk = SKILLS[id];
+  const row = document.createElement('div'); row.className = 'row'; row.dataset.id = id;
+  row.innerHTML = `<div class="ic">${sk.icon}</div><div class="info"><b>${sk.name}</b> Lv.<span class="lv">0</span>/3 · MP${sk.mp} · 쿨${sk.cd}초<br><span class="d">${sk.desc}</span></div><div class="slot">-</div>`;
+  row.addEventListener('click', () => selectOrLearnSkill(id));
+  skillRowsEl.appendChild(row); skillRowEls[id] = row;
+}
+function selectOrLearnSkill(id) {
+  if (player.sp > 0 && player.skillLv[id] < 3) { player.skillLv[id]++; player.sp--; log(`${SKILLS[id].name}을(를) Lv.${player.skillLv[id]}로 배웠다.`, 'sys'); }
+  selectedSkill = id; renderSkillWin();
+}
+function renderSkillWin() {
+  for (const id in SKILLS) {
+    const row = skillRowEls[id];
+    row.querySelector('.lv').textContent = player.skillLv[id];
+    row.classList.toggle('sel', selectedSkill === id);
+    let slotKey = '-';
+    for (const k in player.slotSkill) if (player.slotSkill[k] === id) slotKey = k;
+    row.querySelector('.slot').textContent = slotKey;
+  }
+  skillFootEl.textContent = `SP ${player.sp} · K 닫기 · 클릭해 배우기/선택 → X·C·V로 등록`;
+}
+function toggleSkillWin(force) {
+  skillWinOpen = force === undefined ? !skillWinOpen : force;
+  skillWinEl.style.display = skillWinOpen ? 'block' : 'none';
+  if (skillWinOpen) { keys.clear(); toggleInv(false); renderSkillWin(); } else selectedSkill = null;
+}
+function bindSkillSlot(key) {
+  if (!selectedSkill || player.skillLv[selectedSkill] <= 0) { log('먼저 스킬을 배워야 등록할 수 있다.', 'sys'); return; }
+  for (const k in player.slotSkill) if (player.slotSkill[k] === selectedSkill) player.slotSkill[k] = null;
+  player.slotSkill[key] = selectedSkill;
+  skillEls[key].classList.remove('locked');
+  skillEls[key].innerHTML = `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 15px sans-serif;color:#ffe9a8;">${SKILLS[selectedSkill].icon}</span>`;
+  renderSkillWin();
+  log(`${SKILLS[selectedSkill].name}을(를) ${key} 슬롯에 등록했다.`, 'sys');
+}
+const skillCd = { stomp: 0, spin: 0, heal: 0 };
+function castSkillById(id) {
+  const sk = SKILLS[id], lv = player.skillLv[id];
+  if (lv <= 0) { log('아직 배우지 않은 스킬이다.', 'sys'); return; }
+  if (skillCd[id] > 0) return;
+  if (player.mp < sk.mp) { log('MP가 부족하다.', 'sys'); return; }
+  if (id === 'stomp' && (player.grounded || player.swimming || player.dead)) { log('내려찍기는 공중에서만 쓸 수 있다.', 'sys'); return; }
+  player.mp -= sk.mp; skillCd[id] = sk.cd; updateHUD();
+  if (id === 'heal') {
+    const amt = sk.heal[lv - 1]; player.hp = Math.min(player.maxHp, player.hp + amt); updateHUD();
+    const el = makeLabel('dmg heal', '+' + amt); dmgPops.push({ el, pos: player.mesh.position.clone(), dir: _up.clone(), t: 0 });
+    log('응급 처치로 HP를 회복했다.', 'sys'); return;
+  }
+  const dmg = sk.dmg[lv - 1], radius = id === 'stomp' ? 1.8 : 1.5;
+  puff();
+  for (const s of allMonsters()) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R <= radius) dealDamage(s, dmg); }
+  log(id === 'stomp' ? '내려찍기로 착지 지점을 강타했다.' : '회전 베기를 휘둘렀다.', 'sys');
+}
+function useSlotSkill(key) {
+  const id = player.slotSkill[key];
+  if (!id) { log('아직 배운 스킬이 없다 — K로 스킬창을 열어 배우자.', 'sys'); return; }
+  castSkillById(id);
+}
+function skillSlot(k) {
   const key = k.toUpperCase();
   if (key === 'Z') { attack(); return; }
-  log('아직 배운 스킬이 없다 — 스킬창(K)은 다음 로드맵에서.', 'sys');
+  useSlotSkill(key);
+}
+function updateCooldowns(dt) {
+  for (const id in skillCd) if (skillCd[id] > 0) skillCd[id] = Math.max(0, skillCd[id] - dt);
+  if (player.potCdHp > 0) player.potCdHp = Math.max(0, player.potCdHp - dt);
+  if (player.potCdMp > 0) player.potCdMp = Math.max(0, player.potCdMp - dt);
+  if (player.restCd > 0) player.restCd = Math.max(0, player.restCd - dt);
+  for (const key of SKILL_KEYS) {
+    if (key === 'Z') continue;
+    const id = player.slotSkill[key]; const el = skillEls[key];
+    let cdEl = el.querySelector('.cd');
+    if (!id) { if (cdEl) cdEl.remove(); continue; }
+    const frac = skillCd[id] / SKILLS[id].cd;
+    if (frac > 0) { if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; el.appendChild(cdEl); } cdEl.style.setProperty('--p', frac.toFixed(2)); }
+    else if (cdEl) cdEl.remove();
+  }
+  updateLvRing(dt);
+}
+// 드롭: 슬라임 → 젤리 40%·별씨앗 3~6·HP포션 10%, 가시 슬라임 → 가시 50%·별씨앗 6~10·MP포션 10%
+const seedsHUDEl = document.getElementById('seedsHUD');
+function updateSeedsUI() { seedsHUDEl.textContent = `별씨앗 ${player.seeds}`; }
+function rollDrop(kind) {
+  const seedsRange = kind === 'blue' ? [3, 6] : [6, 10];
+  const seeds = seedsRange[0] + Math.floor(Math.random() * (seedsRange[1] - seedsRange[0] + 1));
+  player.seeds += seeds;
+  const msgs = [];
+  if (kind === 'blue') {
+    if (Math.random() < 0.4) { player.inv.jelly++; msgs.push('슬라임 젤리'); }
+    if (Math.random() < 0.1) { player.inv.hpPot++; msgs.push('HP 포션'); }
+  } else {
+    if (Math.random() < 0.5) { player.inv.spike++; msgs.push('가시'); }
+    if (Math.random() < 0.1) { player.inv.mpPot++; msgs.push('MP 포션'); }
+  }
+  msgs.push(`별씨앗 ${seeds}개`);
+  log(`획득: ${msgs.join(', ')}`, 'sys');
+  updateInvUI(); updateSeedsUI();
+}
+function usePotion(type) {
+  if (type === 'hp') {
+    if (player.potCdHp > 0) return;
+    if ((player.inv.hpPot || 0) <= 0) { log('HP 포션이 없다.', 'sys'); return; }
+    player.inv.hpPot--; player.potCdHp = 5; player.hp = Math.min(player.maxHp, player.hp + 40); updateHUD();
+    const el = makeLabel('dmg heal', '+40'); dmgPops.push({ el, pos: player.mesh.position.clone(), dir: _up.clone(), t: 0 });
+  } else {
+    if (player.potCdMp > 0) return;
+    if ((player.inv.mpPot || 0) <= 0) { log('MP 포션이 없다.', 'sys'); return; }
+    player.inv.mpPot--; player.potCdMp = 5; player.mp = Math.min(player.maxMp, player.mp + 30); updateHUD();
+    const el = makeLabel('dmg heal', '+30'); dmgPops.push({ el, pos: player.mesh.position.clone(), dir: _up.clone(), t: 0 });
+  }
+  updateInvUI();
 }
 updateQuestUI();
 
@@ -1757,7 +1941,10 @@ function dealDamage(s, dmg) {
     s.alive = false; s.respawnT = 12; s.mesh.visible = false; s.label.style.display = 'none';
     if (s.kind === 'spike') { s.shadowMesh.visible = false; s.telegraphT = 0; }
     if (player.target === s) player.target = null;
-    exp = Math.min(1, exp + (s.kind === 'blue' ? 0.05 : 0.08));
+    const staminaMult = player.stamina > 0 ? 3 : 1;   // 작업 D: 기력 남아있으면 경험치 3배(원작 "2배 더"의 재해석)
+    gainExp(s.exp * staminaMult);
+    player.stamina = Math.max(0, player.stamina - s.exp * 0.5); updateStaminaUI();
+    rollDrop(s.kind);
     if (s.kind === 'blue') {
       quest.kills++; log('파란 슬라임을 쓰러뜨렸다.');
       if (QUESTS[quest.i].kills && quest.kills >= QUESTS[quest.i].kills) { log('슬라임 3마리 처치 완료! 수문장 벨라에게 돌아가자.', 'sys'); advanceQuest(); }
@@ -1848,7 +2035,7 @@ const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null };
 const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementById('dlgWho'), dlgTxt = document.getElementById('dlgTxt');
 let nearNpc = null;
 const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';
-const myLabel = makeLabel('me', '탐사자');
+const myLabel = makeLabel('me', 'Lv.1 탐사자');
 const targetLabel = makeLabel('target', '▾'); targetLabel.style.display = 'none';   // 작업 C: Tab으로 고른 대상 표시
 function openDialog(n) {
   const q = QUESTS[quest.i];
@@ -1866,8 +2053,27 @@ function advanceDialog() {
   if (dialog.i >= dialog.lines.length) { dialog.open = false; dlgEl.style.display = 'none'; if (dialog.onEnd) dialog.onEnd(); return; }
   dlgTxt.textContent = dialog.lines[dialog.i]; log(`${dialog.npc.name}: ${dialog.lines[dialog.i]}`, 'npc');
 }
-// 인벤토리 (I)
+// 인벤토리 (I) — 작업 D: 드롭 4종(젤리·가시·HP포션·MP포션)을 앞 4칸에 표시, 포션은 클릭으로도 사용
 const invEl = document.getElementById('inv'); let invOpen = false;
+const invGridEl = document.querySelector('#inv .grid'), invFootEl = document.querySelector('#inv .foot');
+const invSlotOrder = ['jelly', 'spike', 'hpPot', 'mpPot'];
+const invIcon = { jelly: '젤', spike: '시', hpPot: 'HP', mpPot: 'MP' };
+const invCells = {};
+for (let i = 0; i < 30; i++) {
+  const cell = document.createElement('i');
+  if (i < invSlotOrder.length) {
+    const id = invSlotOrder[i]; cell.dataset.item = id;
+    cell.innerHTML = `<span class="ic">${invIcon[id]}</span><span class="ct">0</span>`;
+    if (id === 'hpPot' || id === 'mpPot') cell.addEventListener('click', () => usePotion(id === 'hpPot' ? 'hp' : 'mp'));
+    invCells[id] = cell;
+  }
+  invGridEl.appendChild(cell);
+}
+function updateInvUI() {
+  for (const id of invSlotOrder) { const c = player.inv[id] || 0; invCells[id].querySelector('.ct').textContent = c; invCells[id].classList.toggle('has', c > 0); }
+  invFootEl.textContent = 'I 닫기 · 포션은 클릭 또는 숫자키 1(HP)·2(MP)로 사용';
+}
+updateInvUI();
 // 작업 C: HP/MP HUD·피격 비네트·사망 페이드
 const hpNumEl = document.getElementById('hpNum'), mpNumEl = document.getElementById('mpNum');
 const vignetteEl = document.getElementById('vignette'), deathFadeEl = document.getElementById('deathFade');
@@ -1885,7 +2091,7 @@ function startDeath() {
   player.dead = true; player.deadT = 0; keys.clear(); player.moving = false;
   deathFadeEl.classList.add('on'); log('쓰러졌다...', 'sys');
 }
-function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) keys.clear(); }
+function toggleInv(force) { invOpen = force === undefined ? !invOpen : force; invEl.style.display = invOpen ? 'block' : 'none'; if (invOpen) { keys.clear(); toggleSkillWin(false); updateInvUI(); } }
 
 // 시작 컷신 (1:30~1:40): 높은 곳에서 내려오는 카메라, 비행정 하강·착지, 캐릭터 등 뒤로 붙음, 지역명
 const cut = { on: !DEBUG && !new URLSearchParams(location.search).has('nocut'), t: 0, dur: 8, land: 5.4 };
@@ -1916,7 +2122,8 @@ if (cut.on) startCutscene(); else { player.mesh.visible = true; }
 const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너머로 비쳐 보이지 않게)
 function updateLabels() {
   placeLabel(myLabel, headOf(player.mesh, 1.95));
-  if (nearNpc && !dialog.open && !cut.on) placeLabel(tipEl, headOf(player.mesh, 1.95)); else tipEl.style.display = 'none';
+  if ((nearNpc || nearTent) && !dialog.open && !cut.on) { tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : '<b>F</b>휴식(기력 회복)'; placeLabel(tipEl, headOf(player.mesh, 1.95)); }
+  else tipEl.style.display = 'none';
   for (const n of NPCS) {
     if (angDeg(n.dir, _up) * DEG * R > LABEL_DIST) { n.label.style.display = 'none'; continue; }
     placeLabel(n.label, headOf(n.mesh, 1.95)); n.label.classList.toggle('q', QUESTS[quest.i].npc === n.id);
@@ -1933,21 +2140,25 @@ let mapView = 0;
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
-  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); e.preventDefault(); return; }
-  if (k === 'escape') { mapView = 0; toggleInv(false); return; }
+  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); e.preventDefault(); return; }
+  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); return; }
   if (mapView) return;
   if (k === 'i') { toggleInv(); return; }
+  if (k === 'k') { toggleSkillWin(); return; }
   if (k === 'q') { cycleQuality(); return; }
   if (dialog.open) { if (k === ' ') { e.preventDefault(); advanceDialog(); } return; }
+  if (skillWinOpen) { if (k === 'x' || k === 'c' || k === 'v') bindSkillSlot(k.toUpperCase()); return; }
   if (invOpen) return;
   if (player.dead) return;   // 작업 C: 주저앉아 있는 동안엔 조작 없음
   keys.add(k);
   // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·채집·이슬·포탈), Z~V가 공격·스킬
   if (k === ' ') { e.preventDefault(); tryJump(); }
-  if (k === 'f') { if (nearNpc) openDialog(nearNpc); }
+  if (k === 'f') { if (nearNpc) openDialog(nearNpc); else if (nearTent) restAtTent(); }
   if (k === 'z') attack();
   if (k === 'x' || k === 'c' || k === 'v') skillSlot(k);
   if (k === 'tab') { e.preventDefault(); cycleTarget(); }
+  if (k === '1') usePotion('hp');   // 작업 D: 포션 사용
+  if (k === '2') usePotion('mp');
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
@@ -1958,7 +2169,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
   if (cut.on) { cut.t = cut.dur; return; }
   if (dialog.open) { advanceDialog(); return; }
-  if (invOpen) return;
+  if (invOpen || skillWinOpen) return;
   attack();   // 클릭도 기본 공격
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2062,10 +2273,11 @@ function step(dt) {
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     for (const b of beams) b.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
-    updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt);
+    updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt); updateCooldowns(dt);
     updateQuestBeam(); questBeam.material.uniforms.uT.value = nowS; updateTutArrows(nowS);
     nearNpc = null; let best = 2.4;
     for (const n of NPCS) { const d = angDeg(n.dir, _up) * DEG * R; if (d < best) { best = d; nearNpc = n; } }
+    nearTent = angDeg(tentProp.userData.dir, _up) * DEG * R < 2.6;   // 작업 D: 텐트 근처면 F로 휴식
   }
 
   // 카메라
@@ -2642,6 +2854,10 @@ if (DEBUG) {
     target() { return player.target; },
     respawn, startDeath,
     swim() { return { swimming: player.swimming, swimT: player.swimT, z: player.z }; },
+    // 작업 D 검증용
+    gainExp, XP_TO_NEXT, rollDrop, usePotion, SKILLS, selectOrLearnSkill, bindSkillSlot, toggleSkillWin, castSkillById,
+    restAtTent, nearTent() { return nearTent; },
+    skillWinOpen() { return skillWinOpen; }, invOpen() { return invOpen; },
     SPRITES, planet,
     perf() { return { dpr, quality, qualityMode, frameMs, gpu: GPU_NAME, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     setQuality(q) { qualityMode = q; applyQuality(q, 'debug'); },
