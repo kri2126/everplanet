@@ -9,8 +9,9 @@
 | **v0.05** | 로드맵 5 완료본 — 2D 구면 투영판. 높이·점프, 물, 광장·다리·계단, 길, 떨어진 별, 초목, 생활의 흔적, 광장 소품까지 | `v0.05-roadmap5/evergreen-exploration.html` (커밋 20faef7과 동일) | https://kri2126.github.io/everplanet/versions/v0.05-roadmap5/evergreen-exploration.html |
 | **v0.06** | 로드맵 6 완료본 — three.js 3D판(빌보드 2.5D). 구체 지형, 고정 카메라, 원형 미니맵·M 지도·MM 전경도, HUD, NPC 3·슬라임 8·기본 공격, 착륙 컷신 | `v0.06-roadmap6/evergreen-3d.html` (커밋 8653671과 동일) | https://kri2126.github.io/everplanet/versions/v0.06-roadmap6/evergreen-3d.html |
 | **v0.07** | 로드맵 7 완료본 — 원작의 게임 방식: 2단 점프·ZXCV 슬롯·수영·오르기, 몬스터 2종 전투·사망/부활, 레벨·기력·무직 스킬·드롭·포션, 행성/일반 퀘스트, 이슬·채집·소·밭·모험 기록, 포탈·저장/불러오기·시작 화면, 목표 줄·키 안내·채팅 | `v0.07-roadmap7/evergreen-3d.html` (커밋 c1c2f22와 동일 — 그림 에셋만 최신 `web/assets/`를 읽음) | https://kri2126.github.io/everplanet/versions/v0.07-roadmap7/evergreen-3d.html |
+| **v0.08** | 로드맵 8 완료본 — 원작 지역 지도대로 다시 지은 별내림 천문대: 북쪽 관측소 초원(착륙·출구 포탈)·내려가는 돌계단·야영지·중앙 호수 띠+나무다리+섬(헤엄쳐 별 조각)·샘물·남쪽 별 크레이터(몬스터 구역) | `v0.08-roadmap8/evergreen-3d.html` (커밋 5b86456과 동일 — 그림 에셋만 최신 `web/assets/`를 읽음) | https://kri2126.github.io/everplanet/versions/v0.08-roadmap8/evergreen-3d.html |
 
 규칙
 - 보관본은 절대 수정하지 않습니다. 고칠 게 있으면 `web/`의 최신 파일에서 고치고, 로드맵이 끝날 때 새 번호로 복제합니다.
-- 그림 에셋(`web/assets/`)은 로드맵 8부터 별도로 계속 바뀌므로 보관본에 넣지 않습니다. v0.07 이후 보관본은 `../../web/assets/`를 읽고, 없으면 내장 캔버스 그림으로 돌아갑니다.
+- 그림 에셋(`web/assets/`)은 로드맵 8부터 별도로 계속 바뀌므로 보관본에 넣지 않습니다. v0.07 이후 보관본(v0.07·v0.08)은 `../../web/assets/`를 읽고, 없으면 내장 캔버스 그림으로 돌아갑니다.
 - `web/asmara-exploration.html` 리다이렉트 스텁은 넥슨 신청서 링크가 걸려 있어 그대로 둡니다.
