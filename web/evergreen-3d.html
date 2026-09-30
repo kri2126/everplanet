@@ -2188,13 +2188,20 @@ function updateTutArrows(nowS) {
 
 // 슬라임 8마리 — 슬라임 초원(§3), 집 반경 3 안을 배회, 6 안에 들어오면 다가온다
 // 작업 C: 몬스터 2종 — 파란 슬라임(근접 돌진) · 가시 슬라임(내려찍기, 재해석 §11)
+// 로드맵 8 추기 #2: 몬스터 구역 — 몬스터는 여기 안에서만 태어나고, 쫓아오다가도 구역 밖으로는 못 나간다(시작 초원·야영지엔 절대 없음)
+const MONSTER_ZONES = [
+  { id: 'crater', name: '별 크레이터', center: T.starCrater, r: 5.2 },              // 반지름 5.2° ≈ 8 유닛: 접시 + 둘레 + 길 트임 앞까지
+  { id: 'lone', name: '호수 남쪽 길가', center: dirFromLonLat(5.4, 8.5), r: 2.0 },  // 홀로 있는 슬라임 한 마리
+];
+function zoneOf(dir) { let best = MONSTER_ZONES[0], bd = 1e9; for (const z of MONSTER_ZONES) { const d = angDeg(dir, z.center); if (d < bd) { bd = d; best = z; } } return best; }
+function inZone(z, dir) { return angDeg(dir, z.center) <= z.r; }
 const SLIME_HOMES = [[-6.4, 2.4], [-1.0, 3.2], [-0.4, -1.6], [-6.2, -1.6], [-3.6, -2.6], [-6.2, 0.2], [-0.8, 0.9], [-3.4, 3.4], [5.4, 8.5]];   // 로드맵 8: 크레이터 둘레 8 + 호수 남쪽 길 옆 홀로 1
 const slimes = SLIME_HOMES.map(([lon, lat], i) => {
   const home = dirFromLonLat(lon, lat);
   const m = makeBillboard(slimeTex[0], 1.1, 0.95); scene.add(m);
   const s = { home, dir: home.clone(), mesh: m, kind: 'blue', alive: true, hp: 30, maxHp: 30, exp: 12,
     hopT: i * 1.3, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '슬라임 Lv.1'), flip: 1,
-    atkT: 0, engageT: 0, flashT: 0 };
+    atkT: 0, engageT: 0, flashT: 0, zone: zoneOf(home) };
   return s;
 });
 const _sd = new THREE.Vector3(), _sn = new THREE.Vector3();
@@ -2223,7 +2230,7 @@ function updateSlimes(dt) {
         _sd.normalize();
         _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.3 : 0.9) * dt / R).normalize();
         const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
-        if (th > WATER + 0.4 && fromHome < (target === pdir ? 6.5 : 3.2)) s.dir.copy(_sn);
+        if (th > WATER + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3.2)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
         _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
         const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
       }
@@ -2247,7 +2254,7 @@ const spikeSlimes = SPIKE_HOMES.map(([lon, lat], i) => {
   shadowMesh.visible = false; scene.add(shadowMesh);
   return { home, dir: home.clone(), mesh: m, kind: 'spike', alive: true, hp: 45, maxHp: 45, exp: 20,
     hopT: i * 1.7, wanderT: 0, wander: new THREE.Vector3(), respawnT: 0, label: makeLabel('slime', '가시 슬라임 Lv.2'), flip: 1,
-    atkT: 0, telegraphT: 0, slamDir: home.clone(), flashT: 0, shadowMesh };
+    atkT: 0, telegraphT: 0, slamDir: home.clone(), flashT: 0, shadowMesh, zone: zoneOf(home) };
 });
 function updateSpikes(dt) {
   const pdir = _up;
@@ -2282,14 +2289,14 @@ function updateSpikes(dt) {
           _sd.normalize();
           _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.1 : 0.8) * dt / R).normalize();
           const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
-          if (th > WATER + 0.4 && fromHome < (target === pdir ? 6 : 3)) s.dir.copy(_sn);
+          if (th > WATER + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
           _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
           const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
         }
       }
       s.atkT = Math.max(0, s.atkT - dt);
       if (detect && dp >= 2.5 && dp <= 4 && s.atkT <= 0 && !player.dead) {
-        s.atkT = 3; s.telegraphT = 0.5; s.slamDir.copy(pdir);
+        s.atkT = 3; s.telegraphT = 0.5; s.slamDir.copy(inZone(s.zone, pdir) ? pdir : s.dir);   // 추기 #2: 구역 밖 플레이어 위로는 안 뛴다
         s.shadowMesh.visible = true; s.shadowMesh.position.copy(pdir).multiplyScalar(R + terrainH(pdir) + 0.03);
         s.shadowMesh.quaternion.setFromUnitVectors(_ringN, pdir);
       }
@@ -3719,6 +3726,7 @@ if (DEBUG) {
     farmStage() { return farmStage; }, farmTimer() { return farmTimer; },
     charWinOpen() { return charWinOpen; }, toggleCharWin, forageProgress() { return forageProgress; },
     // 작업 G 검증용
+    MONSTER_ZONES, inZone,
     PORTALS, WORLD_AREAS, openPortal, enterPortal, portalTransit, portalOpen() { return portalOpen; }, nearPortal() { return nearPortal; },
     buildSave, applySave, saveGame, loadSaveRaw, clearSave, requestSave, SAVE_KEY, saveCount() { return saveCount; },
     gate, showStartScreen, continueGame, newGame, startScreenOn() { return startScreenEl.classList.contains('on'); },
