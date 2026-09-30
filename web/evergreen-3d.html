@@ -171,6 +171,26 @@
   .lb.target { color: #ffd166; font: 900 16px sans-serif; text-shadow: 0 0 4px rgba(0,0,0,.8); }
   /* 작업 D: 회복 데미지팝(초록) */
   .lb.dmg.heal { color: #baffb0; -webkit-text-stroke: 1px #1f6b1a; }
+  /* 작업 G: 시작 화면(이어하기/새로 시작) · 포탈 이동 페이드 · 포탈 안내판 */
+  #startScreen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,12,20,.45); z-index: 8; }
+  #startScreen.on { display: flex; }
+  #startScreen .box { background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14; border-radius: 12px; padding: 18px 26px 16px; width: 340px; text-align: center; box-shadow: 0 12px 50px rgba(0,0,0,.6); }
+  #startScreen small { display: block; font: 700 11px 'JetBrains Mono', monospace; letter-spacing: .3em; color: #ffd166; opacity: .9; }
+  #startScreen h2 { margin: 4px 0 10px; font: 700 22px 'Gowun Dodum', sans-serif; color: #fdf4de; letter-spacing: .08em; }
+  #startScreen .sv { font-size: 12px; color: #e8d5b5; line-height: 1.5; background: #4a3219; border: 1px solid #2f1e0c; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+  #startScreen .btns { display: flex; gap: 8px; justify-content: center; }
+  #startScreen button { flex: 1; font: 700 14px 'Gowun Dodum', sans-serif; color: #fdf4de; background: #8a5f34; border: 2px solid #c99354; border-radius: 8px; padding: 9px 6px; cursor: pointer; }
+  #startScreen button:hover { background: #a3733f; }
+  #startScreen button.warn { background: #8a3a2e; border-color: #e08a6a; }
+  #startScreen button b { display: inline-block; padding: 0 5px; margin-right: 6px; border-radius: 3px; background: #fff; color: #223; font: 700 11px monospace; }
+  #startScreen .foot { margin-top: 9px; font-size: 11px; color: #e8d5b5; opacity: .85; }
+  #portalFade { position: fixed; inset: 0; background: #dff8ff; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 6; }
+  #portalMsg { position: fixed; left: 50%; top: 42%; transform: translate(-50%,-50%); display: none; text-align: center; z-index: 7; pointer-events: none; }
+  #portalMsg.on { display: block; }
+  #portalMsg b { display: block; font: 700 24px 'Gowun Dodum', sans-serif; color: #2b4a6b; letter-spacing: .1em; }
+  #portalMsg span { display: block; margin-top: 8px; font-size: 13px; color: #2b4a6b; opacity: .85; }
+  #saveToast { position: fixed; right: 14px; bottom: 44px; font: 600 11px 'JetBrains Mono', monospace; color: #fdf4de; background: rgba(16,20,30,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 8px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
+  #saveToast.on { opacity: .9; }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -200,6 +220,12 @@
 <div id="charWin"><h3>모험 기록</h3><div class="rows"></div><div class="foot">P 닫기</div></div>
 <div id="forageBar"><div class="track"><i></i></div><span id="forageLabel"></span></div>
 <div id="cut"><div class="bar top"></div><div class="bar bot"></div><div class="skip"><b>Space</b> 건너뛰기</div></div>
+<div id="portalFade"></div>
+<div id="portalMsg"><b></b><span></span></div>
+<div id="saveToast">저장됨</div>
+<div id="startScreen"><div class="box"><small>✦ EVERGREEN ✦</small><h2>별내림 천문대</h2><div class="sv" id="startInfo"></div>
+  <div class="btns"><button id="btnContinue"><b>1</b>이어하기</button><button id="btnNew"><b>2</b>새로 시작</button></div>
+  <div class="foot" id="startFoot">저장된 모험이 있어요 — 버튼을 누르거나 숫자키 1·2</div></div></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -1704,6 +1730,7 @@ function advanceMainStage() {
   const st = MAIN_QUEST.stages[mq.stage];
   log(`행성 퀘스트: ${st.obj}`, 'sys');
   updateQuestUI();
+  requestSave('퀘스트');   // 작업 G
 }
 function mqHuntActive() { return mq.accepted && !mq.done && mq.stage === 3; }
 function mqCheckHunt() {
@@ -1723,6 +1750,8 @@ function deliverStar() {
   log(`별이 다시 빛나기 시작했다! 행성 퀘스트 완료 — 경험치 +${MAIN_QUEST.rewardExp}·별씨앗 +${MAIN_QUEST.rewardSeeds}`, 'sys');
   showQuestBanner(MAIN_QUEST.title, `경험치 +${MAIN_QUEST.rewardExp} · 별씨앗 +${MAIN_QUEST.rewardSeeds}`);
   updateQuestUI();
+  openPortal();            // 작업 G: 완료 조건 — 포탈 개방·전경도 표시
+  requestSave('행성 퀘스트 완료');
 }
 
 // 작업 E: 일반 퀘스트(NPC 사연) — 행성 퀘스트 수락 후에만 제안됨.
@@ -1769,6 +1798,7 @@ function acceptSide(id) {
   const def = SIDE_QUESTS.find(x => x.id === id);
   log(`일반 퀘스트 수락: ${def.title}`, 'sys');
   updateQuestUI();
+  requestSave('퀘스트');   // 작업 G
 }
 function completeSide(id) {
   const def = SIDE_QUESTS.find(x => x.id === id), s = sq[id];
@@ -1780,6 +1810,7 @@ function completeSide(id) {
   log(`퀘스트 완료: ${def.title} — 경험치 +${def.rewardExp}·별씨앗 +${def.rewardSeeds}${potTxt}`, 'sys');
   showQuestBanner(def.title, `경험치 +${def.rewardExp} · 별씨앗 +${def.rewardSeeds}${potTxt}`);
   updateQuestUI();
+  requestSave('퀘스트 완료');   // 작업 G
 }
 function inspectCrate(idx) {
   if (!sq.cargo.accepted || sq.cargo.done) return;
@@ -1788,6 +1819,7 @@ function inspectCrate(idx) {
   const done3 = sq.cargo.inspected.size >= 3;
   log(`상자를 살펴봤다 (${sq.cargo.inspected.size}/3)` + (done3 ? ' — 부품을 다 찾았다. 미르에게 돌아가자.' : ''), 'sys');
   updateQuestUI();
+  requestSave('퀘스트');   // 작업 G
 }
 function npcMarker(id) {
   if (!mq.done) { const st = MAIN_QUEST.stages[mq.stage]; if (st && st.npc === id) return 'give'; }
@@ -1893,6 +1925,7 @@ function gainExp(amt) {
     lvRingT = 0; lvRing.visible = true; lvRing.material.opacity = 0.9;
     myLabel.textContent = `Lv.${player.level} 탐사자`;
     log(`레벨 업! Lv.${player.level} — 스킬 포인트 +1${player.level === 10 ? ' (상한 도달, 에버그린 항구에서 전직 가능)' : ''}`, 'sys');
+    requestSave('레벨 업');   // 작업 G
   }
   updateHUD(); updateQuestUI();
 }
@@ -1954,8 +1987,7 @@ function bindSkillSlot(key) {
   if (!selectedSkill || player.skillLv[selectedSkill] <= 0) { log('먼저 스킬을 배워야 등록할 수 있다.', 'sys'); return; }
   for (const k in player.slotSkill) if (player.slotSkill[k] === selectedSkill) player.slotSkill[k] = null;
   player.slotSkill[key] = selectedSkill;
-  skillEls[key].classList.remove('locked');
-  skillEls[key].innerHTML = `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 15px sans-serif;color:#ffe9a8;">${SKILLS[selectedSkill].icon}</span>`;
+  for (const k in player.slotSkill) setSlotUI(k, player.slotSkill[k]);   // 작업 G: 불러오기와 같은 함수로 슬롯 그림 갱신
   renderSkillWin();
   log(`${SKILLS[selectedSkill].name}을(를) ${key} 슬롯에 등록했다.`, 'sys');
 }
@@ -2433,9 +2465,187 @@ function updateAchievements() {
       log(`🏅 모험 기록 달성: ${a.title}`, 'sys');
       showQuestBanner('모험 기록: ' + a.title, '별씨앗 +20');
       if (charWinOpen) renderCharWin();
+      requestSave('모험 기록');   // 작업 G
     }
   }
 }
+
+// ── 작업 G: 진행·저장 — 완료 조건 · 포탈 · 저장/불러오기 ───────────────────────
+// 완료 조건: 행성 퀘스트 5단계(별 봉헌)가 끝나면 별 받침대의 별이 켜지고(beams[1]) 슬라임 초원 북동쪽 바위벽 앞에 포탈이 열린다.
+// 포탈 자리: 원문의 "지붕 없는 동굴 방향(구역 북동, 로드맵 5 간선 2 끝)"은 2D판 좌표라 3D판에선 슬라임 초원 북동 모서리(lon 12, lat 45,
+// 표지판 [11.2, 41.4] 너머 바위벽 앞 평지 3.5 — 처음 잡은 lon 12는 나무 [13, 43]에 가려 lon 9.6으로)로 옮겨 배치한다(§11 재해석). 다음 맵(겸손한 사원)은 다음 로드맵이라 지금은 안내 뒤 착륙 데크로 복귀.
+const PORTALS = [{ id: 'temple', name: '겸손한 사원', lon: 9.6, lat: 45.2, areaIdx: 1 }];
+let portalOpen = false;
+const portalGroup = (() => {
+  const P = PORTALS[0]; P.dir = dirFromLonLat(P.lon, P.lat);
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.17, 10, 44), new THREE.MeshToonMaterial({ color: 0x8ff0e8, emissive: 0x2fbdb5, emissiveIntensity: 0.9 }));
+  ring.position.y = 1.8; ring.castShadow = true; g.add(ring);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.5, 36), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms: { uT: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv - 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'varying vec2 vUv; uniform float uT; void main(){ float r = length(vUv) * 2.0; float a = atan(vUv.y, vUv.x); float sw = 0.5 + 0.5 * sin(a * 3.0 - uT * 2.2 + r * 9.0); float al = (1.0 - smoothstep(0.55, 1.0, r)) * (0.35 + 0.45 * sw); gl_FragColor = vec4(0.55, 0.95, 1.0, al); }' }));
+  disc.position.y = 1.8; g.add(disc);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.1, 0.18, 24), new THREE.MeshToonMaterial({ color: 0xbfae8e }));
+  base.position.y = 0.09; base.receiveShadow = true; g.add(base);
+  g.position.copy(P.dir).multiplyScalar(R + terrainH(P.dir));
+  { _bn.set(0, 1, 0); tangentize(_bn, P.dir); _be.crossVectors(_bn, P.dir).normalize(); _bm.makeBasis(_be, P.dir, _bn.clone().negate()); g.quaternion.setFromRotationMatrix(_bm); }   // 똑바로 세우고 고리 면은 남쪽(카메라 쪽)
+  g.userData.disc = disc; g.userData.ring = ring; g.visible = false; scene.add(g);
+  const beam = addBeam(P.lon, P.lat); beam.visible = false; beam.scale.set(1.4, 1.2, 1); g.userData.beam = beam;
+  return g;
+})();
+let nearPortal = false;
+function openPortal(silent) {
+  if (portalOpen) return;
+  portalOpen = true; portalGroup.visible = true; portalGroup.userData.beam.visible = true;
+  WORLD_AREAS[0].cleared = true; WORLD_AREAS[PORTALS[0].areaIdx].unlocked = true;
+  if (!silent) {
+    log(`별내림 천문대의 별이 되살아났다 — 북동쪽 바위벽 앞에 ${PORTALS[0].name}으로 가는 포탈이 열렸다. 전경도(M M)에도 표시된다.`, 'sys');
+    setTimeout(() => showQuestBanner('별내림 천문대 완료', `${PORTALS[0].name} 포탈 개방 · 전경도에 표시`), 3400);
+  }
+}
+// 포탈 이동 연출: F로 진입 → 빛기둥 속에서 1.5초 떠오르며 밝아짐 → 안내(다음 맵은 다음 로드맵) → 착륙 데크로 복귀
+const portalTransit = { on: false, t: 0, z0: 0, phase: 0 };
+const portalFadeEl = document.getElementById('portalFade'), portalMsgEl = document.getElementById('portalMsg');
+function enterPortal() {
+  if (!portalOpen || portalTransit.on || player.dead || player.swimming) return;
+  portalTransit.on = true; portalTransit.t = 0; portalTransit.z0 = player.z; portalTransit.phase = 0;
+  keys.clear(); player.moving = false; player.target = null;
+  log(`${PORTALS[0].name}으로 가는 포탈에 들어섰다.`, 'sys');
+}
+function updatePortalTransit(dt) {
+  if (!portalTransit.on) return;
+  const P = portalTransit; P.t += dt;
+  if (P.t < 1.5) {
+    const k = easeOut(P.t / 1.5);
+    player.z = P.z0 + 1.8 * k; player.vz = 0; player.grounded = false; player.jumps = 2;
+    player.pos.copy(_up).multiplyScalar(R + player.z);
+    portalFadeEl.style.opacity = (k * 0.98).toFixed(3);
+  } else if (P.phase === 0) {
+    P.phase = 1; portalFadeEl.style.opacity = '1';
+    portalMsgEl.querySelector('b').textContent = `${PORTALS[0].name}은 다음 로드맵에서 열립니다`;
+    portalMsgEl.querySelector('span').textContent = '이번 판은 별내림 천문대까지 — 착륙 데크로 돌아갑니다';
+    portalMsgEl.classList.add('on');
+  } else if (P.phase === 1 && P.t >= 4.2) {
+    P.phase = 2;
+    // 착륙 데크 옆 시작 지점으로 복귀 — respawn()과 같은 방식으로 바닥에 세운다
+    const d = dirFromLonLat(START[0], START[1]);
+    player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
+    player.fwd.set(0, 1, 0); tangentize(player.fwd, d); tangentize(cam.fwd, d);
+    camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+    player.safe.copy(d); player.safeNext.copy(d);
+    portalMsgEl.classList.remove('on'); portalFadeEl.style.opacity = '0';
+    stats.portalTrips = (stats.portalTrips || 0) + 1;
+    log('별내림 천문대 착륙 데크로 돌아왔다.', 'sys');
+    requestSave('portal');
+  } else if (P.phase === 2 && P.t >= 4.8) {
+    P.on = false;
+  }
+}
+
+// 저장/불러오기 — localStorage 슬롯 1개. 퀘스트 상태 변화·레벨업·포탈·모험 기록 때 즉시, 그 밖엔 30초마다.
+// 버전 필드(v)로 뒤 로드맵의 형식 변경에 대비한다. 컷신·시작 화면·사망 중엔 저장하지 않는다.
+const SAVE_KEY = 'ep.save.v1', SAVE_VER = 1, AUTOSAVE_EVERY = 30;
+let saveSoonT = -1, autosaveT = 0, saveCount = 0, lastSaveAt = 0;
+const saveToastEl = document.getElementById('saveToast');
+function lonLatOf(dir) { return [+(Math.atan2(dir.x, dir.z) / DEG).toFixed(4), +(Math.asin(Math.max(-1, Math.min(1, dir.y))) / DEG).toFixed(4)]; }
+function buildSave() {
+  return {
+    v: SAVE_VER, t: Date.now(),
+    pos: lonLatOf(player.pos.clone().normalize()), safe: lonLatOf(player.safe),
+    player: { level: player.level, xp: player.xp, sp: player.sp, hp: Math.round(player.hp), mp: Math.round(player.mp), stamina: Math.round(player.stamina), seeds: player.seeds,
+      inv: { ...player.inv }, skillLv: { ...player.skillLv }, slotSkill: { ...player.slotSkill }, restCd: Math.round(player.restCd), cowCd: Math.round(player.cowCd) },
+    mq: { accepted: mq.accepted, stage: mq.stage, done: mq.done, kills: mq.kills, spikeKills: mq.spikeKills, fieldStars: mq.fieldStars },
+    sq: Object.fromEntries(Object.entries(sq).map(([id, q]) => [id, { accepted: q.accepted, done: q.done, inspected: q.inspected ? [...q.inspected] : undefined }])),
+    stars: STARS.map(s => s.found), stats: { ...stats }, achieved: [...achieved],
+    farm: { stage: farmStage, timer: Math.round(farmTimer) },
+    dew: dewNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))), forage: forageNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))),
+    tracked: trackedQuest, portalOpen,
+  };
+}
+function saveGame(reason) {
+  if (gate.on || cut.on || player.dead) return false;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(buildSave())); } catch (e) { return false; }
+  saveCount++; lastSaveAt = performance.now(); saveSoonT = -1; autosaveT = 0;
+  saveToastEl.textContent = '저장됨' + (reason && reason !== 'auto' ? ` · ${reason}` : '');
+  saveToastEl.classList.add('on'); setTimeout(() => saveToastEl.classList.remove('on'), 1400);
+  return true;
+}
+function requestSave(reason) { saveSoonT = 0.4; requestSave.reason = reason; }
+function loadSaveRaw() { try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return null; const o = JSON.parse(raw); return o && o.v === SAVE_VER ? o : null; } catch (e) { return null; } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+function setSlotUI(key, id) {
+  const el = skillEls[key];
+  if (!id) { el.classList.add('locked'); el.innerHTML = ''; return; }
+  el.classList.remove('locked');
+  el.innerHTML = `<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 15px sans-serif;color:#ffe9a8;">${SKILLS[id].icon}</span>`;
+}
+function applySave(o) {
+  const P = o.player || {};
+  player.level = Math.max(1, Math.min(10, P.level || 1)); player.xp = P.xp || 0; player.sp = P.sp || 0;
+  player.hp = Math.max(1, Math.min(player.maxHp, P.hp ?? player.maxHp)); player.mp = Math.max(0, Math.min(player.maxMp, P.mp ?? player.maxMp));
+  player.stamina = Math.max(0, Math.min(player.staminaMax, P.stamina ?? 100)); player.seeds = P.seeds || 0;
+  for (const k in player.inv) player.inv[k] = (P.inv && P.inv[k]) || 0;
+  for (const k in player.skillLv) player.skillLv[k] = Math.max(0, Math.min(3, (P.skillLv && P.skillLv[k]) || 0));
+  for (const k in player.slotSkill) { const id = P.slotSkill && P.slotSkill[k]; player.slotSkill[k] = id && SKILLS[id] && player.skillLv[id] > 0 ? id : null; setSlotUI(k, player.slotSkill[k]); }
+  player.restCd = P.restCd || 0; player.cowCd = P.cowCd || 0;
+  Object.assign(mq, o.mq || {});
+  for (const id in sq) { const q = o.sq && o.sq[id]; if (!q) continue; sq[id].accepted = !!q.accepted; sq[id].done = !!q.done; if (sq[id].inspected) sq[id].inspected = new Set(q.inspected || []); }
+  (o.stars || []).forEach((f, i) => { if (STARS[i]) STARS[i].found = !!f; });
+  Object.assign(stats, o.stats || {});
+  achieved.clear(); for (const id of (o.achieved || [])) achieved.add(id);
+  if (o.farm) { farmStage = o.farm.stage || 0; farmTimer = o.farm.timer || 0; farmProp.material.map = farmTex[farmStage]; farmProp.material.needsUpdate = true; }
+  (o.dew || []).forEach((cd, i) => { const n = dewNodes[i]; if (!n) return; n.avail = cd <= 0; n.cd = cd; n.mesh.visible = n.avail; });
+  (o.forage || []).forEach((cd, i) => { const n = forageNodes[i]; if (!n) return; n.avail = cd <= 0; n.cd = cd; n.mesh.visible = n.avail; });
+  trackedQuest = o.tracked && (o.tracked === 'main' || SIDE_QUESTS.some(s => s.id === o.tracked)) ? o.tracked : 'main';
+  if (mq.done || o.portalOpen) { beams[1].scale.setScalar(1.6); openPortal(true); }
+  // 자리: 저장된 위치의 바닥에 세운다(물속·공중이었으면 안전 지점으로)
+  let d = o.pos ? dirFromLonLat(o.pos[0], o.pos[1]) : dirFromLonLat(START[0], START[1]);
+  if (terrainH(d) <= WATER - 1.2 && o.safe) d = dirFromLonLat(o.safe[0], o.safe[1]);
+  player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
+  player.fwd.set(0, 1, 0); tangentize(player.fwd, d); tangentize(cam.fwd, d);
+  camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+  const sd = o.safe ? dirFromLonLat(o.safe[0], o.safe[1]) : d; player.safe.copy(sd); player.safeNext.copy(sd);
+  myLabel.textContent = `Lv.${player.level} 탐사자`;
+  updateHUD(); updateStaminaUI(); updateSeedsUI(); updateInvUI(); updateQuestUI();
+}
+function updateSaveTimers(dt) {
+  if (gate.on || cut.on) return;
+  if (saveSoonT >= 0) { saveSoonT -= dt; if (saveSoonT < 0) saveGame(requestSave.reason || 'auto'); }
+  autosaveT += dt; if (autosaveT >= AUTOSAVE_EVERY) { autosaveT = 0; saveGame('auto'); }
+}
+addEventListener('beforeunload', () => { if (!gate.on && !cut.on && !player.dead) saveGame('unload'); });
+
+// 시작 화면: 저장이 있으면 컷신 대신 "이어하기 / 새로 시작"을 먼저 묻는다. ?fresh 로 무시할 수 있다.
+const gate = { on: false, confirmNew: false };
+const startScreenEl = document.getElementById('startScreen'), startInfoEl = document.getElementById('startInfo'), btnContinue = document.getElementById('btnContinue'), btnNew = document.getElementById('btnNew');
+let pendingSave = null;
+function fmtAgo(ts) { const m = Math.max(0, Math.round((Date.now() - ts) / 60000)); return m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; }
+function showStartScreen(o) {
+  pendingSave = o; gate.on = true; gate.confirmNew = false;
+  const P = o.player || {};
+  const qTxt = o.mq && o.mq.done ? '행성 퀘스트 완료' : o.mq && o.mq.accepted ? `행성 퀘스트 ${(o.mq.stage || 0) + 1}/5 단계` : '행성 퀘스트 전';
+  startInfoEl.innerHTML = `Lv.${P.level || 1} 탐사자 · ${qTxt}<br>별씨앗 ${P.seeds || 0} · 모험 기록 ${(o.achieved || []).length}/${ACHIEVEMENTS.length} · 저장 ${fmtAgo(o.t || Date.now())}`;
+  btnNew.textContent = ''; btnNew.innerHTML = '<b>2</b>새로 시작'; btnNew.classList.remove('warn');
+  startScreenEl.classList.add('on');
+}
+function continueGame() {
+  if (!gate.on || !pendingSave) return;
+  applySave(pendingSave); pendingSave = null;
+  gate.on = false; startScreenEl.classList.remove('on');
+  cut.on = false; cutEl.style.display = 'none'; player.mesh.visible = true; myLabel.style.display = 'block'; airship.userData.alt = 0;
+  zoneShown = true; showZoneName();
+  log('저장된 자리에서 모험을 이어 간다.', 'sys');
+}
+function newGame() {
+  if (!gate.on) return;
+  if (!gate.confirmNew) { gate.confirmNew = true; btnNew.innerHTML = '<b>2</b>정말요? 저장이 지워져요'; btnNew.classList.add('warn'); return; }
+  clearSave(); pendingSave = null;
+  gate.on = false; startScreenEl.classList.remove('on');
+  if (!DEBUG && !QP.has('nocut')) startCutscene(); else { player.mesh.visible = true; myLabel.style.display = 'block'; }
+}
+btnContinue.addEventListener('click', continueGame);
+btnNew.addEventListener('click', newGame);
 
 // 대화창
 const dialog = { open: false, npc: null, lines: [], i: 0, onEnd: null, choices: null, choicesShown: false };
@@ -2525,7 +2735,7 @@ const hpNumEl = document.getElementById('hpNum'), mpNumEl = document.getElementB
 const vignetteEl = document.getElementById('vignette'), deathFadeEl = document.getElementById('deathFade');
 function updateHUD() { hpNumEl.textContent = Math.round(player.hp); mpNumEl.textContent = Math.round(player.mp); }
 function hitPlayer(dmg, fromDir) {
-  if (player.dead) return;
+  if (player.dead || portalTransit.on) return;   // 작업 G: 포탈 이동 중 무적
   player.hp = Math.max(0, player.hp - dmg); player.hurtT = 0;
   vignetteEl.classList.add('hit'); setTimeout(() => vignetteEl.classList.remove('hit'), 200);
   _sd.copy(_up).sub(fromDir); tangentize(_sd, _up);
@@ -2588,14 +2798,19 @@ function updateCutscene(dt) {
   camera.position.copy(_cp); camera.up.copy(_up); camera.lookAt(_cl);
   if (cut.t >= cut.dur) endCutscene();
 }
-if (cut.on) startCutscene(); else { player.mesh.visible = true; }
+{
+  // 작업 G: 저장이 있으면 시작 화면부터 (컷신은 "새로 시작"을 고르면)
+  const saved = QP.has('fresh') ? null : loadSaveRaw();
+  if (saved) { cut.on = false; player.mesh.visible = true; myLabel.style.display = 'none'; showStartScreen(saved); }
+  else if (cut.on) startCutscene(); else { player.mesh.visible = true; }
+}
 
 const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너머로 비쳐 보이지 않게)
 function updateLabels() {
   placeLabel(myLabel, headOf(player.mesh, 1.95));
-  if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal || nearDewIdx != null || nearCow || nearFarm) && !dialog.open && !cut.on) {
+  if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal || nearDewIdx != null || nearCow || nearFarm || nearPortal) && !dialog.open && !cut.on && !portalTransit.on) {
     tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : nearCrateIdx != null ? '<b>F</b>상자 조사' : nearPedestal ? '<b>F</b>별 조각 바치기'
-      : nearDewIdx != null ? '<b>F</b>이슬 모으기' : nearCow ? '<b>F</b>소젖 짜기' : nearFarm ? '<b>F</b>밭 살피기' : '<b>F</b>휴식(기력 회복)';
+      : nearDewIdx != null ? '<b>F</b>이슬 모으기' : nearCow ? '<b>F</b>소젖 짜기' : nearFarm ? '<b>F</b>밭 살피기' : nearPortal ? `<b>F</b>${PORTALS[0].name}으로` : '<b>F</b>휴식(기력 회복)';
     placeLabel(tipEl, headOf(player.mesh, 1.95));
   } else tipEl.style.display = 'none';
   for (const n of NPCS) {
@@ -2617,6 +2832,8 @@ const keys = new Set();
 let mapView = 0;
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
+  if (gate.on) { if (k === '1' || k === 'enter') continueGame(); else if (k === '2') newGame(); return; }   // 작업 G: 시작 화면
+  if (portalTransit.on) return;                                                                            // 작업 G: 포탈 이동 중 조작 없음
   if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
   if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); e.preventDefault(); return; }
   if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); return; }
@@ -2646,6 +2863,7 @@ addEventListener('keydown', (e) => {
     else if (nearDewIdx != null) collectDew(nearDewIdx);
     else if (nearCow) milkCow();
     else if (nearFarm) interactFarm();
+    else if (nearPortal) enterPortal();   // 작업 G
     else if (nearTent) restAtTent();
   }
   if (k === 'z') attack();
@@ -2662,6 +2880,7 @@ const cam = { fwd: new THREE.Vector3(0, 1, 0) };   // 항상 그 자리의 북�
 canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 1) { mapView = insideZoneDisc(e.clientX, e.clientY) ? 2 : 0; return; }
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
+  if (gate.on || portalTransit.on) return;   // 작업 G
   if (cut.on) { cut.t = cut.dur; return; }
   if (dialog.open) { advanceDialog(); return; }
   if (invOpen || skillWinOpen || questWinOpen || charWinOpen) return;
@@ -2691,7 +2910,7 @@ function step(dt) {
   if (keys.has('s') || keys.has('arrowdown')) iy -= 1;
   if (keys.has('d') || keys.has('arrowright')) ix += 1;
   if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
-  if (cut.on || dialog.open || invOpen || player.dead) { ix = 0; iy = 0; }   // 컷신·대화·가방·사망 중엔 안 움직인다
+  if (cut.on || dialog.open || invOpen || player.dead || gate.on || portalTransit.on) { ix = 0; iy = 0; }   // 컷신·대화·가방·사망·시작 화면·포탈 이동 중엔 안 움직인다
   player.moving = (ix !== 0 || iy !== 0);
   if (player.moving) {
     _dir.copy(cam.fwd).multiplyScalar(iy).addScaledVector(_right, ix).normalize();
@@ -2785,6 +3004,10 @@ function step(dt) {
     nearDewIdx = null; { let bestW = 2.0; dewNodes.forEach((n, idx) => { if (!n.avail) return; const d = angDeg(n.dir, _up) * DEG * R; if (d < bestW) { bestW = d; nearDewIdx = idx; } }); }
     nearCow = angDeg(cowProp.userData.dir, _up) * DEG * R < 1.6;
     nearFarm = angDeg(farmProp.userData.dir, _up) * DEG * R < 1.6;
+    // 작업 G: 포탈 근접·소용돌이·이동 연출·자동 저장
+    nearPortal = portalOpen && !portalTransit.on && angDeg(PORTALS[0].dir, _up) * DEG * R < 2.2;
+    if (portalOpen) { portalGroup.userData.disc.material.uniforms.uT.value = nowS; portalGroup.userData.ring.rotation.z = nowS * 0.6; }
+    updatePortalTransit(dt); updateSaveTimers(dt);
   }
 
   // 카메라
@@ -2816,7 +3039,7 @@ function step(dt) {
     c.position.copy(d.dir).multiplyScalar(R + d.alt + Math.sin(t + d.drift) * 0.8);
   }
 
-  if (!zoneShown && !cut.on) { zoneShown = true; setTimeout(showZoneName, 600); }
+  if (!zoneShown && !cut.on && !gate.on) { zoneShown = true; setTimeout(showZoneName, 600); }
 }
 
 function showZoneName() {
@@ -3219,14 +3442,18 @@ function drawWorldMap(viewW, viewH, t) {
     ctx.ellipse(p.x, p.y + r * 0.72, r * 0.95, r * 0.40, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 표식
+    // 표식 (작업 G: 잠금 해제된 다음 지역은 청록 테두리, 완료한 지역은 ✓)
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = planned ? '#cbbfa6' : (cur ? '#ff8aa0' : '#ffd166');
+    ctx.fillStyle = planned ? (a.unlocked ? '#bfeee9' : '#cbbfa6') : (cur ? '#ff8aa0' : '#ffd166');
     ctx.fill();
-    ctx.strokeStyle = planned ? 'rgba(110,100,85,0.5)' : 'rgba(120,80,60,0.75)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = planned ? (a.unlocked ? 'rgba(42,169,163,0.9)' : 'rgba(110,100,85,0.5)') : 'rgba(120,80,60,0.75)';
+    ctx.lineWidth = a.unlocked ? 3 : 2;
     ctx.stroke();
+    if (a.cleared) {
+      ctx.fillStyle = '#2f8f4a'; ctx.beginPath(); ctx.arc(p.x + r * 0.85, p.y - r * 0.85, r * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = `700 ${small ? 8 : 10}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✓', p.x + r * 0.85, p.y - r * 0.85 + 0.5);
+    }
 
     // 현재 위치는 맥동하는 고리로 강조
     if (cur) {
@@ -3246,7 +3473,7 @@ function drawWorldMap(viewW, viewH, t) {
 
     // 이름표 — 좁은 화면에서는 아래 범례가 이름을 대신한다
     if (small) continue;
-    const label = planned ? `${a.name} 🔒` : a.name;
+    const label = planned ? (a.unlocked ? `${a.name} · 포탈 개방` : `${a.name} 🔒`) : (a.cleared ? `${a.name} ✓ 완료` : a.name);
     ctx.font = `600 ${small ? 9 : 11}px "Gowun Dodum", sans-serif`;
     ctx.textBaseline = 'top';
     const lw = ctx.measureText(label).width + (small ? 8 : 12);
@@ -3286,7 +3513,7 @@ function drawWorldMap(viewW, viewH, t) {
       ctx.textAlign = 'left';
       ctx.font = '600 9px "Gowun Dodum", sans-serif';
       ctx.fillStyle = planned ? 'rgba(110,100,82,0.85)' : '#5b4632';
-      ctx.fillText(planned ? `${a.name} 🔒` : a.name, ex + 13, ey);
+      ctx.fillText(planned ? (a.unlocked ? `${a.name} 🔓` : `${a.name} 🔒`) : (a.cleared ? `${a.name} ✓` : a.name), ex + 13, ey);
     });
     ctx.textAlign = 'center';
   }
@@ -3323,7 +3550,7 @@ function drawWorldMap(viewW, viewH, t) {
   // 한 줄 캡션 — 제목·진행도·안내를 모아 패널 맨 아래에 둔다.
   // (상단에 두면 HUD 조작 칩과, 명판 옆에 두면 명판과 겹치는 창 비율이 있다)
   const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
-  const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}  ·  모험 기록 ${achieved.size}/${ACHIEVEMENTS.length}`;
+  const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}  ·  완료 ${WORLD_AREAS.filter(a => a.cleared).length}  ·  모험 기록 ${achieved.size}/${ACHIEVEMENTS.length}`;
   const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
   const lockTxt = small ? '🔒 미구현' : '🔒 표시는 아직 만들지 않은 지역';
   ctx.textAlign = 'center';
@@ -3376,6 +3603,11 @@ if (DEBUG) {
     nearDewIdx() { return nearDewIdx; }, nearForageIdx() { return nearForageIdx; }, nearCow() { return nearCow; }, nearFarm() { return nearFarm; },
     farmStage() { return farmStage; }, farmTimer() { return farmTimer; },
     charWinOpen() { return charWinOpen; }, toggleCharWin, forageProgress() { return forageProgress; },
+    // 작업 G 검증용
+    PORTALS, WORLD_AREAS, openPortal, enterPortal, portalTransit, portalOpen() { return portalOpen; }, nearPortal() { return nearPortal; },
+    buildSave, applySave, saveGame, loadSaveRaw, clearSave, requestSave, SAVE_KEY, saveCount() { return saveCount; },
+    gate, showStartScreen, continueGame, newGame, startScreenOn() { return startScreenEl.classList.contains('on'); },
+    setSlotUI,
     SPRITES, planet,
     perf() { return { dpr, quality, qualityMode, frameMs, gpu: GPU_NAME, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
     setQuality(q) { qualityMode = q; applyQuality(q, 'debug'); },
