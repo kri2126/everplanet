@@ -475,9 +475,16 @@ function vnoise(x, y, z) {
 
 // ── 구체 좌표 도우미 ─────────────────────────────────────────────────────────
 // (경도, 위도)°→ 단위 방향. 착륙 초원 중심 (0°,0°)이 +Z, 북(+위도)이 +Y.
-function dirFromLonLat(lonDeg, latDeg) {
+function dirFromLonLatW(lonDeg, latDeg) {   // 세계 좌표(실제 경위도)
   const lon = lonDeg * DEG, lat = latDeg * DEG;
   return new THREE.Vector3(Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon));
+}
+// 로드맵 8 추기 #4: 지도가 좁아 설계 좌표(§1-2 표, 경도 ±14 · 위도 -11~48)를 MAP_S배로 늘려 놓는다.
+// 위도 중심(18.5)을 적도에 맞춰 남북이 고르게 늘어나고, 배치 코드는 전부 설계 좌표 그대로 쓴다.
+const MAP_S = 1.45, MAP_LAT0 = 18.5;
+function dirFromLonLat(lonDeg, latDeg) { return dirFromLonLatW(lonDeg * MAP_S, (latDeg - MAP_LAT0) * MAP_S); }
+function designLonLat(dir) {   // 세계 방향 → 설계 좌표 [lon, lat]
+  return [Math.atan2(dir.x, dir.z) / DEG / MAP_S, Math.asin(Math.max(-1, Math.min(1, dir.y))) / DEG / MAP_S + MAP_LAT0];
 }
 // 접평면으로 투영해 단위화 (구 위에서 방향 벡터를 옮길 때마다 호출)
 function tangentize(v, up) {
@@ -526,27 +533,22 @@ function bearingFrom(center, p) {
 const MEADOW_H = 1.76;                 // 관측소 초원 높이 — 돌계단 4단 × 0.44 (STEP_UP 0.45 이내)
 const LAKE = { lon0: -13.2, lon1: 7.4, lat0: 17.1, lat1: 28.1 };   // 호수 띠(°)
 const T = {
-  meadowDiscs: [[dirFromLonLat(-0.9, 40.6), 5.5], [dirFromLonLat(6.5, 41.5), 3.6], [dirFromLonLat(10.6, 43.9), 2.7]],   // 관측소 초원 = 원반 3개의 합
+  meadowDiscs: [[dirFromLonLat(-0.9, 40.6), 6.2], [dirFromLonLat(6.5, 41.5), 3.6], [dirFromLonLat(10.6, 43.9), 2.7]],   // 관측소 초원 = 원반 3개의 합 (추기 #4: 큰 원반 5.5→6.2 — 세계 위도 32°의 경도 압축 보정, 선돌 고리가 초원 안에)
   stairs: makeSeg(-1.5, 35.7, -1.5, 33.2),      // 초원 남쪽 가장자리와 야영지를 잇는 4단(추기 #3: 올라가는 방향으로 쓴다, 0.44 ≤ STEP_UP)
   stairCut: makeSeg(-1.5, 35.7, -1.5, 33.2),    // 초원 절벽에서 계단 통로를 깎아내는 범위(계단과 같은 구간)
   bridge: makeSeg(-3.9, 28.6, -3.9, 16.6),      // 남북 나무다리 (호수 띠 전체, 양쪽 물가 너머까지 — 약 19 유닛)
   island: dirFromLonLat(2.4, 23.2),             // 호수 속 섬(반지름 약 1.8°, 높이 0.6)
   spring: dirFromLonLat(-4.8, 14.4),            // 샘물 웅덩이(얕은 물)
-  starCrater: dirFromLonLat(-3.5, 0.8),         // 별 크레이터 중심(접시 + 둘레 턱, 북동쪽 트임)
+  starCrater: dirFromLonLat(-3.5, 0.8),         // 별 크레이터 중심(접시 + 둘레 턱, 추기 #4: 북서쪽 트임)
   // 바위벽(능선): 놀이 구역 가장자리
-  walls: [
-    makeSeg(-15, -11, 15, -11),        // 남 (추기 #3: 착륙 들판 자리를 위해 -8 → -11)
-    makeSeg(-15, 48, 15, 48),          // 북
-    makeSeg(14.6, -11, 14.6, 48),      // 동
-    makeSeg(-14.6, -11, -14.6, 48),    // 서
-  ],
+  // walls: 추기 #4부터 terrainH 안에서 설계 경위도(남 -11 · 북 48 · 동서 ±14.6)로 직접 판정 (makeSeg 대원은 확대된 지도에서 위선을 벗어난다)
   // 모래길 — 추기 #3: 간선(착륙 들판→크레이터 앞→비탈→샘물→다리→야영지→계단→관측소), 크레이터 지선, 출구 지선, 서쪽 지선
   paths: [
-    makeSeg(10.1, -6.4, 8.6, -2.6),    // 0 착륙 데크 경사로 아래 → 북서
-    makeSeg(8.6, -2.6, 4.6, 2.2),      // 1 → 크레이터 동쪽
-    makeSeg(4.6, 2.2, 1.2, 4.5),       // 2 → 크레이터 앞 갈림길
-    makeSeg(1.2, 4.5, -1.6, 1.6),      // 3 크레이터 지선: 갈림길 → 크레이터 안(북동 트임)
-    makeSeg(1.2, 4.5, -0.5, 9.2),      // 4 갈림길 → 비탈
+    makeSeg(-9.6, -6.4, -8.6, -2.6),   // 0 착륙 데크 경사로 아래 → 북 (추기 #4: 들판은 남서쪽)
+    makeSeg(-8.6, -2.6, -7.6, 2.0),    // 1 → 크레이터 서쪽
+    makeSeg(-7.6, 2.0, -6.0, 4.6),     // 2 → 크레이터 앞 갈림길(북서)
+    makeSeg(-6.0, 4.6, -4.4, 1.4),     // 3 크레이터 지선: 갈림길 → 크레이터 안(북서 트임)
+    makeSeg(-6.0, 4.6, -0.5, 9.2),     // 4 갈림길 → 비탈
     makeSeg(-0.5, 9.2, -1.4, 16.0),    // 5 → 샘물 옆
     makeSeg(-1.4, 16.0, -3.9, 16.4),   // 6 → 다리 남단
     makeSeg(-3.9, 28.3, -4.5, 29.8),   // 7 다리 북단 → 야영지 갈림길
@@ -559,10 +561,11 @@ const T = {
     makeSeg(-9.0, 10.5, -12.2, 10.2),  // 14
   ],
   // 걷기 판정용 구조물 (시각은 작업 C)
-  deck: dirFromLonLat(5.6, -6.4),      // 추기 #3: 팔각 착륙 데크 중심(남쪽 착륙 들판), 반경 2.25°, 땅보다 1.2 높음
-  ramp: makeSeg(7.8, -6.4, 10.0, -6.4),    // 데크 → 들판 경사로(동쪽, 데크 가장자리 안에서 시작)
+  deck: dirFromLonLat(-5.6, -6.4),     // 추기 #4: 팔각 착륙 데크 중심(남서쪽 착륙 들판), 반경 2.25°(세계), 땅보다 1.2 높음
+  ramp: makeSeg(-7.52, -6.4, -9.4, -6.4),  // 데크 → 들판 경사로(서쪽). 세계 위도 -36°라 설계 경도 1°가 세계 1.17°: 가장자리(2.25°)에서 시작해 2.2° 길이
 };
 const _o = { t: 0, inside: false };
+const CRATER_GAP_BEARING = 320;   // 추기 #4: 크레이터 트임 방위(북서) — 착륙 들판이 남서쪽이라 길이 서쪽에서 들어온다
 
 // 자연 굴곡(놀이 구역 밖 완만한 언덕)
 function hills(p) {
@@ -574,8 +577,8 @@ function lakeInside(lon, lat) {
   return Math.min(lon - LAKE.lon0, LAKE.lon1 - lon, lat - LAKE.lat0, LAKE.lat1 - lat);
 }
 function terrainH(p) {
-  const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG;
-  const lon = Math.atan2(p.x, p.z) / DEG;
+  const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG / MAP_S + MAP_LAT0;   // 설계 좌표(추기 #4)
+  const lon = Math.atan2(p.x, p.z) / DEG / MAP_S;
   let h = hills(p);
 
   // 놀이 구역(경도 ±14, 위도 -11~48)은 평평하게 (잔 얼룩만)
@@ -587,7 +590,7 @@ function terrainH(p) {
 
   // 관측소 초원(북쪽 높은 지대): 원반 3개의 합, 가장자리는 가파른 절벽(0.12°) — 계단으로만 내려간다
   let mk = 0;
-  for (const [c, r] of T.meadowDiscs) mk = Math.max(mk, ss(r + 0.12, r, angDeg(p, c)));
+  for (const [c, r] of T.meadowDiscs) mk = Math.max(mk, ss(r * MAP_S + 0.12, r * MAP_S, angDeg(p, c)));
   const dS = T.stairs.dist(p, _o), tS = _o.t;
   const dCut = T.stairCut.dist(p, _o), cutInside = _o.inside;
   const stairCorridor = cutInside ? ss(1.5, 1.05, dCut) : 0;
@@ -609,25 +612,28 @@ function terrainH(p) {
     h = lerp(h, -4.2 + 0.4 * vnoise(p.x * 30, p.y * 30, p.z * 30), m);
     // 섬: 호수 위 0.6, 물가는 완만해 헤엄쳐 올라온다
     const dI = angDeg(p, T.island);
-    h = lerp(h, 0.6 + 0.05 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.2, 1.6, dI));
+    h = lerp(h, 0.6 + 0.05 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.2 * MAP_S, 1.6 * MAP_S, dI));
   }
 
   // 샘물 웅덩이: 얕은 물(-3.3)
   const dSp = angDeg(p, T.spring);
-  if (dSp < 1.6) h = lerp(h, -3.3, ss(1.4, 0.7, dSp));
+  if (dSp < 1.6 * MAP_S) h = lerp(h, -3.3, ss(1.4 * MAP_S, 0.7 * MAP_S, dSp));
 
   // 별 크레이터: 접시(안쪽 -0.4) + 둘레 턱(1.0, 가파름 — 걸어선 못 넘고 점프로) + 북동쪽 길 트임
   const dC = angDeg(p, T.starCrater);
-  if (dC < 2.8) {
+  if (dC < 2.8 * MAP_S) {
     const bear = bearingFrom(T.starCrater, p);
-    const gap = ss(30, 14, Math.abs(bear - 60));   // 방위 60°(북동, 길이 들어오는 쪽) ±14° 트임, 30°까지 섞임
-    const rim = ss(1.4, 1.5, dC) * ss(2.25, 2.15, dC) * (1 - gap);   // 옆면 0.1°(0.16유닛) — 걸어선 못 오르고 점프로
-    h += 1.0 * rim - 0.4 * ss(1.5, 0.5, dC);
+    const dBear = Math.abs(((bear - CRATER_GAP_BEARING + 540) % 360) - 180);
+    const gap = ss(30, 14, dBear);   // 길이 들어오는 방위 ±14° 트임, 30°까지 섞임 (추기 #4: 북서쪽)
+    const rIn = 1.4 * MAP_S, rOut = 2.25 * MAP_S;
+    const rim = ss(rIn, rIn + 0.1, dC) * ss(rOut, rOut - 0.1, dC) * (1 - gap);   // 옆면 0.1°(0.16유닛) — 걸어선 못 오르고 점프로
+    h += 1.0 * rim - 0.4 * ss(1.5 * MAP_S, 0.5 * MAP_S, dC);
   }
 
-  // 바위벽(능선): 높이 5, 가파른 옆면
-  for (const w of T.walls) {
-    const d = w.dist(p, _o);
+  // 바위벽(능선): 높이 5, 가파른 옆면. 추기 #4: 설계 위선·경선(남 -11 · 북 48 · 동서 ±14.6)까지의 거리(세계 °)로
+  {
+    const cosLat = Math.cos((lat - MAP_LAT0) * MAP_S * DEG);
+    const d = Math.abs(Math.min((lat + 11) * MAP_S, (48 - lat) * MAP_S, (14.6 - Math.abs(lon)) * MAP_S * cosLat));
     if (d < 1.5) {
       const wh = 5 * ss(1.4, 0.9, d) * (0.85 + 0.3 * vnoise(p.x * 50, p.y * 50, p.z * 50));
       h = Math.max(h, wh);
@@ -674,7 +680,7 @@ function place(obj, lonDeg, latDeg, yaw = 0, lift = 0, useWalk = false) {
 
 // ── 지형 메시 ────────────────────────────────────────────────────────────────
 // 놀이 구역(경도 ±28°, 위도 -20~56°)은 고해상 패치, 나머지는 저해상 구.
-const PATCH = { lon0: -28, lon1: 28, lat0: -20, lat1: 56 };
+const PATCH = { lon0: -32, lon1: 32, lat0: -50, lat1: 50 };   // 추기 #4: 확대된 놀이 구역(세계 경도 ±20.3 · 위도 ±42.8) 둘레
 
 function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
   const verts = (nLon + 1) * (nLat + 1);
@@ -687,7 +693,7 @@ function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
     const lat = lat0 + (lat1 - lat0) * j / nLat;
     for (let i = 0; i <= nLon; i++) {
       const lon = lon0 + (lon1 - lon0) * i / nLon;
-      p.copy(dirFromLonLat(lon, lat));
+      p.copy(dirFromLonLatW(lon, lat));
       const r = radiusOf(p);
       pos[k * 3] = p.x * r; pos[k * 3 + 1] = p.y * r; pos[k * 3 + 2] = p.z * r;
       uv[k * 2] = lon * Math.cos(lat * DEG) / 2.6; uv[k * 2 + 1] = lat / 2.6;   // 질감 1장 ≈ 2.6°(약 4유닛)
@@ -798,7 +804,7 @@ const planet = (() => {
   // 정점 버퍼는 공유한 채 인덱스만 6×8 타일로 나눠 메시 48개로 만든다 → 화면 밖 타일은 그리지 않는다(절두체 컬링).
   // 법선은 나누기 전에 한 번에 계산돼 있어 타일 경계에 이음새가 없다.
   const hullMat = outlineMat(0.14, 0x3a2f1c);
-  const TX = 6, TY = 8, pos = patch.attributes.position;
+  const TX = 8, TY = 12, pos = patch.attributes.position;   // 추기 #4: 패치가 커져 타일을 8×12로
   const tiles = [];
   for (let tj = 0; tj < TY; tj++) for (let ti = 0; ti < TX; ti++) {
     const i0 = Math.floor(nLon * ti / TX), i1 = Math.floor(nLon * (ti + 1) / TX);
@@ -828,7 +834,7 @@ const water = (() => {
   const step = 0.3;
   const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
   // 지형이 수면보다 1.2 이상 높은 칸은 어차피 땅에 가려지므로 만들지 않는다 (정점·오버드로 절약)
-  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER, (lon, lat) => terrainH(dirFromLonLat(lon, lat)) > WATER + 1.2);
+  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER, (lon, lat) => terrainH(dirFromLonLatW(lon, lat)) > WATER + 1.2);
   const dirs = geo.userData.dirs;
   const shore = new Float32Array(dirs.length);
   for (let i = 0; i < dirs.length; i++) {
@@ -1161,7 +1167,7 @@ function mapDot(dir, radius, color) {
 }
 
 // ── 세계 채우기 ───────────────────────────────────────────────────────────────
-const START = [10.8, -7.2];                    // 로드맵 8 추기 #3: 남쪽 착륙 들판, 데크 경사로 아래
+const START = [-10.0, -7.2];                    // 로드맵 8 추기 #4: 남서쪽 착륙 들판, 데크 경사로 아래
 const player = {
   pos: dirFromLonLat(START[0], START[1]).multiplyScalar(R),
   fwd: new THREE.Vector3(0, 1, 0),             // 북쪽
@@ -1240,11 +1246,11 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     // 섬
     [1.6, 24.4], [3.4, 22.2],
     // 샘물 비탈·서쪽 지선·동쪽
-    [-12.0, 12.6], [-10.2, 8.4], [-7.0, 9.4], [-4.4, 7.6], [-12.4, 5.6], [3.6, 11.4], [7.2, 9.8], [10.8, 11.6], [12.2, 8.0], [9.4, 5.6], [5.4, 3.0], [-8.4, 4.0],
+    [-12.0, 12.6], [-10.2, 8.4], [-7.0, 9.4], [-4.4, 7.6], [-12.4, 5.6], [3.6, 11.4], [7.2, 9.8], [10.8, 11.6], [12.2, 8.0], [9.4, 5.6], [5.4, 3.0], [-10.2, 4.6],
     // 크레이터 둘레 바깥·남쪽 벽 앞
-    [-9.6, 0.6], [-11.4, -3.2], [-8.0, -4.6], [-4.4, -5.4], [0.2, -5.6], [2.4, -4.6], [7.6, -2.6], [12.8, -3.0], [12.4, 1.2], [8.2, 1.8], [-7.0, -1.6],
+    [-9.6, 0.6], [-11.8, -2.4], [-2.0, -4.8], [0.2, -5.6], [2.4, -4.6], [7.6, -2.6], [11.6, -4.8], [12.4, 1.2], [8.2, 1.8], [-1.2, -1.2], [5.0, -1.0],
     // 추기 #3: 착륙 들판 남쪽 벽 앞(벽을 -11로 내리며 생긴 띠)
-    [-10.0, -8.8], [-6.0, -9.2], [-1.5, -8.9], [2.6, -9.3], [12.4, -8.6],
+    [-12.6, -9.0], [-6.0, -9.2], [-1.5, -8.9], [2.6, -9.3], [12.4, -8.6],
   ];
   spots.forEach(([lon, lat], i) => {
     const sc = 0.9 + ((i * 7) % 5) * 0.06;
@@ -1255,12 +1261,12 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     mapDot(t.userData.dir, 1.6, 0x3f9a2a);
   });
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
-  const bushes = [[-4.8, 44.2], [2.2, 43.6], [-8.2, 35.2], [4.4, 30.4], [-7.4, 28.6], [10.6, 24.2], [-8.4, 13.0], [2.4, 12.2], [-10.8, 10.9], [6.0, 6.8], [-6.2, -2.6], [3.2, -2.2]];
+  const bushes = [[-4.8, 44.2], [2.2, 43.6], [-8.2, 35.2], [4.4, 30.4], [-7.4, 28.6], [10.6, 24.2], [-8.4, 13.0], [2.4, 12.2], [-10.8, 10.9], [6.0, 6.8], [-3.4, -2.2], [3.2, -2.2]];
   bushes.forEach(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); });
   const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
   flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
     if (c === 'white') forageNodes.push({ mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 }); });   // 흰 꽃은 채집 대상
-  const mush = [[-11.2, 36.8, 'red'], [-10.4, 38.4, 'red'], [-12.0, 33.8, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-6.0, -4.2, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
+  const mush = [[-11.2, 36.8, 'red'], [-10.4, 38.4, 'red'], [-12.0, 33.8, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-2.8, -3.6, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
@@ -1494,9 +1500,9 @@ function addProp(tex, w, h, lon, lat, opts = {}) {
   scene.add(m); props.push(m); return m;
 }
 // 로드맵 8 추기 #3 — 착륙 들판(남): 비행정(데크 북쪽 들판 위에 떠 있음, 시작 컷신에서 여기로 내려온다)·표지판·등불
-const airship = addProp(airshipTex, 6.4, 4.8, 5.6, -3.6, { lift: 0.35 }); airship.userData.base = airship.position.clone(); airship.userData.alt = 0;
-addProp(signTex, 1.3, 1.75, 9.2, -4.4);         // 들판 길 초입(크레이터 방향 안내)
-addProp(lanternTex, 1.1, 1.5, 9.9, -7.6);        // 데크 경사로 입구
+const airship = addProp(airshipTex, 6.4, 4.8, -5.6, -3.6, { lift: 0.35 }); airship.userData.base = airship.position.clone(); airship.userData.alt = 0;
+addProp(signTex, 1.3, 1.75, -8.0, -4.4);        // 들판 길 초입(크레이터 방향 안내)
+addProp(lanternTex, 1.1, 1.5, -8.4, -7.9);       // 데크 경사로 입구
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
 // 관측소 둥근 터: 선돌 3기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6). 추기 #3: 고리 한가운데가 별 받침대
 [addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)]
@@ -1519,7 +1525,7 @@ addProp(signTex, 1.3, 1.75, -12.2, 10.2);
 // 떨어진 별 조각 3개(크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가)와 관측소 선돌 고리 한가운데 별 받침대 (추기 #3)
 addProp(starTex, 1.9, 1.9, 2.6, 1.2);
 addProp(starTex, 1.9, 1.9, -12.0, 10.6);
-addProp(starTex, 1.9, 1.9, 6.2, 10.4);
+addProp(starTex, 1.9, 1.9, 3.4, 10.8);
 addProp(starTex, 2.2, 2.2, -5.9, 38.7);
 // 로드맵 8: 폭포는 원작 지도에 없어 제거(§11-5). 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
 const dewNodes = [[-5.9, 15.1], [-4.1, 13.3], [1.4, 22.6]].map(([lon, lat]) => {
@@ -1538,7 +1544,7 @@ function addBeam(lon, lat) {
   const m = new THREE.Mesh(geo, mat);
   m.position.copy(dir).multiplyScalar(R + terrainH(dir) + 0.6); orientBillboard(m, dir); scene.add(m); return m;
 }
-const beams = [addBeam(2.6, 1.2), addBeam(-12.0, 10.6), addBeam(6.2, 10.4)];   // 별 조각 3개 (추기 #3)
+const beams = [addBeam(2.6, 1.2), addBeam(-12.0, 10.6), addBeam(3.4, 10.8)];   // 별 조각 3개 (추기 #3)
 const pedestalBeam = addBeam(-5.9, 38.7);                                        // 별 받침대(관측소 선돌 고리)
 
 // 착륙 데크(3D — 걷는 바닥) + 경사로 + 난간
@@ -1563,7 +1569,7 @@ const deck = (() => {
   const rampLen = T.ramp.arc * DEG * R;
   const ramp = withOutline(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, Math.hypot(rampLen, 1.2)), woodTop), 0.02, 0x6b4a1e);
   ramp.position.set(rad + rampLen / 2, 0.6, 0); ramp.rotation.y = Math.PI / 2; ramp.rotation.x = -Math.atan2(1.2, rampLen); ramp.receiveShadow = true; g.add(ramp);
-  { const dl = Math.atan2(T.deck.x, T.deck.z) / DEG, dla = Math.asin(T.deck.y) / DEG; place(g, dl, dla, 0); } scene.add(g);   // 로드맵 8: T.deck 자리(추기 #3: 남쪽 착륙 들판)
+  { const [dl, dla] = designLonLat(T.deck); place(g, dl, dla, Math.PI); } scene.add(g);   // 추기 #4: T.deck 자리, 경사로가 서쪽을 보게 180° 돌림
   return g;
 })();
 
@@ -1613,7 +1619,7 @@ const deck = (() => {
 // ── 나무다리 (작업 C 첫 항목) — 사진의 아치형 판자 다리. 걷기 높이는 walkH의 아치와 같다 ──
 const bridge = (() => {
   const g = new THREE.Group();
-  const seg = T.bridge, N = 44;   // 로드맵 8: 호수 띠를 건너는 긴 다리(약 19 유닛)
+  const seg = T.bridge, N = Math.round(seg.arc * DEG * R / 0.43);   // 로드맵 8: 호수 띠를 건너는 긴 다리 (추기 #4: 판자 수는 길이에서, 약 0.43유닛 간격)
   const plankM = toon(0xd9a45a), plankDark = toon(0xb9823f), postM = toon(0x8a5a2b), ropeM = toon(0xe6d3a0);
   const north = new THREE.Vector3(), east = new THREE.Vector3(), up = new THREE.Vector3(), mtx = new THREE.Matrix4(), pos = new THREE.Vector3();
   const frameAt = (t) => {
@@ -1742,7 +1748,7 @@ function log(text, cls = '') {
 
 // NPC 3 — 좌표 직접 배치 (§8). 대사는 buildDialog()가 행성/일반 퀘스트 상태에 따라 고른다(작업 E)
 const NPCS = [
-  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: 11.0, lat: -5.8, lift: 0.78,
+  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -10.6, lat: -5.4, lift: 0.78,
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
   { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -4.5, lat: 29.8, lift: 0,
     idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
@@ -2198,12 +2204,12 @@ function updateTutArrows(nowS) {
 // 작업 C: 몬스터 2종 — 파란 슬라임(근접 돌진) · 가시 슬라임(내려찍기, 재해석 §11)
 // 로드맵 8 추기 #2: 몬스터 구역 — 몬스터는 여기 안에서만 태어나고, 쫓아오다가도 구역 밖으로는 못 나간다(시작 초원·야영지엔 절대 없음)
 const MONSTER_ZONES = [
-  { id: 'crater', name: '별 크레이터', center: T.starCrater, r: 5.2 },              // 반지름 5.2° ≈ 8 유닛: 접시 + 둘레 + 길 트임 앞까지
-  { id: 'lone', name: '호수 남쪽 길가', center: dirFromLonLat(5.4, 8.5), r: 2.0 },  // 홀로 있는 슬라임 한 마리
+  { id: 'crater', name: '별 크레이터', center: T.starCrater, r: 3.6 * MAP_S },   // 추기 #4: 확대된 지도에선 3.6°(세계 5.2°) — 접시·둘레·트임 앞까지, 착륙 들판 쪽으론 안 나옴              // 반지름 5.2° ≈ 8 유닛: 접시 + 둘레 + 길 트임 앞까지
+  { id: 'lone', name: '호수 남쪽 길가', center: dirFromLonLat(2.6, 9.4), r: 2.0 * MAP_S },  // 홀로 있는 슬라임 한 마리
 ];
 function zoneOf(dir) { let best = MONSTER_ZONES[0], bd = 1e9; for (const z of MONSTER_ZONES) { const d = angDeg(dir, z.center); if (d < bd) { bd = d; best = z; } } return best; }
 function inZone(z, dir) { return angDeg(dir, z.center) <= z.r; }
-const SLIME_HOMES = [[-6.4, 2.4], [-1.0, 3.2], [-0.4, -1.6], [-6.2, -1.6], [-3.6, -2.6], [-6.2, 0.2], [-0.8, 0.9], [-3.4, 3.4], [5.4, 8.5]];   // 로드맵 8: 크레이터 둘레 8 + 호수 남쪽 길 옆 홀로 1
+const SLIME_HOMES = [[-6.4, 2.4], [-1.0, 3.2], [0.2, 0.2], [-2.0, 3.6], [0.6, 2.6], [-6.2, 0.2], [-0.8, 0.9], [-3.4, 3.4], [2.6, 9.4]];   // 추기 #4: 남쪽 둘레 3마리는 동·북쪽으로 — 착륙 들판에서 안 보이게   // 로드맵 8: 크레이터 둘레 8 + 호수 남쪽 길 옆 홀로 1
 const slimes = SLIME_HOMES.map(([lon, lat], i) => {
   const home = dirFromLonLat(lon, lat);
   const m = makeBillboard(slimeTex[0], 1.1, 0.95); scene.add(m);
@@ -2416,7 +2422,7 @@ function updateCombat(dt) {
 }
 
 // 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
-const STARS = [[2.6, 1.2], [-12.0, 10.6], [6.2, 10.4]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));   // 로드맵 8 추기 #3: 크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가(홀로 슬라임 옆)
+const STARS = [[2.6, 1.2], [-12.0, 10.6], [3.4, 10.8]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));   // 로드맵 8 추기 #3: 크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가(홀로 슬라임 옆)
 const pedestalDir = dirFromLonLat(-5.9, 38.7);   // 별 받침대(관측소 선돌 고리 한가운데) — 행성 퀘스트 마지막 단계에서 F로 봉헌
 const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
 // 2단 점프 발치의 흰 고리
@@ -2552,7 +2558,7 @@ const ACHIEVEMENTS = [
 const achieved = new Set();
 function updateAchievements() {
   if (!stats.reachedCamp && angDeg(tentProp.userData.dir, _up) * DEG * R < 4) stats.reachedCamp = true;
-  if (!stats.reachedIsland && player.grounded && !player.swimming && angDeg(T.island, _up) < 2.4) stats.reachedIsland = true;   // 로드맵 8: 섬 위에 서면
+  if (!stats.reachedIsland && player.grounded && !player.swimming && angDeg(T.island, _up) < 2.4 * MAP_S) stats.reachedIsland = true;   // 로드맵 8: 섬 위에 서면
   for (const a of ACHIEVEMENTS) {
     if (achieved.has(a.id)) continue;
     if (a.cond()) {
@@ -2644,7 +2650,7 @@ function updatePortalTransit(dt) {
 const SAVE_KEY = 'ep.save.v1', SAVE_VER = 1, AUTOSAVE_EVERY = 30;
 let saveSoonT = -1, autosaveT = 0, saveCount = 0, lastSaveAt = 0;
 const saveToastEl = document.getElementById('saveToast');
-function lonLatOf(dir) { return [+(Math.atan2(dir.x, dir.z) / DEG).toFixed(4), +(Math.asin(Math.max(-1, Math.min(1, dir.y))) / DEG).toFixed(4)]; }
+function lonLatOf(dir) { const [lo, la] = designLonLat(dir); return [+lo.toFixed(4), +la.toFixed(4)]; }   // 추기 #4: 저장은 설계 좌표
 function buildSave() {
   return {
     v: SAVE_VER, t: Date.now(),
@@ -2657,7 +2663,7 @@ function buildSave() {
     farm: { stage: farmStage, timer: Math.round(farmTimer) },
     dew: dewNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))), forage: forageNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))),
     tracked: trackedQuest, portalOpen,
-    map: 3,   // 로드맵 8: 지도 판. 1(없음)=로드맵 7 배치, 2=원작 지도 배치(북쪽 시작), 3=추기 #3 남→북 진행
+    map: 4,   // 로드맵 8: 지도 판. 1(없음)=로드맵 7 배치, 2=원작 지도 배치(북쪽 시작), 3=추기 #3 남→북 진행, 4=추기 #4 확대·남서 시작(저장 좌표가 설계 좌표)
   };
 }
 function saveGame(reason) {
@@ -2697,13 +2703,13 @@ function applySave(o) {
   trackedQuest = o.tracked && (o.tracked === 'main' || SIDE_QUESTS.some(s => s.id === o.tracked)) ? o.tracked : 'main';
   if (mq.done || o.portalOpen) { pedestalBeam.scale.setScalar(1.6); openPortal(true); }
   // 자리: 저장된 위치의 바닥에 세운다(물속·공중이었으면 안전 지점으로). 로드맵 7 지도의 저장(map 없음)은 위치만 시작 지점으로
-  const oldMap = !o.map || o.map < 3;
+  const oldMap = !o.map || o.map < 4;
   let d = o.pos && !oldMap ? dirFromLonLat(o.pos[0], o.pos[1]) : dirFromLonLat(START[0], START[1]);
   if (!oldMap && terrainH(d) <= WATER - 1.2 && o.safe) d = dirFromLonLat(o.safe[0], o.safe[1]);
   if (oldMap) {
     o = { ...o, safe: null }; log('지도가 바뀌어 착륙 들판 시작 지점으로 옮겨졌다.', 'sys');
-    // 추기 #3: 행성 퀘스트 단계 순서가 바뀌어(사냥이 2단계) 진행 중이던 행성 퀘스트는 처음부터. 완료한 것·별 조각·나머지는 그대로
-    if (mq.accepted && !mq.done) { mq.accepted = false; mq.stage = 0; mq.kills = 0; mq.spikeKills = 0; log('진행 순서가 바뀌어 행성 퀘스트를 미르에게서 다시 받는다.', 'sys'); }
+    // 추기 #3: 행성 퀘스트 단계 순서가 바뀌어(사냥이 2단계) 진행 중이던 행성 퀘스트는 처음부터. 완료한 것·별 조각·나머지는 그대로 (map 3 저장은 순서가 같지만 시작점만 옮긴다)
+    if (mq.accepted && !mq.done && o.map !== 3) { mq.accepted = false; mq.stage = 0; mq.kills = 0; mq.spikeKills = 0; log('진행 순서가 바뀌어 행성 퀘스트를 미르에게서 다시 받는다.', 'sys'); }
   }
   player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
   player.fwd.set(0, 1, 0); tangentize(player.fwd, d); tangentize(cam.fwd, d);
@@ -2728,7 +2734,7 @@ function showStartScreen(o) {
   pendingSave = o; gate.on = true; gate.confirmNew = false;
   const P = o.player || {};
   const qTxt = o.mq && o.mq.done ? '행성 퀘스트 완료' : o.mq && o.mq.accepted ? `행성 퀘스트 ${(o.mq.stage || 0) + 1}/5 단계` : '행성 퀘스트 전';
-  startInfoEl.innerHTML = `Lv.${P.level || 1} 탐사자 · ${qTxt}<br>별씨앗 ${P.seeds || 0} · 모험 기록 ${(o.achieved || []).length}/${ACHIEVEMENTS.length} · 저장 ${fmtAgo(o.t || Date.now())}` + (!o.map || o.map < 3 ? '<br><span style="color:#ffd166">지도가 바뀌어 시작 지점으로 옮겨집니다' + (o.mq && o.mq.accepted && !o.mq.done ? ' · 행성 퀘스트는 미르에게서 다시' : '') + '</span>' : '');
+  startInfoEl.innerHTML = `Lv.${P.level || 1} 탐사자 · ${qTxt}<br>별씨앗 ${P.seeds || 0} · 모험 기록 ${(o.achieved || []).length}/${ACHIEVEMENTS.length} · 저장 ${fmtAgo(o.t || Date.now())}` + (!o.map || o.map < 4 ? '<br><span style="color:#ffd166">지도가 바뀌어 시작 지점으로 옮겨집니다' + (o.mq && o.mq.accepted && !o.mq.done ? ' · 행성 퀘스트는 미르에게서 다시' : '') + '</span>' : '');
   btnNew.textContent = ''; btnNew.innerHTML = '<b>2</b>새로 시작'; btnNew.classList.remove('warn');
   startScreenEl.classList.add('on');
 }
@@ -3226,7 +3232,7 @@ const zoneCap = document.getElementById('zoneCap'), zoneTitle = document.getElem
 const ui2d = document.getElementById('ui2d'), ctx = ui2d.getContext('2d');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const ZONE_LABELS = [
-  ['착륙 들판', 7.6, -7.8], ['별 크레이터', -3.5, 0.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', -4.8, 14.0], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
+  ['착륙 들판', -7.4, -8.2], ['별 크레이터', -3.5, 0.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', -4.8, 14.0], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
   ['야영지', -5.0, 30.8], ['돌계단', -1.5, 34.4], ['관측소 초원', -0.9, 41.6], ['겸손한 사원 →', 10.6, 44.6],
 ];
 const zoneLabelEls = ZONE_LABELS.map(([name]) => { const d = document.createElement('div'); d.className = 'lbl'; d.textContent = name; zoneLabels.appendChild(d); return d; });
@@ -3708,8 +3714,8 @@ if (DEBUG) {
       camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
     },
     lonLat() {
-      const d = player.pos.clone().normalize();
-      return { lon: Math.atan2(d.x, d.z) / DEG, lat: Math.asin(Math.max(-1, Math.min(1, d.y))) / DEG, z: player.z };
+      const [lon, lat] = designLonLat(player.pos.clone().normalize());
+      return { lon, lat, z: player.z };
     },
     press(k, on) { on ? keys.add(k) : keys.delete(k); },
     setMap(v) { mapView = v; },
@@ -3738,7 +3744,7 @@ if (DEBUG) {
     farmStage() { return farmStage; }, farmTimer() { return farmTimer; },
     charWinOpen() { return charWinOpen; }, toggleCharWin, forageProgress() { return forageProgress; },
     // 작업 G 검증용
-    MONSTER_ZONES, inZone, MQ_HUNT, MQ_DELIVER, DECK_TOP,
+    MONSTER_ZONES, inZone, MQ_HUNT, MQ_DELIVER, DECK_TOP, MAP_S, MAP_LAT0, designLonLat, dirFromLonLatW, CRATER_GAP_BEARING,
     PORTALS, WORLD_AREAS, openPortal, enterPortal, portalTransit, portalOpen() { return portalOpen; }, nearPortal() { return nearPortal; },
     buildSave, applySave, saveGame, loadSaveRaw, clearSave, requestSave, SAVE_KEY, saveCount() { return saveCount; },
     gate, showStartScreen, continueGame, newGame, startScreenOn() { return startScreenEl.classList.contains('on'); },
