@@ -27,7 +27,8 @@
   #mini { position: fixed; right: 14px; top: 14px; width: 150px; height: 150px; pointer-events: none; }
   #mini .ring { position: absolute; inset: 0; border-radius: 50%;
     box-shadow: 0 0 0 5px #c99354, 0 0 0 7px #7a5230, 0 4px 14px rgba(0,0,0,.35), inset 0 0 18px rgba(0,0,0,.35); }
-  #mini canvas, #zonemap .disc canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+  #mini canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+  #zonemap .disc canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   #mini .n { position: absolute; left: 50%; top: -22px; transform: translateX(-50%); font: 700 11px monospace; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
   #mini .cap { position: absolute; left: 50%; top: 100%; margin-top: 12px; transform: translateX(-50%); white-space: nowrap;
     font-size: 11px; color: #fdf4de; background: rgba(60,40,20,.6); padding: 2px 8px; border-radius: 4px; }
@@ -37,8 +38,9 @@
   /* M 지도: 화면 가운데 큰 원형 지도 */
   #zonemap { position: fixed; inset: 0; display: none; pointer-events: none; }
   #zonemap .dim { position: absolute; inset: 0; background: rgba(52,38,26,.58); }
-  #zonemap .disc { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); border-radius: 50%;
-    box-shadow: 0 0 0 7px #c99354, 0 0 0 10px #7a5230, 0 8px 30px rgba(0,0,0,.5), inset 0 0 40px rgba(0,0,0,.35); }
+  #zonemap .disc { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); border-radius: 14px;   /* 추기 #5: 원작처럼 세로 양피지 액자 */
+    box-shadow: 0 0 0 7px #c99354, 0 0 0 10px #7a5230, 0 8px 30px rgba(0,0,0,.5), inset 0 0 40px rgba(0,0,0,.25); }
+  #zonemap .disc canvas { border-radius: 14px; }
   #zonemap .title { position: absolute; left: 50%; transform: translateX(-50%); font: 700 16px 'Gowun Dodum', sans-serif; color: #fdf4de; text-shadow: 0 1px 3px rgba(0,0,0,.7); white-space: nowrap; }
   #zonemap .cap { position: absolute; left: 50%; transform: translateX(-50%); font: 600 12px monospace; color: #fdf4de; text-shadow: 0 1px 3px rgba(0,0,0,.7); white-space: nowrap; }
   #zonemap .lbl { position: absolute; transform: translate(-50%, -100%); font: 600 11px 'Gowun Dodum', sans-serif; color: #5b4632;
@@ -228,7 +230,7 @@
 <div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용(길게: 채집) <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>P</b>기록 <b>M</b>지도 <b>M M</b>전경도 <b>Enter</b>채팅 <b>H</b>키 안내 <b>Q</b>화질</div>
 <div id="objBar"></div>
 <div id="fps"></div>
-<div id="mini"><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
+<div id="mini"><canvas id="miniCv"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
 <div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
 <div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
@@ -539,33 +541,34 @@ const T = {
   bridge: makeSeg(-3.9, 28.6, -3.9, 16.6),      // 남북 나무다리 (호수 띠 전체, 양쪽 물가 너머까지 — 약 19 유닛)
   island: dirFromLonLat(2.4, 23.2),             // 호수 속 섬(반지름 약 1.8°, 높이 0.6)
   spring: dirFromLonLat(-4.8, 14.4),            // 샘물 웅덩이(얕은 물)
-  starCrater: dirFromLonLat(-3.5, 0.8),         // 별 크레이터 중심(접시 + 둘레 턱, 추기 #4: 북서쪽 트임)
+  starCrater: dirFromLonLat(-10.5, 33.5),       // 별 크레이터 중심(접시 + 둘레 턱). 추기 #5: 지도 북서쪽(야영지 서쪽), 남동쪽 트임으로 야영지에서 들어온다
   // 바위벽(능선): 놀이 구역 가장자리
   // walls: 추기 #4부터 terrainH 안에서 설계 경위도(남 -11 · 북 48 · 동서 ±14.6)로 직접 판정 (makeSeg 대원은 확대된 지도에서 위선을 벗어난다)
   // 모래길 — 추기 #3: 간선(착륙 들판→크레이터 앞→비탈→샘물→다리→야영지→계단→관측소), 크레이터 지선, 출구 지선, 서쪽 지선
   paths: [
     makeSeg(-9.6, -6.4, -8.6, -2.6),   // 0 착륙 데크 경사로 아래 → 북 (추기 #4: 들판은 남서쪽)
-    makeSeg(-8.6, -2.6, -7.6, 2.0),    // 1 → 크레이터 서쪽
-    makeSeg(-7.6, 2.0, -6.0, 4.6),     // 2 → 크레이터 앞 갈림길(북서)
-    makeSeg(-6.0, 4.6, -4.4, 1.4),     // 3 크레이터 지선: 갈림길 → 크레이터 안(북서 트임)
-    makeSeg(-6.0, 4.6, -0.5, 9.2),     // 4 갈림길 → 비탈
-    makeSeg(-0.5, 9.2, -1.4, 16.0),    // 5 → 샘물 옆
-    makeSeg(-1.4, 16.0, -3.9, 16.4),   // 6 → 다리 남단
-    makeSeg(-3.9, 28.3, -4.5, 29.8),   // 7 다리 북단 → 야영지 갈림길
-    makeSeg(-4.5, 29.8, -1.5, 33.0),   // 8 갈림길 → 계단 아래
-    makeSeg(-1.5, 35.9, -0.2, 40.0),   // 9 계단 위 → 관측소 초원 갈림길
-    makeSeg(0.2, 40.0, 3.4, 39.2),     // 10 출구 지선: 초원 동쪽
-    makeSeg(3.4, 39.2, 7.0, 41.5),     // 11
-    makeSeg(7.0, 41.5, 10.6, 43.9),    // 12 → 포탈
-    makeSeg(-1.0, 12.6, -9.0, 10.5),   // 13 서쪽 지선
-    makeSeg(-9.0, 10.5, -12.2, 10.2),  // 14
+    makeSeg(-8.6, -2.6, -6.0, 4.6),    // 1 → 들판 북쪽 굽이 (추기 #5: 크레이터가 북서로 가서 곧장)
+    makeSeg(-6.0, 4.6, -0.5, 9.2),     // 2 → 비탈
+    makeSeg(-0.5, 9.2, -1.4, 16.0),    // 3 → 샘물 옆
+    makeSeg(-1.4, 16.0, -3.9, 16.4),   // 4 → 다리 남단
+    makeSeg(-3.9, 28.3, -4.5, 29.8),   // 5 다리 북단 → 야영지 갈림길
+    makeSeg(-4.5, 29.8, -1.5, 33.0),   // 6 갈림길 → 계단 아래
+    makeSeg(-1.5, 35.9, -0.2, 40.0),   // 7 계단 위 → 관측소 초원 갈림길
+    makeSeg(0.2, 40.0, 3.4, 39.2),     // 8 출구 지선: 초원 동쪽
+    makeSeg(3.4, 39.2, 7.0, 41.5),     // 9
+    makeSeg(7.0, 41.5, 10.6, 43.9),    // 10 → 포탈
+    makeSeg(-1.0, 12.6, -9.0, 10.5),   // 11 서쪽 지선
+    makeSeg(-9.0, 10.5, -12.2, 10.2),  // 12
+    makeSeg(-4.5, 29.8, -7.8, 29.4),   // 13 크레이터 지선(추기 #5): 야영지 갈림길 → 텐트 남쪽
+    makeSeg(-7.8, 29.4, -9.2, 31.2),   // 14 → 크레이터 남동 트임 앞
+    makeSeg(-9.2, 31.2, -9.9, 33.0),   // 15 → 크레이터 안
   ],
   // 걷기 판정용 구조물 (시각은 작업 C)
   deck: dirFromLonLat(-5.6, -6.4),     // 추기 #4: 팔각 착륙 데크 중심(남서쪽 착륙 들판), 반경 2.25°(세계), 땅보다 1.2 높음
   ramp: makeSeg(-7.52, -6.4, -9.4, -6.4),  // 데크 → 들판 경사로(서쪽). 세계 위도 -36°라 설계 경도 1°가 세계 1.17°: 가장자리(2.25°)에서 시작해 2.2° 길이
 };
 const _o = { t: 0, inside: false };
-const CRATER_GAP_BEARING = 320;   // 추기 #4: 크레이터 트임 방위(북서) — 착륙 들판이 남서쪽이라 길이 서쪽에서 들어온다
+const CRATER_GAP_BEARING = 150;   // 추기 #5: 크레이터 트임 방위(남동) — 야영지 쪽에서 길이 들어온다
 
 // 자연 굴곡(놀이 구역 밖 완만한 언덕)
 function hills(p) {
@@ -1157,14 +1160,7 @@ function placeSprite(mesh, lonDeg, latDeg, useWalk = false, lift = 0) {
   return mesh;
 }
 // 미니맵(위에서 본 지도)용 납작 표식 — 레이어 2에만
-function mapDot(dir, radius, color) {
-  const m = new THREE.Mesh(new THREE.CircleGeometry(radius, 12), new THREE.MeshBasicMaterial({ color }));
-  m.position.copy(dir).multiplyScalar(R + terrainH(dir) + 0.6);
-  _q.setFromUnitVectors(_y, dir); m.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2));
-  m.layers.set(2);
-  scene.add(m);
-  return m;
-}
+function mapDot(dir, radius, color) { return null; }   // 추기 #5: 지도가 그림 지도(캔버스)로 바뀌어 3D 지도 점은 안 만든다
 
 // ── 세계 채우기 ───────────────────────────────────────────────────────────────
 const START = [-10.0, -7.2];                    // 로드맵 8 추기 #4: 남서쪽 착륙 들판, 데크 경사로 아래
@@ -1240,7 +1236,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     // 북쪽 관측소 초원 둘레(초원 위, 절벽 안쪽)
     [-6.5, 44.6], [-3.2, 45.4], [0.5, 45.8], [3.6, 45.2], [-7.6, 41.8], [-7.0, 36.6], [4.6, 37.0], [5.6, 43.9], [8.6, 45.5], [12.3, 45.6], [12.6, 41.9], [9.0, 39.6], [-9.2, 42.0],
     // 초원 절벽 아래(야영지 북쪽 벽면 앞)·야영지 둘레
-    [-9.6, 33.5], [-10.8, 31.0], [-12.2, 28.9], [3.2, 34.2], [5.8, 32.8], [2.6, 31.2], [-8.0, 30.0], [-11.6, 34.6], [7.4, 30.2],
+    [-13.0, 30.6], [-7.4, 33.9], [-12.2, 28.9], [3.2, 34.2], [5.8, 32.8], [2.6, 31.2], [-9.3, 29.2], [-12.8, 37.4], [7.4, 30.2],   // 추기 #5: 크레이터(북서) 자리 비움
     // 호수 북안·남안·동쪽 호숫가
     [10.0, 27.6], [12.0, 25.0], [9.6, 22.3], [11.8, 19.6], [8.6, 17.4], [-12.4, 15.8], [-9.0, 16.2], [-6.6, 15.9], [1.2, 15.4], [4.2, 15.8], [6.6, 14.6],
     // 섬
@@ -1266,7 +1262,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
   flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
     if (c === 'white') forageNodes.push({ mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 }); });   // 흰 꽃은 채집 대상
-  const mush = [[-11.2, 36.8, 'red'], [-10.4, 38.4, 'red'], [-12.0, 33.8, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-2.8, -3.6, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
+  const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-2.8, -3.6, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
@@ -1510,7 +1506,7 @@ addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(�
 // 야영지(다리 북쪽 갈림길): 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
 const tentProp = addProp(tentTex, 4.4, 4.4, -5.8, 31.4);   // 작업 D: 텐트 앞 F로 휴식(기력 회복)
 addProp(cauldronTex, 1.2, 1.2, -4.0, 30.7);
-const campCrates = [addProp(crateTex, 1.0, 1.0, -6.6, 29.5), addProp(crateTex, 0.9, 0.9, -6.0, 28.8), addProp(crateTex, 0.9, 0.9, -2.4, 31.5)];   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
+const campCrates = [addProp(crateTex, 1.0, 1.0, -6.9, 30.8), addProp(crateTex, 0.9, 0.9, -7.5, 30.1), addProp(crateTex, 0.9, 0.9, -2.4, 31.5)];   // 추기 #5: 크레이터 지선을 비켜 텐트 서쪽으로   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
 campCrates.forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
 addProp(lanternTex, 1.1, 1.5, -3.0, 28.7);        // 다리 북단
 // 소·밭 — 야영지 동쪽. 근접 판정 반경(각 1.6)이 겹치지 않게 띄운다
@@ -1519,13 +1515,13 @@ const farmProp = addProp(farmTex[0], 2.6, 1.5, 0.8, 29.6, { shadow: false });
 let farmStage = 0, farmTimer = 0;   // 0=빈 밭, 1=자라는 중, 2=수확 가능
 // 다리 남단 돌 아치 (가운데가 비어 캐릭터가 지나간다)
 addProp(archTex, 5.6, 4.9, -3.9, 16.0);
-// 크레이터 동쪽 표지판·서쪽 지선 끝 표지판
-addProp(signTex, 1.3, 1.75, 2.2, 0.7);
+// 크레이터 지선 초입 표지판·서쪽 지선 끝 표지판
+addProp(signTex, 1.3, 1.75, -8.2, 28.9);
 addProp(signTex, 1.3, 1.75, -12.2, 10.2);
 // 떨어진 별 조각 3개(크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가)와 관측소 선돌 고리 한가운데 별 받침대 (추기 #3)
-addProp(starTex, 1.9, 1.9, 2.6, 1.2);
-addProp(starTex, 1.9, 1.9, -12.0, 10.6);
-addProp(starTex, 1.9, 1.9, 3.4, 10.8);
+addProp(starTex, 1.9, 1.9, -11.2, 32.4);   // 추기 #5: 크레이터 안
+addProp(starTex, 1.9, 1.9, -8.2, 36.4);    // 크레이터 북동쪽 언덕
+addProp(starTex, 1.9, 1.9, 2.4, 23.2);     // 호수 섬
 addProp(starTex, 2.2, 2.2, -5.9, 38.7);
 // 로드맵 8: 폭포는 원작 지도에 없어 제거(§11-5). 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
 const dewNodes = [[-5.9, 15.1], [-4.1, 13.3], [1.4, 22.6]].map(([lon, lat]) => {
@@ -1544,7 +1540,7 @@ function addBeam(lon, lat) {
   const m = new THREE.Mesh(geo, mat);
   m.position.copy(dir).multiplyScalar(R + terrainH(dir) + 0.6); orientBillboard(m, dir); scene.add(m); return m;
 }
-const beams = [addBeam(2.6, 1.2), addBeam(-12.0, 10.6), addBeam(3.4, 10.8)];   // 별 조각 3개 (추기 #3)
+const beams = [addBeam(-11.2, 32.4), addBeam(-8.2, 36.4), addBeam(2.4, 23.2)];   // 별 조각 3개 (추기 #5: 크레이터 안·크레이터 북동 언덕·섬)
 const pedestalBeam = addBeam(-5.9, 38.7);                                        // 별 받침대(관측소 선돌 고리)
 
 // 착륙 데크(3D — 걷는 바닥) + 경사로 + 난간
@@ -1581,7 +1577,7 @@ const deck = (() => {
   const chevGeo = new THREE.PlaneGeometry(1.4, 1.4);
   const chevMat = new THREE.MeshBasicMaterial({ map: chevronTex, transparent: true, alphaTest: 0.2, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   const chevs = [];
-  const mainPaths = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => T.paths[i]);   // 로드맵 8: 간선에만 (추기 #3: 들판→크레이터→…→관측소)
+  const mainPaths = [0, 1, 2, 3, 4, 5, 6, 7].map(i => T.paths[i]);   // 로드맵 8: 간선에만 (추기 #5: 들판→비탈→샘물→다리→야영지→계단→관측소)
   const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpP = new THREE.Vector3(), up = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
   for (const seg of mainPaths) {
     const len = seg.arc * DEG * R;
@@ -1768,17 +1764,17 @@ const MAIN_QUEST = {
   title: '별내림 천문대에 떨어진 별을 되찾아라',
   acceptLines: [
     '별내림 천문대에 온 걸 환영해. 비행정은 여기 세워 둘게.',
-    '지난밤 하늘에서 별 조각이 떨어지는 걸 봤어 — 바로 이 북쪽, 슬라임 떼가 모여든 크레이터야.',
-    '떨어진 별을 그대로 두면 이 위성의 기운이 옅어진다고 해. 슬라임들이 조각의 기운에 홀려 삼키려 든다니, 정리하면서 조각을 되찾아 줬으면 하는데.',
-    '조각은 세 개 — 크레이터 동쪽, 서쪽 샛길 끝, 호수 남쪽 길가에 하나씩 떨어졌어. Z로 공격, 배운 스킬은 X·C·V로. 맡아 주겠나?',
+    '지난밤 하늘에서 별 조각이 떨어지는 걸 봤어 — 호수 건너 북서쪽 언덕에 크레이터가 생겼대.',
+    '떨어진 별을 그대로 두면 이 위성의 기운이 옅어진다고 해. 자네가 찾아서 별 받침대에 되돌려 줬으면 하는데.',
+    '북쪽으로 길을 따라가면 샘물가에 수문장 벨라가 있어. 사정을 더 알고 있을 거야 — 맡아 주겠나?',
   ],
   stages: [
     { npc: 'sailor', obj: '항해사 미르와 이야기하기' },
-    { obj: '크레이터의 슬라임 5마리·가시 슬라임 2마리 처치, 별 조각 3개 회수', kills: 5, spikeKills: 2, fieldStars: 3 },
-    { npc: 'knight', obj: '비탈을 올라 샘물가의 수문장 벨라 만나기',
-      lines: ['조각을 다 모았군. 크레이터가 조용해진 걸 보니 자네 솜씨겠어.', '별 받침대는 호수 건너 북쪽, 관측소 언덕 위 선돌 고리에 있어. 나무다리를 건너 야영지 지기 도토에게 길을 물어봐.', '다리 위는 미끄러우니 물에 빠지지 않게 조심하고.'] },
+    { npc: 'knight', obj: '북쪽 길을 따라 샘물가의 수문장 벨라 만나기',
+      lines: ['별 조각을 찾는다고 들었어. 어젯밤 하늘이 번쩍하더니 호수 건너 북서쪽으로 떨어지더군.', '슬라임들이 별 조각의 기운에 홀려서 자꾸 삼키려 든다더군 — 몇 마리는 배 속에 품고 있을지도 몰라.', '나무다리를 건너 야영지 지기 도토를 찾아가게. 크레이터 바로 옆이라 길을 잘 알아. 다리 위는 미끄러우니 조심하고.'] },
     { npc: 'keeper', obj: '나무다리를 건너 야영지 지기 도토 만나기',
-      lines: ['다리를 건너왔군! 가마솥에 국을 끓이는 중이야.', '별 조각을 받침대로 가져간다고? 야영지 동쪽 돌계단을 올라가면 관측소 초원이야 — 선돌 세 개가 둥글게 선 곳 한가운데가 받침대지.', '별이 다시 빛나면 초원 북동쪽 겸손한 사원 길도 열릴 거야.'] },
+      lines: ['다리를 건너왔군! 가마솥에 국을 끓이는 중이야.', '별 크레이터는 야영지 서쪽이야 — 슬라임이 잔뜩 몰려 있으니 슬라임 5마리·가시 슬라임 2마리는 정리해야 할 거야. Z로 공격, 배운 스킬은 X·C·V로.', '조각은 세 개 — 크레이터 안, 크레이터 북동쪽 언덕, 그리고 호수 섬에 하나씩 떨어졌어. 다 모으면 야영지 동쪽 돌계단을 올라 관측소 선돌 고리의 받침대에 올려 줘.'] },
+    { obj: '별 크레이터의 슬라임 5마리·가시 슬라임 2마리 처치, 별 조각 3개 회수', kills: 5, spikeKills: 2, fieldStars: 3 },
     { obj: '돌계단을 올라 관측소 선돌 고리의 별 받침대(F)에 별 조각 올리기', deliver: true },
   ],
   rewardExp: 120, rewardSeeds: 50,
@@ -1808,7 +1804,7 @@ function advanceMainStage() {
   updateQuestUI();
   requestSave('퀘스트');   // 작업 G
 }
-const MQ_HUNT = 1, MQ_DELIVER = 4;   // 추기 #3: 사냥은 2단계(수락 직후), 봉헌은 마지막
+const MQ_HUNT = 3, MQ_DELIVER = 4;   // 추기 #5: 미르 → 벨라 → 도토 → 사냥(북서 크레이터) → 봉헌
 function mqHuntActive() { return mq.accepted && !mq.done && mq.stage === MQ_HUNT; }
 function mqCheckHunt() {
   if (!mqHuntActive()) return;
@@ -1845,9 +1841,9 @@ const SIDE_QUESTS = [
     turnin: ['좋았어! 이걸로 오늘 저녁은 훌륭하겠군. 이거 받아.'],
     rewardExp: 35, rewardSeeds: 20, rewardPot: 'hpPot' },
   { id: 'thorns', npc: 'knight', title: '다리 밑 가시', item: 'spike', target: 3,
-    offer: ['크레이터에서 올라온 가시 슬라임이 떨어뜨린 가시가 길에 잔뜩 박혀 있어.', '지나다니기 위험하니 세 개만 치워주겠나?'],
+    offer: ['북서쪽 크레이터에서 내려온 가시 슬라임이 떨어뜨린 가시가 야영지 길에 잔뜩 박혀 있대.', '지나다니기 위험하니 세 개만 치워주겠나?'],
     idle: ['가시 세 개, 크레이터 쪽에서 찾을 수 있을 거야.'],
-    turnin: ['치워줘서 고맙다. 덕분에 샘물 길이 한결 안전해졌어.'],
+    turnin: ['치워줘서 고맙다. 덕분에 야영지 길이 한결 안전해졌어.'],
     rewardExp: 30, rewardSeeds: 15, rewardPot: 'mpPot' },
   { id: 'dew', npc: 'sailor', title: '이슬 한 모금', item: 'dew', target: 3,
     offer: ['요즘 자꾸 목이 마르더라고 — 신선한 이슬을 마시면 좀 낫다던데.', '이슬방울 세 개만 모아다 줄 수 있겠어? 북쪽 샘물가나 호수 섬 물가에 몽글몽글 맺혀 있을 거야.'],
@@ -2204,12 +2200,11 @@ function updateTutArrows(nowS) {
 // 작업 C: 몬스터 2종 — 파란 슬라임(근접 돌진) · 가시 슬라임(내려찍기, 재해석 §11)
 // 로드맵 8 추기 #2: 몬스터 구역 — 몬스터는 여기 안에서만 태어나고, 쫓아오다가도 구역 밖으로는 못 나간다(시작 초원·야영지엔 절대 없음)
 const MONSTER_ZONES = [
-  { id: 'crater', name: '별 크레이터', center: T.starCrater, r: 3.6 * MAP_S },   // 추기 #4: 확대된 지도에선 3.6°(세계 5.2°) — 접시·둘레·트임 앞까지, 착륙 들판 쪽으론 안 나옴              // 반지름 5.2° ≈ 8 유닛: 접시 + 둘레 + 길 트임 앞까지
-  { id: 'lone', name: '호수 남쪽 길가', center: dirFromLonLat(2.6, 9.4), r: 2.0 * MAP_S },  // 홀로 있는 슬라임 한 마리
+  { id: 'crater', name: '별 크레이터', center: T.starCrater, r: 3.6 * MAP_S },   // 3.6°(세계 5.2°): 접시 + 둘레 + 트임 앞까지. 추기 #5: 몬스터 구역은 북서쪽 크레이터 하나뿐
 ];
 function zoneOf(dir) { let best = MONSTER_ZONES[0], bd = 1e9; for (const z of MONSTER_ZONES) { const d = angDeg(dir, z.center); if (d < bd) { bd = d; best = z; } } return best; }
 function inZone(z, dir) { return angDeg(dir, z.center) <= z.r; }
-const SLIME_HOMES = [[-6.4, 2.4], [-1.0, 3.2], [0.2, 0.2], [-2.0, 3.6], [0.6, 2.6], [-6.2, 0.2], [-0.8, 0.9], [-3.4, 3.4], [2.6, 9.4]];   // 추기 #4: 남쪽 둘레 3마리는 동·북쪽으로 — 착륙 들판에서 안 보이게   // 로드맵 8: 크레이터 둘레 8 + 호수 남쪽 길 옆 홀로 1
+const SLIME_HOMES = [[-12.6, 34.4], [-11.6, 35.8], [-9.4, 35.6], [-8.7, 33.9], [-12.5, 32.2], [-10.9, 31.4], [-8.6, 31.8], [-11.9, 33.0], [-9.8, 34.6]];   // 추기 #5: 북서쪽 크레이터 둘레·안 9마리
 const slimes = SLIME_HOMES.map(([lon, lat], i) => {
   const home = dirFromLonLat(lon, lat);
   const m = makeBillboard(slimeTex[0], 1.1, 0.95); scene.add(m);
@@ -2260,7 +2255,7 @@ function updateSlimes(dt) {
   }
 }
 // 가시 슬라임 — 슬라임 초원 안쪽 3마리. 근접하면 안 때리고, 거리 2.5~4에서 튀어 내려찍기(0.5초 그림자 예고 → 착지 반경 1.2, 데미지 14, 쿨 3초)
-const SPIKE_HOMES = [[-3.5, 1.9], [-4.6, 0.2], [-2.6, 0.0]];   // 로드맵 8: 크레이터 안쪽
+const SPIKE_HOMES = [[-10.5, 34.4], [-11.4, 33.0], [-9.7, 32.9]];   // 추기 #5: 북서쪽 크레이터 안쪽
 const spikeSlimes = SPIKE_HOMES.map(([lon, lat], i) => {
   const home = dirFromLonLat(lon, lat);
   const m = makeBillboard(slimeTex[0], 1.25, 1.05); scene.add(m); m.material = m.material.clone();
@@ -2422,7 +2417,7 @@ function updateCombat(dt) {
 }
 
 // 떨어진 별 발견: 반경 2 안이면 반짝임 + 로그 (포탈 잠금엔 안 씀)
-const STARS = [[2.6, 1.2], [-12.0, 10.6], [3.4, 10.8]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));   // 로드맵 8 추기 #3: 크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가(홀로 슬라임 옆)
+const STARS = [[-11.2, 32.4], [-8.2, 36.4], [2.4, 23.2]].map(([lon, lat]) => ({ dir: dirFromLonLat(lon, lat), found: false }));   // 로드맵 8 추기 #5: 크레이터 안·크레이터 북동 언덕·호수 섬
 const pedestalDir = dirFromLonLat(-5.9, 38.7);   // 별 받침대(관측소 선돌 고리 한가운데) — 행성 퀘스트 마지막 단계에서 F로 봉헌
 const sparkle = makeBillboard(sparkleTex, 1.8, 1.8, { shadow: false }); sparkle.visible = false; scene.add(sparkle); let sparkleT = 0;
 // 2단 점프 발치의 흰 고리
@@ -2663,7 +2658,7 @@ function buildSave() {
     farm: { stage: farmStage, timer: Math.round(farmTimer) },
     dew: dewNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))), forage: forageNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))),
     tracked: trackedQuest, portalOpen,
-    map: 4,   // 로드맵 8: 지도 판. 1(없음)=로드맵 7 배치, 2=원작 지도 배치(북쪽 시작), 3=추기 #3 남→북 진행, 4=추기 #4 확대·남서 시작(저장 좌표가 설계 좌표)
+    map: 5,   // 로드맵 8: 지도 판. 1(없음)=로드맵 7 배치, 2=원작 지도 배치(북쪽 시작), 3=추기 #3 남→북 진행, 4=추기 #4 확대·남서 시작(저장 좌표가 설계 좌표), 5=추기 #5 크레이터 북서·퀘스트 순서
   };
 }
 function saveGame(reason) {
@@ -2703,13 +2698,13 @@ function applySave(o) {
   trackedQuest = o.tracked && (o.tracked === 'main' || SIDE_QUESTS.some(s => s.id === o.tracked)) ? o.tracked : 'main';
   if (mq.done || o.portalOpen) { pedestalBeam.scale.setScalar(1.6); openPortal(true); }
   // 자리: 저장된 위치의 바닥에 세운다(물속·공중이었으면 안전 지점으로). 로드맵 7 지도의 저장(map 없음)은 위치만 시작 지점으로
-  const oldMap = !o.map || o.map < 4;
+  const oldMap = !o.map || o.map < 5;
   let d = o.pos && !oldMap ? dirFromLonLat(o.pos[0], o.pos[1]) : dirFromLonLat(START[0], START[1]);
   if (!oldMap && terrainH(d) <= WATER - 1.2 && o.safe) d = dirFromLonLat(o.safe[0], o.safe[1]);
   if (oldMap) {
     o = { ...o, safe: null }; log('지도가 바뀌어 착륙 들판 시작 지점으로 옮겨졌다.', 'sys');
     // 추기 #3: 행성 퀘스트 단계 순서가 바뀌어(사냥이 2단계) 진행 중이던 행성 퀘스트는 처음부터. 완료한 것·별 조각·나머지는 그대로 (map 3 저장은 순서가 같지만 시작점만 옮긴다)
-    if (mq.accepted && !mq.done && o.map !== 3) { mq.accepted = false; mq.stage = 0; mq.kills = 0; mq.spikeKills = 0; log('진행 순서가 바뀌어 행성 퀘스트를 미르에게서 다시 받는다.', 'sys'); }
+    if (mq.accepted && !mq.done) { mq.accepted = false; mq.stage = 0; mq.kills = 0; mq.spikeKills = 0; log('진행 순서가 바뀌어 행성 퀘스트를 미르에게서 다시 받는다.', 'sys'); }
   }
   player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
   player.fwd.set(0, 1, 0); tangentize(player.fwd, d); tangentize(cam.fwd, d);
@@ -2734,7 +2729,7 @@ function showStartScreen(o) {
   pendingSave = o; gate.on = true; gate.confirmNew = false;
   const P = o.player || {};
   const qTxt = o.mq && o.mq.done ? '행성 퀘스트 완료' : o.mq && o.mq.accepted ? `행성 퀘스트 ${(o.mq.stage || 0) + 1}/5 단계` : '행성 퀘스트 전';
-  startInfoEl.innerHTML = `Lv.${P.level || 1} 탐사자 · ${qTxt}<br>별씨앗 ${P.seeds || 0} · 모험 기록 ${(o.achieved || []).length}/${ACHIEVEMENTS.length} · 저장 ${fmtAgo(o.t || Date.now())}` + (!o.map || o.map < 4 ? '<br><span style="color:#ffd166">지도가 바뀌어 시작 지점으로 옮겨집니다' + (o.mq && o.mq.accepted && !o.mq.done ? ' · 행성 퀘스트는 미르에게서 다시' : '') + '</span>' : '');
+  startInfoEl.innerHTML = `Lv.${P.level || 1} 탐사자 · ${qTxt}<br>별씨앗 ${P.seeds || 0} · 모험 기록 ${(o.achieved || []).length}/${ACHIEVEMENTS.length} · 저장 ${fmtAgo(o.t || Date.now())}` + (!o.map || o.map < 5 ? '<br><span style="color:#ffd166">지도가 바뀌어 시작 지점으로 옮겨집니다' + (o.mq && o.mq.accepted && !o.mq.done ? ' · 행성 퀘스트는 미르에게서 다시' : '') + '</span>' : '');
   btnNew.textContent = ''; btnNew.innerHTML = '<b>2</b>새로 시작'; btnNew.classList.remove('warn');
   startScreenEl.classList.add('on');
 }
@@ -3220,20 +3215,19 @@ if (DEBUG || QP.has('fps')) fpsEl.style.display = 'block';
 loadAssets();
 
 // ── 지도 ─────────────────────────────────────────────────────────────────────
-// 미니맵과 M 지도는 플레이어 위 직교 카메라로 실제 지형을 내려다본 렌더(북쪽 위).
+// 추기 #5: 미니맵과 M 지도는 원작 지역 지도처럼 파스텔 그림 지도. 지형(terrainH)을 설계 좌표 격자로 훑어 물·모래길·초원·절벽·바위벽을
+// 색으로 칠하고, 나무·소품·NPC·몬스터·별 조각을 아이콘으로 얹은 캔버스(atlas)를 한 번 그려 두고 미니맵은 그 일부를, M 지도는 전체를 보여 준다.
 // 전경도(M M)는 옛 판의 그림책풍 캔버스 그림을 그대로 옮겼다.
-const mapCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 220);
-mapCam.layers.enable(2);
 const _north = new THREE.Vector3(), _east = new THREE.Vector3();
-const miniEl = document.getElementById('mini'), miniMark = document.getElementById('miniMark'), zoneCv = document.getElementById('zoneCv');
+const miniEl = document.getElementById('mini'), miniMark = document.getElementById('miniMark'), zoneCv = document.getElementById('zoneCv'), miniCv = document.getElementById('miniCv');
 const zoneEl = document.getElementById('zonemap'), zoneDisc = document.getElementById('zoneDisc');
 const zoneLabels = document.getElementById('zoneLabels'), zoneMark = document.getElementById('zoneMark');
 const zoneCap = document.getElementById('zoneCap'), zoneTitle = document.getElementById('zoneTitle');
 const ui2d = document.getElementById('ui2d'), ctx = ui2d.getContext('2d');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const ZONE_LABELS = [
-  ['착륙 들판', -7.4, -8.2], ['별 크레이터', -3.5, 0.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', -4.8, 14.0], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
-  ['야영지', -5.0, 30.8], ['돌계단', -1.5, 34.4], ['관측소 초원', -0.9, 41.6], ['겸손한 사원 →', 10.6, 44.6],
+  ['착륙 들판', -7.4, -8.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', -4.8, 14.0], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
+  ['야영지', -4.4, 30.8], ['별 크레이터', -10.5, 36.6], ['돌계단', -1.5, 34.4], ['관측소 초원', -0.9, 41.6], ['겸손한 사원 →', 10.6, 44.6],
 ];
 const zoneLabelEls = ZONE_LABELS.map(([name]) => { const d = document.createElement('div'); d.className = 'lbl'; d.textContent = name; zoneLabels.appendChild(d); return d; });
 
@@ -3242,100 +3236,141 @@ function headingDeg() {
   _east.crossVectors(_north, _up).normalize();
   return Math.atan2(player.fwd.dot(_east), player.fwd.dot(_north)) / DEG;
 }
-// 위에서 본 렌더를 렌더 타겟에 그린다. 미니맵은 GPU에서 바로 원형으로 화면에 찍고(픽셀 읽기 없음, 3프레임마다 갱신),
-// M 지도만 픽셀을 읽어 2D 캔버스에 옮긴다(지도가 열려 있을 땐 게임이 멈춰 있으니 괜찮다).
-const MAP_RT = 384;
-const mapRT = new THREE.WebGLRenderTarget(MAP_RT, MAP_RT, { depthBuffer: true });
-mapRT.texture.colorSpace = THREE.SRGBColorSpace;   // 화면과 같은 밝기로 읽히게
-const mapPixels = new Uint8Array(MAP_RT * MAP_RT * 4);
-const mapTmp = document.createElement('canvas'); mapTmp.width = MAP_RT; mapTmp.height = MAP_RT;
-const mapTmpCtx = mapTmp.getContext('2d');
-const mapImg = mapTmpCtx.createImageData(MAP_RT, MAP_RT);
-function renderMapRT(half) {
-  _north.set(0, 1, 0); tangentize(_north, _up);
-  mapCam.left = -half; mapCam.right = half; mapCam.top = half; mapCam.bottom = -half;
-  mapCam.updateProjectionMatrix();
-  mapCam.position.copy(player.pos).addScaledVector(_up, 30);   // 안개(55~) 안쪽에 머물도록 낮게
-  mapCam.up.copy(_north);
-  mapCam.lookAt(player.pos);
-  mapCam.updateMatrixWorld();
-  renderer.setRenderTarget(mapRT);
-  renderer.render(scene, mapCam);
-  renderer.setRenderTarget(null);
+
+// ── 그림 지도(atlas): 설계 좌표 경도 -15.2~15.2 · 위도 -11.8~48.8, 1° = PPD px ──
+const ATLAS = { lon0: -15.2, lon1: 15.2, lat0: -11.8, lat1: 48.8, ppd: 16 };
+ATLAS.w = Math.round((ATLAS.lon1 - ATLAS.lon0) * ATLAS.ppd); ATLAS.h = Math.round((ATLAS.lat1 - ATLAS.lat0) * ATLAS.ppd);
+const atlasPx = (lon, lat) => [(lon - ATLAS.lon0) * ATLAS.ppd, (ATLAS.lat1 - lat) * ATLAS.ppd];
+const atlas = document.createElement('canvas'); atlas.width = ATLAS.w; atlas.height = ATLAS.h;
+const PASTEL = { paper: '#efe2c4', paperLine: '#c9b48a', grass: [168, 214, 138], grass2: [150, 202, 122], meadow: [198, 232, 160], slope: [178, 214, 138],
+  water: [126, 194, 234], shallow: [170, 218, 242], sand: [232, 207, 150], rock: [200, 178, 140], rockDark: [150, 124, 92], cliff: [140, 110, 78], dish: [226, 200, 150] };
+function buildAtlas() {
+  const g = atlas.getContext('2d');
+  // 종이 바탕
+  g.fillStyle = PASTEL.paper; g.fillRect(0, 0, ATLAS.w, ATLAS.h);
+  // 지형 색: 0.2° 격자로 훑어 저해상 이미지에 칠하고 부드럽게 키워 얹는다
+  const step = 0.2, nx = Math.round((ATLAS.lon1 - ATLAS.lon0) / step) + 1, ny = Math.round((ATLAS.lat1 - ATLAS.lat0) / step) + 1;
+  const H = new Float32Array(nx * ny), inPlay = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const lon = ATLAS.lon0 + i * step, lat = ATLAS.lat1 - j * step;
+    inPlay[j * nx + i] = (Math.abs(lon) <= 14.6 && lat >= -11 && lat <= 48) ? 1 : 0;
+    H[j * nx + i] = inPlay[j * nx + i] ? terrainH(dirFromLonLat(lon, lat)) : 99;
+  }
+  const lo = document.createElement('canvas'); lo.width = nx; lo.height = ny;
+  const lg = lo.getContext('2d'), img = lg.createImageData(nx, ny), d = img.data;
+  const put = (k, c, a = 255) => { d[k * 4] = c[0]; d[k * 4 + 1] = c[1]; d[k * 4 + 2] = c[2]; d[k * 4 + 3] = a; };
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const k = j * nx + i; if (!inPlay[k]) { put(k, [0, 0, 0], 0); continue; }
+    const h = H[k], lat = ATLAS.lat1 - j * step, lon = ATLAS.lon0 + i * step;
+    let slope = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2]) slope = Math.max(slope, Math.abs(H[k2] - h)); }
+    const wob = (vnoise(lon * 0.9 + 3, lat * 0.9, 7) - 0.5) * 14;
+    let c;
+    if (h <= WATER - 1.2) c = PASTEL.water;
+    else if (h <= WATER + 0.5) c = PASTEL.shallow;
+    else if (h >= 3.4) c = vnoise(lon * 3, lat * 3, 1) > 0.5 ? PASTEL.rock : PASTEL.rockDark;
+    else if (slope > 0.6) c = PASTEL.cliff;
+    else if (angDeg(dirFromLonLat(lon, lat), T.starCrater) < 1.5 * MAP_S) c = PASTEL.dish;
+    else if (h >= MEADOW_H - 0.05 && lat > 30) c = PASTEL.meadow;
+    else if (lat < 17 && lat > 8) c = PASTEL.slope;
+    else c = vnoise(lon * 1.7, lat * 1.7, 2) > 0.55 ? PASTEL.grass2 : PASTEL.grass;
+    put(k, [c[0] + wob, c[1] + wob, c[2] + wob]);
+  }
+  lg.putImageData(img, 0, 0);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(lo, 0, 0, nx, ny, 0, 0, ATLAS.w + ATLAS.ppd * step, ATLAS.h + ATLAS.ppd * step);
+  // 모래길·다리·계단·데크
+  const seg2px = (seg) => { const A = designLonLat(seg.A), B = designLonLat(seg.B); return [atlasPx(A[0], A[1]), atlasPx(B[0], B[1])]; };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const seg of T.paths) { const [a, b] = seg2px(seg); g.strokeStyle = '#d9b884'; g.lineWidth = ATLAS.ppd * 0.75; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+  for (const seg of T.paths) { const [a, b] = seg2px(seg); g.strokeStyle = 'rgba(255,240,205,.55)'; g.lineWidth = ATLAS.ppd * 0.35; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+  { const [a, b] = seg2px(T.bridge); g.strokeStyle = '#a8763f'; g.lineWidth = ATLAS.ppd * 0.8; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    g.strokeStyle = '#d9a45a'; g.lineWidth = ATLAS.ppd * 0.5; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
+    g.strokeStyle = 'rgba(110,70,30,.5)'; g.lineWidth = 1; const n = 18; for (let i = 1; i < n; i++) { const t = i / n, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.beginPath(); g.moveTo(x - ATLAS.ppd * 0.4, y); g.lineTo(x + ATLAS.ppd * 0.4, y); g.stroke(); } }
+  { const [a, b] = seg2px(T.stairs); for (let i = 0; i < 4; i++) { const t = (i + 0.5) / 4, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.fillStyle = i % 2 ? '#c9c0ae' : '#b5ab98'; g.fillRect(x - ATLAS.ppd * 0.55, y - ATLAS.ppd * 0.3, ATLAS.ppd * 1.1, ATLAS.ppd * 0.6); } }
+  { const [dl, dla] = designLonLat(T.deck); const [x, y] = atlasPx(dl, dla); const r = ATLAS.ppd * 1.7;
+    g.fillStyle = '#d9a45a'; g.strokeStyle = '#7a5230'; g.lineWidth = 1.5; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke(); }
+  // 놀이 구역 테두리
+  { const [x0, y0] = atlasPx(-14.6, 48), [x1, y1] = atlasPx(14.6, -11); g.strokeStyle = 'rgba(90,60,30,.55)'; g.lineWidth = 3; g.strokeRect(x0, y0, x1 - x0, y1 - y0); }
+  // 나무·버섯·꽃·갈대(장식은 작게)
+  const treeIcon = (x, y, r) => { g.fillStyle = '#6a4a26'; g.fillRect(x - r * 0.18, y, r * 0.36, r * 0.9); g.fillStyle = '#3f9a2a'; g.beginPath(); g.arc(x, y - r * 0.15, r, 0, Math.PI * 2); g.fill(); g.fillStyle = '#7fd15a'; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.4, r * 0.5, 0, Math.PI * 2); g.fill(); };
+  for (const t of trees) { const [lo2, la2] = designLonLat(t.userData.dir); const [x, y] = atlasPx(lo2, la2); treeIcon(x, y, ATLAS.ppd * 0.55); }
+  for (const n of forageNodes) { const [lo2, la2] = designLonLat(n.dir); const [x, y] = atlasPx(lo2, la2); g.fillStyle = n.kind === 'mush' ? '#e2453a' : '#fff6e0'; g.beginPath(); g.arc(x, y, ATLAS.ppd * 0.18, 0, Math.PI * 2); g.fill(); }
+  // 소품 아이콘: 텐트·비행정·선돌 고리(받침대)·샘물 표시·포탈 화살표
+  { const [lo2, la2] = designLonLat(tentProp.userData.dir); const [x, y] = atlasPx(lo2, la2); const r = ATLAS.ppd * 0.7; g.fillStyle = '#3aa0b8'; g.strokeStyle = '#1c5f70'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y + r * 0.6); g.lineTo(x - r, y + r * 0.6); g.closePath(); g.fill(); g.stroke(); }
+  { const [lo2, la2] = designLonLat(airship.userData.dir); const [x, y] = atlasPx(lo2, la2); g.fillStyle = '#eef3f8'; g.strokeStyle = '#2f6fb8'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, ATLAS.ppd * 1.0, ATLAS.ppd * 0.55, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.fillStyle = '#e8891c'; g.beginPath(); g.arc(x, y - ATLAS.ppd * 0.55, ATLAS.ppd * 0.18, 0, Math.PI * 2); g.fill(); }
+  { const [lo2, la2] = designLonLat(pedestalDir); const [x, y] = atlasPx(lo2, la2); g.strokeStyle = '#4c7a2e'; g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, ATLAS.ppd * 1.1, 0, Math.PI * 2); g.stroke(); }
+  { const P = PORTALS[0]; const [x, y] = atlasPx(P.lon, P.lat); g.fillStyle = '#3fbf5a'; g.strokeStyle = '#1f6b30'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + ATLAS.ppd * 0.9, y - ATLAS.ppd * 0.9); g.lineTo(x - ATLAS.ppd * 0.2, y - ATLAS.ppd * 0.1); g.lineTo(x + ATLAS.ppd * 0.1, y + ATLAS.ppd * 0.2); g.closePath(); g.fill(); g.stroke(); }
 }
-// 미니맵 블릿: 렌더 타겟 텍스처를 화면 오른쪽 위 원 안에 찍는 아주 작은 씬
-const miniScene = new THREE.Scene(), miniCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-miniScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-  uniforms: { tMap: { value: mapRT.texture } }, depthTest: false, depthWrite: false, transparent: true,
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-  fragmentShader: 'uniform sampler2D tMap; varying vec2 vUv; void main(){ vec2 d = vUv - 0.5; float r = length(d); if (r > 0.5) discard; vec4 c = texture2D(tMap, vUv); c.rgb *= 1.0 - 0.35 * smoothstep(0.36, 0.5, r); gl_FragColor = c; }',
-})));
-let mapFrame = 0, miniRect = null;
-addEventListener('resize', () => { miniRect = null; });
+// 동적 아이콘: 몬스터(주황 점)·NPC(파란 마름모)·별 조각(흰 반짝)·포탈(열리면 초록 점)
+function drawMapIcons(g, toXY, scale) {
+  const r = 3.2 * scale;
+  for (const s of [...slimes, ...spikeSlimes]) { if (!s.alive) continue; const [lo, la] = designLonLat(s.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = s.kind === 'spike' ? '#a25be0' : '#ff8a2a'; g.strokeStyle = 'rgba(80,30,0,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  for (const st of STARS) { if (st.found) continue; const [lo, la] = designLonLat(st.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = '#fff8d8'; g.strokeStyle = '#d8a930'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, rr = i % 2 ? r * 0.7 : r * 1.9; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }
+  for (const n of NPCS) { const [x, y] = toXY(n.lon, n.lat); if (x == null) continue; const mk = npcMarker(n.id); g.fillStyle = mk === 'give' ? '#ffd166' : '#4aa3ff'; g.strokeStyle = '#1b3e78'; g.lineWidth = 1.2; const d = r * 1.9; g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill(); g.stroke(); }
+  if (portalOpen) { const P = PORTALS[0]; const [x, y] = toXY(P.lon, P.lat); if (x != null) { g.fillStyle = 'rgba(90,240,140,.9)'; g.beginPath(); g.arc(x, y, r * 1.6, 0, Math.PI * 2); g.fill(); } }
+}
+// 미니맵: 플레이어 둘레 설계 ±MINI_DEG°를 원 안에 (북쪽 위)
+const MINI_DEG = 8.5;
+let mapFrame = 0;
 function drawMiniMap() {
-  if (mapFrame++ % QUALITY[quality].mapEvery === 0) renderMapRT(24);          // 3프레임(낮음: 6)에 한 번만 다시 그린다
-  const rc = miniRect || (miniRect = miniEl.getBoundingClientRect());   // 레이아웃 강제 계산을 매 프레임 하지 않게 캐시
-  renderer.setViewport(rc.left, innerHeight - rc.bottom, rc.width, rc.height);
-  renderer.setScissor(rc.left, innerHeight - rc.bottom, rc.width, rc.height);
-  renderer.setScissorTest(true);
-  renderer.autoClear = false; renderer.render(miniScene, miniCam); renderer.autoClear = true;
-  renderer.setScissorTest(false);
-  renderer.setViewport(0, 0, innerWidth, innerHeight);
-}
-function renderTopDown(cv, half) {
-  renderMapRT(half);
-  renderer.setRenderTarget(mapRT);
-  renderer.readRenderTargetPixels(mapRT, 0, 0, MAP_RT, MAP_RT, mapPixels);
-  renderer.setRenderTarget(null);
-  mapImg.data.set(mapPixels);
-  mapTmpCtx.putImageData(mapImg, 0, 0);
-  const size = cv.width;
-  const g = cv.getContext('2d');
+  if (mapFrame++ % QUALITY[quality].mapEvery !== 0) return;
+  const size = 150 * Math.min(devicePixelRatio, 2);
+  if (miniCv.width !== size) { miniCv.width = miniCv.height = size; }
+  const g = miniCv.getContext('2d');
+  const [plon, plat] = designLonLat(_up);
+  const sc = size / (MINI_DEG * 2 * ATLAS.ppd);   // atlas px → mini px
+  const toXY = (lon, lat) => { const dx = (lon - plon) * ATLAS.ppd * sc, dy = (plat - lat) * ATLAS.ppd * sc; return Math.hypot(dx, dy) < size / 2 - 4 ? [size / 2 + dx, size / 2 + dy] : [null, null]; };
   g.clearRect(0, 0, size, size);
-  g.save();
-  g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.clip();
-  g.translate(0, size); g.scale(1, -1);          // GL은 아래→위 순서
-  g.drawImage(mapTmp, 0, 0, size, size);
+  g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.clip();
+  g.fillStyle = PASTEL.paper; g.fillRect(0, 0, size, size);
+  const [ax, ay] = atlasPx(plon, plat);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(atlas, ax - size / 2 / sc, ay - size / 2 / sc, size / sc, size / sc, 0, 0, size, size);
+  drawMapIcons(g, toXY, size / 150);
+  // 가장자리 어둡게
+  const grad = g.createRadialGradient(size / 2, size / 2, size * 0.36, size / 2, size / 2, size / 2); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(60,40,20,.35)');
+  g.fillStyle = grad; g.fillRect(0, 0, size, size);
   g.restore();
 }
-function insideZoneDisc(px, py) {
-  const r = zoneDisc.getBoundingClientRect();
-  return Math.hypot(px - (r.left + r.width / 2), py - (r.top + r.height / 2)) <= r.width / 2 + 30;
+// M 지도: 지도 전체를 세로 양피지 액자에
+let zoneLayout = null;
+function drawZoneMap(W, H) {
+  const aspect = ATLAS.w / ATLAS.h;
+  let h = Math.min(H * 0.84, (W * 0.9) / aspect), w = h * aspect;
+  const x = (W - w) / 2, y = (H - h) / 2;
+  zoneDisc.style.width = w + 'px'; zoneDisc.style.height = h + 'px';
+  const dpr = Math.min(devicePixelRatio, 2), pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (zoneCv.width !== pw || zoneCv.height !== ph) { zoneCv.width = pw; zoneCv.height = ph; }
+  const g = zoneCv.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(atlas, 0, 0, ATLAS.w, ATLAS.h, 0, 0, pw, ph);
+  const sc = pw / ATLAS.w;
+  const toXY = (lon, lat) => { const [ax, ay] = atlasPx(lon, lat); return [ax * sc, ay * sc]; };
+  drawMapIcons(g, toXY, Math.max(1, pw / 480));
+  zoneLayout = { x, y, w, h };
+  const toScreen = (lon, lat) => { const [ax, ay] = atlasPx(lon, lat); return [x + ax / ATLAS.w * w, y + ay / ATLAS.h * h]; };
+  ZONE_LABELS.forEach(([name, lon, lat], i) => { const [sx, sy] = toScreen(lon, lat); const el = zoneLabelEls[i]; el.style.display = 'block'; el.style.left = sx + 'px'; el.style.top = (sy - 6) + 'px'; });
+  const [plon, plat] = designLonLat(_up); const [px, py] = toScreen(plon, plat);
+  zoneMark.style.display = 'block'; zoneMark.style.left = px + 'px'; zoneMark.style.top = py + 'px';
+  zoneMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
+  zoneTitle.style.top = (y - 34) + 'px'; zoneCap.style.top = (y + h + 16) + 'px';
 }
+buildAtlas();   // 세계 배치가 끝난 뒤 한 번
 function insideRect(h, px, py) { return px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h; }
+function insideZoneDisc(px, py) { return !!zoneLayout && insideRect({ x: zoneLayout.x - 20, y: zoneLayout.y - 20, w: zoneLayout.w + 40, h: zoneLayout.h + 40 }, px, py); }
 
 function drawMaps(t) {
   const W = innerWidth, H = innerHeight;
   miniEl.style.display = mapView === 0 && !cut.on ? 'block' : 'none';
-  for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'hint']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';
+  for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'hint', 'objBar']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';   // 추기 #5: 목표 줄도
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
     if (!cut.on) drawMiniMap();
     miniMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
   } else if (mapView === 1) {
-    const size = Math.min(W, H) * 0.7;
-    const x = (W - size) / 2, y = (H - size) / 2;
-    zoneDisc.style.width = zoneDisc.style.height = size + 'px';
-    const px = Math.round(size * Math.min(devicePixelRatio, 2));
-    if (zoneCv.width !== px) { zoneCv.width = zoneCv.height = px; }
-    zoneTitle.style.top = (y - 34) + 'px';
-    zoneCap.style.top = (y + size + 16) + 'px';
     zoneCap.textContent = isTouch ? '지도를 탭하면 전경도 · 바깥을 탭하면 닫힘' : 'M 한 번 더 → 전경도 · ESC 닫기';
-    renderTopDown(zoneCv, 62);
-    // 구역 이름표: 직교 카메라로 투영해 원 안에 있을 때만
-    const v = new THREE.Vector3();
-    ZONE_LABELS.forEach(([name, lon, lat], i) => {
-      const d = dirFromLonLat(lon, lat); v.copy(d).multiplyScalar(R + terrainH(d) + 1).project(mapCam);
-      const sx = x + (v.x + 1) / 2 * size, sy = y + (1 - v.y) / 2 * size;
-      const inside = Math.hypot(sx - (x + size / 2), sy - (y + size / 2)) < size / 2 - 14;
-      const el = zoneLabelEls[i];
-      el.style.display = inside ? 'block' : 'none';
-      el.style.left = sx + 'px'; el.style.top = (sy - 6) + 'px';
-    });
-    zoneMark.style.display = 'block';
-    zoneMark.style.left = (x + size / 2) + 'px'; zoneMark.style.top = (y + size / 2) + 'px';
-    zoneMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
+    drawZoneMap(W, H);
   } else {
     const dpr = Math.min(devicePixelRatio, 2);
     if (ui2d.width !== Math.round(W * dpr) || ui2d.height !== Math.round(H * dpr)) { ui2d.width = Math.round(W * dpr); ui2d.height = Math.round(H * dpr); }
@@ -3744,7 +3779,7 @@ if (DEBUG) {
     farmStage() { return farmStage; }, farmTimer() { return farmTimer; },
     charWinOpen() { return charWinOpen; }, toggleCharWin, forageProgress() { return forageProgress; },
     // 작업 G 검증용
-    MONSTER_ZONES, inZone, MQ_HUNT, MQ_DELIVER, DECK_TOP, MAP_S, MAP_LAT0, designLonLat, dirFromLonLatW, CRATER_GAP_BEARING,
+    MONSTER_ZONES, inZone, MQ_HUNT, MQ_DELIVER, DECK_TOP, MAP_S, MAP_LAT0, designLonLat, dirFromLonLatW, CRATER_GAP_BEARING, atlas, ATLAS, drawZoneMap, drawMiniMap, miniCv,
     PORTALS, WORLD_AREAS, openPortal, enterPortal, portalTransit, portalOpen() { return portalOpen; }, nearPortal() { return nearPortal; },
     buildSave, applySave, saveGame, loadSaveRaw, clearSave, requestSave, SAVE_KEY, saveCount() { return saveCount; },
     gate, showStartScreen, continueGame, newGame, startScreenOn() { return startScreenEl.classList.contains('on'); },
