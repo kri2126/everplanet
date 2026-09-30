@@ -1,6 +1,6 @@
 # 에버플래닛 프로토타입 (Everplanet Prototype)
 
-🎮 **[지금 바로 플레이하기](https://kri2126.github.io/everplanet/web/evergreen-3d.html)** — 설치 없이 브라우저에서 바로 실행됩니다. (로드맵 6, three.js 2.5D 판)
+🎮 **[지금 바로 플레이하기](https://kri2126.github.io/everplanet/web/evergreen-3d.html)** — 설치 없이 브라우저에서 바로 실행됩니다. (로드맵 7, three.js 2.5D 판 — 진행은 브라우저에 자동 저장)
 
 이전 2D 구면 투영 판(로드맵 1~5)은 [evergreen-exploration.html](https://kri2126.github.io/everplanet/web/evergreen-exploration.html)에서 그대로 플레이할 수 있습니다.
 
@@ -21,8 +21,9 @@
   - [`roadmap/ROADMAP_4.md`](./roadmap/ROADMAP_4.md) — 4단계: 무대를 에버그린으로 확정하고 원작 8개 지역 구조로 세분화 (설계 완료·구현 예정)
   - [`roadmap/ROADMAP_5.md`](./roadmap/ROADMAP_5.md) — 5단계: 별내림 천문대를 원작 영상 기준으로 다시 짓기 (완료)
   - [`roadmap/ROADMAP_6.md`](./roadmap/ROADMAP_6.md) — 6단계: three.js로 2.5D 재구축 — 빌보드 그림 판, HUD, NPC·슬라임, 착륙 컷신 (완료)
-- `web/evergreen-3d.html` — **현재 플레이 판**(로드맵 6). three.js 구체 지형 위에 2D 그림 판(빌보드)을 세운 2.5D 구성. 고정 카메라, 원형 미니맵·M 지도·MM 전경도, HUD, NPC 3·슬라임 8·기본 공격, 착륙 컷신.
-- `versions/` — 로드맵 번호 = 버전 번호로 보관한 옛 판(`v0.05-roadmap5/`, `v0.06-roadmap6/`). 보관본은 수정하지 않습니다.
+  - [`roadmap/ROADMAP_7.md`](./roadmap/ROADMAP_7.md) — 7단계: 원작의 게임 방식 따라가기 — 조작 체계·전투·성장·퀘스트·생활·저장·UI (완료, 에셋·화면은 로드맵 8로)
+- `web/evergreen-3d.html` — **현재 플레이 판**(로드맵 7). three.js 구체 지형 위에 2D 그림 판(빌보드)을 세운 2.5D 구성. 고정 카메라, 원형 미니맵·M 지도·MM 전경도, HUD, NPC 3·슬라임 2종, ZXCV 스킬 슬롯·2단 점프·수영, 레벨·기력·무직 스킬, 행성/일반 퀘스트, 이슬·채집·소·밭·모험 기록, 포탈·저장/불러오기, 착륙 컷신.
+- `versions/` — 로드맵 번호 = 버전 번호로 보관한 옛 판(`v0.05-roadmap5/`, `v0.06-roadmap6/`, `v0.07-roadmap7/`). 보관본은 수정하지 않습니다.
 - `web/assets/` — 3D판이 쓰는 그림 에셋(PNG)과 규격서. 같은 이름으로 덮어쓰면 게임이 바꿔 끼웁니다 — [`web/assets/README.md`](./web/assets/README.md).
 - `web/evergreen-exploration.html` — 로드맵 1~5의 2D 판(HTML5 Canvas, 바닐라 JS). 원작 실제 플레이 영상을 참고해 구현한
   '작은 행성' 정구형 투영 렌더링(둥근 지평선 너머는 걸어가야 드러남)이 핵심 특징이었고, 그대로 보존합니다.
@@ -35,5 +36,5 @@
 
 ## 진행 현황
 
-로드맵 6(three.js 2.5D 재구축)까지 완성. 별내림 천문대 한 구역에서 착륙 컷신 → NPC 퀘스트 3 → 슬라임 퇴치 → 별 조각 찾기가 이어집니다.
-이후 전투 확장 → 성장 시스템 → 에버그린 내 다음 지역(겸손한 사원 등) → 저장 순으로 이어갈 예정입니다.
+로드맵 7(원작의 게임 방식)까지 완성. 별내림 천문대 한 구역에서 착륙 컷신 → 행성 퀘스트(별을 되찾아라) 5단계와 일반 퀘스트 4개 → 슬라임 2종 사냥·레벨 10·기력·무직 스킬 3종 → 이슬·채집·소·밭·모험 기록 10종 → 별 봉헌 → 다음 맵 포탈 개방까지 이어지고, 진행은 브라우저에 자동 저장됩니다.
+다음은 로드맵 8(에셋·화면: 초목 밀도·나무 입체화·애니메이션·원경·인스턴싱)과 에버그린 내 다음 지역(겸손한 사원)입니다.
