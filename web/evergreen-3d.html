@@ -38,9 +38,8 @@
   /* M 지도: 화면 가운데 큰 원형 지도 */
   #zonemap { position: fixed; inset: 0; display: none; pointer-events: none; }
   #zonemap .dim { position: absolute; inset: 0; background: rgba(52,38,26,.58); }
-  #zonemap .disc { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); border-radius: 14px;   /* 추기 #5: 원작처럼 세로 양피지 액자 */
-    box-shadow: 0 0 0 7px #c99354, 0 0 0 10px #7a5230, 0 8px 30px rgba(0,0,0,.5), inset 0 0 40px rgba(0,0,0,.25); }
-  #zonemap .disc canvas { border-radius: 14px; }
+  #zonemap .disc { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); }   /* 추기 #6: 헤진 양피지 — 액자 대신 종이 실루엣 그림자 */
+  #zonemap .disc canvas { filter: drop-shadow(0 12px 22px rgba(0,0,0,.55)) drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
   #zonemap .title { position: absolute; left: 50%; transform: translateX(-50%); font: 700 16px 'Gowun Dodum', sans-serif; color: #fdf4de; text-shadow: 0 1px 3px rgba(0,0,0,.7); white-space: nowrap; }
   #zonemap .cap { position: absolute; left: 50%; transform: translateX(-50%); font: 600 12px monospace; color: #fdf4de; text-shadow: 0 1px 3px rgba(0,0,0,.7); white-space: nowrap; }
   #zonemap .lbl { position: absolute; transform: translate(-50%, -100%); font: 600 11px 'Gowun Dodum', sans-serif; color: #5b4632;
@@ -231,7 +230,7 @@
 <div id="objBar"></div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
-<div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
+<div id="zonemap"><div class="dim"></div><div class="disc" id="zoneDisc"><canvas id="zoneCv"></canvas></div><div class="title" id="zoneTitle" style="display:none">별내림 천문대 전도</div><div class="cap" id="zoneCap"></div><div id="zoneLabels"></div><div class="pmark" id="zoneMark" style="display:none"></div></div>
 <canvas id="ui2d"></canvas>
 <div id="zoneName"><small>✦ EVERGREEN ✦</small>에버그린 · 별내림 천문대</div>
 <div id="hud"><div class="orb hp"><b>HP</b><span id="hpNum">100</span></div><div id="stamina"><i></i></div><div id="skills"></div><div class="orb mp"><b>MP</b><span id="mpNum">50</span></div></div>
@@ -3238,11 +3237,11 @@ function headingDeg() {
 }
 
 // ── 그림 지도(atlas): 설계 좌표 경도 -15.2~15.2 · 위도 -11.8~48.8, 1° = PPD px ──
-const ATLAS = { lon0: -15.2, lon1: 15.2, lat0: -11.8, lat1: 48.8, ppd: 16 };
+const ATLAS = { lon0: -18.6, lon1: 18.6, lat0: -15.6, lat1: 52.6, ppd: 16 };   // 추기 #6: 헤진 가장자리·나침반 자리로 여백 4°
 ATLAS.w = Math.round((ATLAS.lon1 - ATLAS.lon0) * ATLAS.ppd); ATLAS.h = Math.round((ATLAS.lat1 - ATLAS.lat0) * ATLAS.ppd);
 const atlasPx = (lon, lat) => [(lon - ATLAS.lon0) * ATLAS.ppd, (ATLAS.lat1 - lat) * ATLAS.ppd];
 const atlas = document.createElement('canvas'); atlas.width = ATLAS.w; atlas.height = ATLAS.h;
-const PASTEL = { paper: '#efe2c4', paperLine: '#c9b48a', grass: [168, 214, 138], grass2: [150, 202, 122], meadow: [198, 232, 160], slope: [178, 214, 138],
+const PASTEL = { paper: '#e9d9b4', paperLine: '#c9b48a', grass: [168, 214, 138], grass2: [150, 202, 122], meadow: [198, 232, 160], slope: [178, 214, 138],
   water: [126, 194, 234], shallow: [170, 218, 242], sand: [232, 207, 150], rock: [200, 178, 140], rockDark: [150, 124, 92], cliff: [140, 110, 78], dish: [226, 200, 150] };
 function buildAtlas() {
   const g = atlas.getContext('2d');
@@ -3262,12 +3261,12 @@ function buildAtlas() {
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i; if (!inPlay[k]) { put(k, [0, 0, 0], 0); continue; }
     const h = H[k], lat = ATLAS.lat1 - j * step, lon = ATLAS.lon0 + i * step;
-    let slope = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2]) slope = Math.max(slope, Math.abs(H[k2] - h)); }
+    let slope = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2] && H[k2] > WATER + 0.5) slope = Math.max(slope, Math.abs(H[k2] - h)); }   // 추기 #6: 호숫가는 절벽으로 안 친다
     const wob = (vnoise(lon * 0.9 + 3, lat * 0.9, 7) - 0.5) * 14;
     let c;
     if (h <= WATER - 1.2) c = PASTEL.water;
     else if (h <= WATER + 0.5) c = PASTEL.shallow;
-    else if (h >= 3.4) c = vnoise(lon * 3, lat * 3, 1) > 0.5 ? PASTEL.rock : PASTEL.rockDark;
+    else if (h >= 3.4 || (slope > 0.6 && (Math.abs(lon) > 13.0 || lat < -9.4 || lat > 46.4))) c = vnoise(lon * 3, lat * 3, 1) > 0.5 ? PASTEL.rock : PASTEL.rockDark;   // 추기 #6: 바위벽 옆면도 바위색
     else if (slope > 0.6) c = PASTEL.cliff;
     else if (angDeg(dirFromLonLat(lon, lat), T.starCrater) < 1.5 * MAP_S) c = PASTEL.dish;
     else if (h >= MEADOW_H - 0.05 && lat > 30) c = PASTEL.meadow;
@@ -3278,6 +3277,13 @@ function buildAtlas() {
   lg.putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(lo, 0, 0, nx, ny, 0, 0, ATLAS.w + ATLAS.ppd * step, ATLAS.h + ATLAS.ppd * step);
+  // 추기 #6: 물엔 물결 자국, 절벽엔 빗금 — 옛 지도의 손그림 표시
+  g.strokeStyle = 'rgba(70,120,170,.45)'; g.lineWidth = 1;
+  for (let j = 0; j < ny; j += 4) for (let i = 0; i < nx; i += 5) { const k = j * nx + i; if (!inPlay[k] || H[k] > WATER - 1.2) continue; if (wob(i * 31 + j) > 0.55) continue;
+    const x = (i + (wob(i + j) - 0.5)) * step * ATLAS.ppd, y = (j + 0.5) * step * ATLAS.ppd; g.beginPath(); g.moveTo(x - 5, y); g.quadraticCurveTo(x - 2.5, y - 2.2, x, y); g.quadraticCurveTo(x + 2.5, y + 2.2, x + 5, y); g.stroke(); }
+  g.strokeStyle = 'rgba(80,55,30,.35)';
+  for (let j = 1; j < ny; j += 2) for (let i = 1; i < nx; i += 2) { const k = j * nx + i; if (!inPlay[k]) continue; let sl = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2]) sl = Math.max(sl, Math.abs(H[k2] - H[k])); }
+    if (sl < 0.6 || H[k] >= 3.4 || H[k] < WATER + 0.5) continue; const x = i * step * ATLAS.ppd, y = j * step * ATLAS.ppd; g.beginPath(); g.moveTo(x - 2, y + 2); g.lineTo(x + 2, y - 2); g.stroke(); }
   // 모래길·다리·계단·데크
   const seg2px = (seg) => { const A = designLonLat(seg.A), B = designLonLat(seg.B); return [atlasPx(A[0], A[1]), atlasPx(B[0], B[1])]; };
   g.lineCap = 'round'; g.lineJoin = 'round';
@@ -3289,8 +3295,19 @@ function buildAtlas() {
   { const [a, b] = seg2px(T.stairs); for (let i = 0; i < 4; i++) { const t = (i + 0.5) / 4, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.fillStyle = i % 2 ? '#c9c0ae' : '#b5ab98'; g.fillRect(x - ATLAS.ppd * 0.55, y - ATLAS.ppd * 0.3, ATLAS.ppd * 1.1, ATLAS.ppd * 0.6); } }
   { const [dl, dla] = designLonLat(T.deck); const [x, y] = atlasPx(dl, dla); const r = ATLAS.ppd * 1.7;
     g.fillStyle = '#d9a45a'; g.strokeStyle = '#7a5230'; g.lineWidth = 1.5; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke(); }
-  // 놀이 구역 테두리
-  { const [x0, y0] = atlasPx(-14.6, 48), [x1, y1] = atlasPx(14.6, -11); g.strokeStyle = 'rgba(90,60,30,.55)'; g.lineWidth = 3; g.strokeRect(x0, y0, x1 - x0, y1 - y0); }
+  // 놀이 구역 테두리: 손으로 그은 듯 흔들리는 겹선 + 바깥 능선은 작은 산 표시(추기 #6)
+  { const [x0, y0] = atlasPx(-14.6, 48), [x1, y1] = atlasPx(14.6, -11);
+    const wobblyRect = (inset, amp, width, color) => { g.strokeStyle = color; g.lineWidth = width; g.beginPath(); const pts = [];
+      const n = 46; const push = (ax, ay, bx, by, k0) => { for (let i = 0; i < n; i++) { const t = i / n, jx = (wob(k0 + i) - 0.5) * amp, jy = (wob(k0 + i + 300) - 0.5) * amp; pts.push([ax + (bx - ax) * t + jx, ay + (by - ay) * t + jy]); } };
+      push(x0 + inset, y0 + inset, x1 - inset, y0 + inset, 10); push(x1 - inset, y0 + inset, x1 - inset, y1 - inset, 110); push(x1 - inset, y1 - inset, x0 + inset, y1 - inset, 210); push(x0 + inset, y1 - inset, x0 + inset, y0 + inset, 310);
+      pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.stroke(); };
+    wobblyRect(0, 3.5, 2.2, 'rgba(92,62,32,.75)'); wobblyRect(6, 3.0, 1.0, 'rgba(92,62,32,.45)');
+    // 산 표시: 테두리 바깥 띠를 따라 작은 ∧ 를 줄지어
+    g.strokeStyle = 'rgba(96,70,44,.8)'; g.lineWidth = 1.2; g.fillStyle = 'rgba(214,196,160,.9)';
+    const mtn = (x, y, w, h) => { g.beginPath(); g.moveTo(x - w, y + h * 0.5); g.lineTo(x, y - h * 0.5); g.lineTo(x + w, y + h * 0.5); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(x, y - h * 0.5); g.lineTo(x + w * 0.25, y - h * 0.1); g.stroke(); };
+    const sp = ATLAS.ppd * 1.05;
+    for (let x = x0 + sp; x < x1; x += sp) { mtn(x, y0 - ATLAS.ppd * 0.75, sp * 0.5, ATLAS.ppd * 0.9 + wob(x) * 5); mtn(x + sp * 0.4, y1 + ATLAS.ppd * 0.8, sp * 0.5, ATLAS.ppd * 0.9 + wob(x + 7) * 5); }
+    for (let y = y0 + sp; y < y1; y += sp) { mtn(x0 - ATLAS.ppd * 0.75, y, sp * 0.45, ATLAS.ppd * 0.9 + wob(y) * 5); mtn(x1 + ATLAS.ppd * 0.75, y + sp * 0.3, sp * 0.45, ATLAS.ppd * 0.9 + wob(y + 3) * 5); } }
   // 나무·버섯·꽃·갈대(장식은 작게)
   const treeIcon = (x, y, r) => { g.fillStyle = '#6a4a26'; g.fillRect(x - r * 0.18, y, r * 0.36, r * 0.9); g.fillStyle = '#3f9a2a'; g.beginPath(); g.arc(x, y - r * 0.15, r, 0, Math.PI * 2); g.fill(); g.fillStyle = '#7fd15a'; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.4, r * 0.5, 0, Math.PI * 2); g.fill(); };
   for (const t of trees) { const [lo2, la2] = designLonLat(t.userData.dir); const [x, y] = atlasPx(lo2, la2); treeIcon(x, y, ATLAS.ppd * 0.55); }
@@ -3300,6 +3317,39 @@ function buildAtlas() {
   { const [lo2, la2] = designLonLat(airship.userData.dir); const [x, y] = atlasPx(lo2, la2); g.fillStyle = '#eef3f8'; g.strokeStyle = '#2f6fb8'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, ATLAS.ppd * 1.0, ATLAS.ppd * 0.55, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.fillStyle = '#e8891c'; g.beginPath(); g.arc(x, y - ATLAS.ppd * 0.55, ATLAS.ppd * 0.18, 0, Math.PI * 2); g.fill(); }
   { const [lo2, la2] = designLonLat(pedestalDir); const [x, y] = atlasPx(lo2, la2); g.strokeStyle = '#4c7a2e'; g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, ATLAS.ppd * 1.1, 0, Math.PI * 2); g.stroke(); }
   { const P = PORTALS[0]; const [x, y] = atlasPx(P.lon, P.lat); g.fillStyle = '#3fbf5a'; g.strokeStyle = '#1f6b30'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + ATLAS.ppd * 0.9, y - ATLAS.ppd * 0.9); g.lineTo(x - ATLAS.ppd * 0.2, y - ATLAS.ppd * 0.1); g.lineTo(x + ATLAS.ppd * 0.1, y + ATLAS.ppd * 0.2); g.closePath(); g.fill(); g.stroke(); }
+  agePaper(g);
+}
+// 추기 #6: 판타지 지도풍 마무리 — 낡은 양피지 얼룩과 색바램, 헤진 가장자리, 그을린 테두리, 나침반
+function agePaper(g) {
+  const W = ATLAS.w, H = ATLAS.h;
+  // 색바램: 양피지 색을 살짝 곱하고, 여기저기 갈색 얼룩
+  g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(232,214,176,.55)'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 70; i++) { const x = wob(i * 3 + 1) * W, y = wob(i * 3 + 2) * H, r = 12 + wob(i * 3 + 3) * 60; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(150,110,60,${0.05 + wob(i) * 0.09})`); gr.addColorStop(1, 'rgba(150,110,60,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+  // 섬유 결
+  g.strokeStyle = 'rgba(120,90,50,.06)'; g.lineWidth = 1; for (let i = 0; i < 260; i++) { const x = wob(i * 7 + 5) * W, y = wob(i * 7 + 6) * H, l = 8 + wob(i * 7 + 8) * 30; g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y + (wob(i) - 0.5) * 4); g.stroke(); }
+  g.globalCompositeOperation = 'source-over';
+  // 가장자리 비네트(안쪽으로 어두워짐)
+  const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.62); vg.addColorStop(0, 'rgba(90,60,30,0)'); vg.addColorStop(1, 'rgba(90,60,30,.28)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  // 헤진 가장자리: 테두리를 따라 들쭉날쭉한 다각형을 만들고 바깥을 지운다
+  const pts = []; const m = ATLAS.ppd * 1.6;   // 최대 헤짐 깊이
+  // 완만한 잡음(큰 굴곡) + 잔 떨림 + 드문드문 크게 뜯긴 자리
+  const edge = (ax, ay, bx, by, k0, n) => { for (let i = 0; i < n; i++) { const t = i / n; const len = Math.hypot(bx - ax, by - ay);
+      const soft = vnoise(t * len / 55 + k0, k0 * 0.37, 2.5), fine = (wob(k0 + i) - 0.5) * 0.18, bite = vnoise(t * len / 18 + k0 * 3, k0, 9) > 0.78 ? 0.55 : 0;
+      const d = Math.max(0.05, 0.12 + soft * 0.6 + fine + bite) * m;
+      const dirx = (ay === by) ? 0 : (ax > W / 2 ? -1 : 1), diry = (ay === by) ? (ay > H / 2 ? -1 : 1) : 0; pts.push([ax + (bx - ax) * t + dirx * d, ay + (by - ay) * t + diry * d]); } };
+  edge(0, 0, W, 0, 1, 160); edge(W, 0, W, H, 2, 300); edge(W, H, 0, H, 3, 160); edge(0, H, 0, 0, 4, 300);
+  g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.rect(0, 0, W, H); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); g.fill('evenodd'); g.restore();
+  // 그을린 테: 다각형 안쪽으로 짙은 갈색 번짐
+  g.save(); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); g.clip();
+  g.shadowColor = 'rgba(70,40,15,.85)'; g.shadowBlur = 14; g.lineWidth = 6; g.strokeStyle = 'rgba(70,40,15,.55)'; g.stroke(); g.shadowBlur = 0; g.lineWidth = 1.5; g.strokeStyle = 'rgba(60,35,12,.8)'; g.stroke(); g.restore();
+  // 나침반(남동 여백)
+  { const cx = W - ATLAS.ppd * 2.6, cy = H - ATLAS.ppd * 2.7, r = ATLAS.ppd * 1.7;
+    g.strokeStyle = 'rgba(80,50,20,.8)'; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(cx, cy, r * 0.62, 0, Math.PI * 2); g.stroke();
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; const tip = [cx + Math.sin(a) * r * 0.95, cy - Math.cos(a) * r * 0.95], l = [cx + Math.sin(a - Math.PI / 2) * r * 0.22, cy - Math.cos(a - Math.PI / 2) * r * 0.22], rr = [cx + Math.sin(a + Math.PI / 2) * r * 0.22, cy - Math.cos(a + Math.PI / 2) * r * 0.22];
+      g.fillStyle = i === 0 ? '#b8452e' : 'rgba(80,50,20,.85)'; g.beginPath(); g.moveTo(tip[0], tip[1]); g.lineTo(l[0], l[1]); g.lineTo(cx, cy); g.closePath(); g.fill(); g.fillStyle = i === 0 ? '#e4d3ac' : 'rgba(230,212,172,.95)'; g.beginPath(); g.moveTo(tip[0], tip[1]); g.lineTo(rr[0], rr[1]); g.lineTo(cx, cy); g.closePath(); g.fill(); g.strokeStyle = 'rgba(60,35,12,.8)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(tip[0], tip[1]); g.lineTo(l[0], l[1]); g.lineTo(cx, cy); g.lineTo(rr[0], rr[1]); g.closePath(); g.stroke(); }
+    g.fillStyle = '#5a3a1c'; g.font = `700 ${Math.round(ATLAS.ppd * 0.7)}px 'Gowun Dodum', serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', cx, cy - r - ATLAS.ppd * 0.45); }
+  // 제목 두루마리(북쪽 여백): 지역 이름
+  { g.fillStyle = 'rgba(92,62,32,.85)'; g.font = `700 ${Math.round(ATLAS.ppd * 0.95)}px 'Gowun Dodum', serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('✦ 별내림 천문대 ✦', W / 2, ATLAS.ppd * 2.7); }
 }
 // 동적 아이콘: 몬스터(주황 점)·NPC(파란 마름모)·별 조각(흰 반짝)·포탈(열리면 초록 점)
 function drawMapIcons(g, toXY, scale) {
