@@ -328,6 +328,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';   // 로드맵 9: 나무 3D 모델(GLB)
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';   // 나무 조각 합치기(최적화)
+import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';   // 나무 잎 삼각형 줄이기(최적화)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 로드맵 6 — 작업 A(3D 뼈대) + B(지형)
@@ -1394,6 +1396,7 @@ function respawn() {
 }
 
 const trees = [];
+let treeSway = null, treeInstMeshes = [];   // 나무 GLB 인스턴싱(최적화) — 바람 갱신 함수, 인스턴스 메시 목록
 const decor = [];
 const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길게 눌러 채집)
 {
@@ -1429,25 +1432,58 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     try {
       for (const n of names) { const g = await loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'); models.push(g.scene); }
     } catch (e) { if (DEBUG) console.warn('tree GLB 로드 실패 — 그림 판 유지', e); return; }
-    const _y = new THREE.Vector3(0, 1, 0), box = new THREE.Box3(), size = new THREE.Vector3();
-    models.forEach(m => {
+    // 최적화(2026-10-01): 모델 하나가 노드 110~170개(잎 비늘 하나하나가 따로 그려짐)라 63그루를 그대로 복제하면 draw call 7,400번·장면 물체 1만 개 → 프레임 급락.
+    // 모델마다 조각을 전부 '몸통(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색은 정점 색으로 구움, 노드 변환은 정점에 구움),
+    // 그루 수만큼 InstancedMesh 하나로 그린다 → 63그루 전체가 draw call 6번. 바람 흔들림은 인스턴스 행렬을 프레임마다 다시 써서 유지.
+    // 잎 비늘 하나(삼각형 96개)는 게임 카메라 거리에선 과하게 촘촘해 정점을 70% 덜어낸다(같은 잎 모양은 한 번만 계산해 재사용) — 그루당 삼각형 1만~2만 → 4천~6천.
+    const _y = new THREE.Vector3(0, 1, 0), simplifier = new SimplifyModifier(), LEAF_SIMPLIFY = 0.7;
+    const parts = models.map(m => {
+      m.updateMatrixWorld(true);
+      const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5; const simpCache = new Map();
       m.traverse(o => { if (!o.isMesh) return;
-        const src = o.material;   // PBR → 램버트(게임 전체가 평평하고 밝은 셀 톤이라 금속·거칠기 반사는 끈다)
-        const mat = new THREE.MeshLambertMaterial({ color: src.color, map: src.map || null, alphaTest: src.alphaTest || 0, side: src.map ? THREE.DoubleSide : THREE.FrontSide, fog: true });
+        const src = o.material; let base = o.geometry;
+        if (src.map && LEAF_SIMPLIFY > 0) { if (!simpCache.has(base)) { let sg = null; try { sg = simplifier.modify(base, Math.floor(base.getAttribute('position').count * LEAF_SIMPLIFY)); } catch (e) { sg = null; } simpCache.set(base, sg || base); } base = simpCache.get(base); }
+        const g = base.clone().applyMatrix4(o.matrixWorld);
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+        g.morphAttributes = {}; if (!g.getAttribute('normal')) g.computeVertexNormals();
+        const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = src.color || new THREE.Color(1, 1, 1);
+        for (let j = 0; j < n; j++) { col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));   // PBR → 램버트(게임 전체가 평평하고 밝은 셀 톤이라 금속·거칠기 반사는 끈다)
+        if (src.map) { leafMap = src.map; if (src.alphaTest) leafCut = src.alphaTest; if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); groups.leaf.push(g); }
+        else { g.deleteAttribute('uv'); groups.solid.push(g); }
+      });
+      const out = {}, bb = new THREE.Box3();
+      for (const key of ['solid', 'leaf']) {
+        const arr = groups[key]; if (!arr.length) continue;
+        const list = arr.every(g => g.index) ? arr : arr.map(g => g.index ? g.toNonIndexed() : g);
+        const geo = mergeGeometries(list, false); if (!geo) continue; list.forEach(g => g.dispose());
+        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: key === 'leaf' ? leafMap : null, alphaTest: key === 'leaf' ? leafCut : 0, side: key === 'leaf' ? THREE.DoubleSide : THREE.FrontSide, fog: true });
         if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-        o.material = mat; o.castShadow = true; o.receiveShadow = false; });
-      box.setFromObject(m); box.getSize(size); m.userData.h = size.y; m.userData.minY = box.min.y;
+        geo.computeBoundingBox(); bb.union(geo.boundingBox); out[key] = { geo, mat };
+      }
+      return { out, h: bb.max.y - bb.min.y, minY: bb.min.y };
     });
+    const counts = [0, 0, 0]; trees.forEach((t, i) => { if (t.userData.isBillboard) counts[i % 3]++; });
+    const typeMeshes = parts.map((p, ti) => Object.entries(p.out).map(([key, { geo, mat }]) => {
+      const im = new THREE.InstancedMesh(geo, mat, Math.max(1, counts[ti])); im.count = counts[ti];
+      im.castShadow = true; im.receiveShadow = false; im.frustumCulled = false;   // 63그루가 보이는 땅 전체에 퍼져 있어 통째 컬링은 의미 없음
+      im.userData.leaf = key === 'leaf'; scene.add(im); treeInstMeshes.push(im); return im;
+    }));
+    const slot = [0, 0, 0], entries = [], _m = new THREE.Matrix4(), _rz = new THREE.Matrix4();
     trees.forEach((t, i) => {
       if (!t.userData.isBillboard) return;
-      const src = models[i % 3]; const sc = 0.9 + ((i * 7) % 5) * 0.06; const targetH = 6.1 * sc;
-      const k = targetH / src.userData.h;
-      const model = src.clone(); model.scale.setScalar(k); model.position.y = -src.userData.minY * k;   // 뿌리 밑동이 지면에
-      const g = new THREE.Group(); g.add(model);
-      g.position.copy(t.position); g.quaternion.setFromUnitVectors(_y, t.userData.dir); g.rotateY((i * 2.399) % (Math.PI * 2));   // 저마다 다른 방향
-      Object.assign(g.userData, t.userData); g.userData.isBillboard = false; g.userData.model = model;
-      scene.remove(t); t.geometry.dispose(); scene.add(g); trees[i] = g;
+      const ti = i % 3, p = parts[ti], sc = 0.9 + ((i * 7) % 5) * 0.06, k = (6.1 * sc) / p.h;
+      const g = new THREE.Group();   // 장면엔 안 넣고 자리·충돌·미니맵용으로만 유지(그리는 건 InstancedMesh)
+      g.position.copy(t.position); g.quaternion.setFromUnitVectors(_y, t.userData.dir); g.rotateY((i * 2.399) % (Math.PI * 2)); g.updateMatrix();   // 저마다 다른 방향
+      Object.assign(g.userData, t.userData); g.userData.isBillboard = false; g.userData.model = true;
+      g.userData.inst = { ti, idx: slot[ti]++, local: new THREE.Matrix4().makeScale(k, k, k).setPosition(0, -p.minY * k, 0) };   // 뿌리 밑동이 지면에
+      scene.remove(t); t.geometry.dispose(); trees[i] = g; entries.push(g);
     });
+    treeSway = (tw) => {
+      for (const g of entries) { const ins = g.userData.inst; _rz.makeRotationZ(Math.sin(tw + g.userData.sway) * 0.012); _m.multiplyMatrices(g.matrix, _rz).multiply(ins.local); for (const im of typeMeshes[ins.ti]) im.setMatrixAt(ins.idx, _m); }
+      for (const im of treeInstMeshes) im.instanceMatrix.needsUpdate = true;
+    };
+    treeSway(0); applyTreeShadow(quality);
     if (DEBUG) console.log('tree GLB 적용:', trees.filter(t => t.userData.model).length);
   })();
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
@@ -3700,7 +3736,7 @@ function step(dt) {
   }
   // 나무는 바람에 살짝
   const tw = performance.now() * 0.0012;
-  for (const t of trees) (t.userData.model || t).rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
+  if (treeSway) treeSway(tw); else for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
   // 비행정은 살짝 떠다니고, 폭포는 흐르고, 별 빛기둥은 일렁인다
   {
     const nowS = performance.now() * 0.001;
@@ -3776,10 +3812,12 @@ function resize() {
   camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
+// 나무 잎 그림자: 잎 덩어리는 삼각형이 많아(그루당 1만~2만) 그림자 패스에서 비싸다 — 중간 이상에서만 드리우고, 몸통은 늘 드리운다
+function applyTreeShadow(q) { for (const im of treeInstMeshes) im.castShadow = !im.userData.leaf || q >= 2; }
 // 화질 단계 적용: 픽셀 배율·그림자 맵 크기 (그림자 맵은 버리면 다음 프레임에 새 크기로 다시 만들어진다)
 function applyQuality(q, why) {
   q = Math.max(0, Math.min(3, q));
-  const cfg = QUALITY[q]; quality = q;
+  const cfg = QUALITY[q]; quality = q; applyTreeShadow(q);
   dpr = DPR_FIXED || cfg.dpr; renderer.setPixelRatio(dpr); resize();
   // 그림자 켜고 끄기: 재질이 그림자 코드 없이 다시 컴파일되도록 needsUpdate
   const shadowOn = cfg.shadow > 0;
