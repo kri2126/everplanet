@@ -1534,18 +1534,18 @@ const decor = [];
 const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길게 눌러 채집)
 {
   // 로드맵 8: 원작 지도의 나무 밀도대로 좌표 직접 배치 — 가장자리를 따라 빽빽하게, 초원·크레이터 안은 비움
-  // 2026-10-02 재배치: 물에 걸쳐 떠 보이던 나무·길가에 몰린 나무를 없애고 자동으로 다시 심었다 — 잎 아래(반경 2) 전부 마른 평지,
-  // 모래길 중심에서 3.4유닛 안엔 안 심고 길에서 멀수록 촘촘하게(간격 약 12 → 4.5유닛), 숲 덩어리 잡음으로 군데군데 모이게. 다리·계단·데크·크레이터·별 받침대·소품 자리는 비움.
+  // 2026-10-02 재배치: 물에 걸쳐 떠 보이던 나무·길가에 몰린 나무를 없애고 자동으로 다시 심었다 — 잎 아래(반경 2) 전부 마른 평지, 다리·계단·데크·크레이터·별 받침대·소품 자리는 비움.
+  // 같은 날 다시: 길가와 먼 곳 차이가 너무 크다는 지적으로 차이를 줄였다 — 모래길 중심에서 3.0유닛 안엔 안 심고(길은 막지 않게), 간격은 길가 약 8.7 → 먼 곳 약 5.5유닛, 숲 덩어리 잡음으로 군데군데 모이게.
   const spots = [
-    [-7.23, 46.08], [-11.88, 45.93], [11.57, 45.56], [3.61, 44.54], [-2.5, 44.48], [-8.48, 44.06], [-12.35, 43.54], [-9.93, 41.6], [-4.36, 41.35], [8.57, 40.53],
-    [-12.7, 40.12], [13.37, 38.16], [-12.69, 37.8], [10.92, 36.18], [6.04, 36], [12.8, 34], [-5.51, 33.93], [9.01, 33.32], [2.59, 32.62], [6.91, 31.59],
-    [11.46, 31.07], [9.88, 29.8], [2.74, 28.84], [-9.8, 28.79], [7.13, 28.79], [12.54, 28.76], [10.26, 27.56], [8.33, 26.16], [12.03, 24.64], [8.51, 22.87],
-    [13.21, 22.41], [13.15, 19.99], [9.87, 19.23], [7.96, 17.96], [12.1, 17.1], [0.09, 16.4], [9.9, 16.37], [6.21, 15.47], [-9.61, 15.34], [13.58, 14.94],
-    [11.43, 14.74], [-12.49, 14.7], [8.9, 13.7], [12.77, 11.99], [10.42, 11.83], [6.93, 11.24], [-5.08, 9.22], [6.89, 9.22], [10.88, 8.38], [-9.85, 7.57],
-    [13.3, 7.13], [8.34, 6.93], [3.63, 5.22], [6.08, 5.18], [8.92, 4.85], [12.42, 4.8], [-2.99, 3.86], [-12.01, 3.23], [7.02, 3.09], [11.72, 2.57],
-    [2.28, 2.05], [6.06, 0.91], [10.3, 0.48], [0.22, 0.24], [4.12, -0.82], [8.12, -0.97], [-1.49, -1.32], [12.37, -1.85], [1.09, -1.87], [-11.29, -2.1],
-    [6.51, -3.49], [2.66, -3.64], [12.83, -4.68], [9.14, -5.16], [6.31, -5.74], [4.1, -6.44], [-0.94, -6.65], [10.37, -7.28], [5.43, -8.51], [8.14, -8.71],
-    [2.63, -8.73], [12.75, -8.98], [-2.9, -9.38], [-11.87, -9.86], [-7.17, -10.02],
+    [10.86, 31.19], [4.49, -6.37], [10.3, 0.48], [6.82, -3.96], [11.43, 17.99], [7.79, 39.16], [8.15, -7.33], [12.15, 3.72], [-10.41, 13.69], [-13.05, 2.58],
+    [12.37, -3.09], [-1.85, 45.73], [-12.36, 45.09], [-1.18, -0.57], [12.84, 20.03], [-9.25, 43.31], [10.61, 15.84], [6.2, 9.69], [9.24, 35.84], [1.87, -9.77],
+    [-11.87, -1.05], [1.33, 31.12], [-0.43, 1.73], [9.22, 27.64], [9.23, 14], [2.32, 3.94], [12.89, 13.9], [-3.81, 9.22], [-4.84, 41.51], [7.51, 11.52],
+    [8.41, 33.15], [7.46, -1.3], [-7.17, -10.02], [1.44, -3.24], [7.94, 6.23], [-12.85, 36.61], [11.26, 10.09], [5.1, -9.25], [10.57, -9.53], [11.81, 27.58],
+    [-12.22, 29.47], [-10.05, 5.93], [4.34, 5.97], [12.47, 34.36], [-2.16, 4.94], [3.87, 0.29], [11.46, 45.61], [0.42, 43.42], [3.35, 34.08], [5.65, 43.32],
+    [-3.01, -9.24], [-8.02, 45.97], [-9.04, 1.83], [-11.53, -9.58], [10.31, -4.84], [8.68, 21.7], [6.45, 2.66], [0.09, 16.4], [5.49, 15.87], [-7.91, 9.03],
+    [13.37, 7.7], [12.8, -6.61], [6.4, 31.01], [11.07, 22.83], [-13.63, 6.69], [6.04, 36], [9.03, 8.81], [-0.14, -7.64], [-4.12, 36.18], [13.12, 24.73],
+    [-12.39, 42.1], [11.97, 38.56], [-5.93, 12.88], [7.84, 18.17], [-1.58, -4.88], [4.62, 28.99], [-9.94, 40.56], [9.27, 24.73], [12.79, 1.1], [-12.39, 39.14],
+    [10.6, 6.41], [0.78, 37.88], [-12.2, -5.14], [0.83, 8.33], [-13.51, 11.25], [-5.48, -0.92], [9.14, 3.24], [-6.36, 33.36], [13.47, 30.56],
   ];
   spots.forEach(([lon, lat], i) => {
     const sc = treeScale(i);
@@ -1782,7 +1782,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 못 읽은 돌은 그 자리 그림 판을 그대로 둔다.
   {
     const PAT = ['cap', 'clover', 'dots', 'rim', 'streak'], pool = [];
-    for (let n = 1; n <= 8; n++) for (const pt of PAT) pool.push(`rock_${n}_${pt}`);
+    for (let n = 1; n <= 8; n++) if (n !== 3) for (const pt of PAT) pool.push(`rock_${n}_${pt}`);   // 2026-10-02: 보통 돌은 가로로 누운 모양만 — 세로로 선 rock_3은 관측소 선돌 전용
     let seed = 20261002; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const loader = new GLTFLoader(), _y = new THREE.Vector3(0, 1, 0);
@@ -2069,8 +2069,38 @@ addProp(signTex, 1.3, 1.75, -8.0, -4.4);        // 들판 길 초입(크레이�
 addProp(lanternTex, 1.1, 1.5, -8.4, -7.9);       // 데크 경사로 입구
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
 // 관측소 둥근 터: 선돌 3기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6). 추기 #3: 고리 한가운데가 별 받침대
-[addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)]
-  .forEach(m => addClimb(m.userData.dir, 0.5, 1.6));
+const standingStones = [addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)];
+standingStones.forEach(m => { addClimb(m.userData.dir, 0.5, 1.6); m.userData.climb = climbProps[climbProps.length - 1]; });
+// 2026-10-02: 선돌 3기도 그림 판 → 돌 3D 모델로. 돌 40종 중 세로로 선 모양은 rock_3 하나(이끼 5종)뿐이라 선돌엔 그것만 쓴다(이끼 무늬는 기마다 다르게).
+// 키 2.0·1.8·1.9(그림 판보다 살짝 작게), 방향은 기마다 다르게. 오르기 높이는 실제 키의 0.92(1.66~1.84 — 2단 점프로 닿음). 못 읽으면 그림 판 유지.
+{
+  const names = ['rock_3_dots', 'rock_3_cap', 'rock_3_streak'], hs = [2.0, 1.8, 1.9], spins = [0.6, 2.4, 4.3], _y = new THREE.Vector3(0, 1, 0), loader = new GLTFLoader();
+  standingStones.forEach((st, i) => {
+    loader.loadAsync(ASSET_DIR + 'models/rocks/' + names[i] + '.glb').then((gl) => {
+      const m = gl.scene; m.updateMatrixWorld(true); const geos = [];
+      m.traverse((o) => { if (!o.isMesh) return;
+        const g = o.geometry.clone().applyMatrix4(o.matrixWorld), vc = g.getAttribute('color');
+        const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = o.material.color || new THREE.Color(1, 1, 1);
+        for (let j = 0; j < n; j++) { col[j * 3] = c.r * (vc ? vc.getX(j) : 1); col[j * 3 + 1] = c.g * (vc ? vc.getY(j) : 1); col[j * 3 + 2] = c.b * (vc ? vc.getZ(j) : 1); }
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+        if (!g.getAttribute('normal')) g.computeVertexNormals();
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3)); geos.push(g); });
+      const list = geos.every((g) => g.index) ? geos : geos.map((g) => (g.index ? g.toNonIndexed() : g));
+      const geo = mergeGeometries(list, false); if (!geo) return;
+      geo.computeBoundingBox(); const bb = geo.boundingBox, sz = new THREE.Vector3(); bb.getSize(sz);
+      const k = hs[i] / sz.y, ctr = bb.getCenter(new THREE.Vector3());
+      geo.translate(-ctr.x, -bb.min.y, -ctr.z); geo.scale(k, k, k);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true }));
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.position.copy(st.userData.dir).multiplyScalar(R + terrainH(st.userData.dir) - 0.06);
+      mesh.quaternion.setFromUnitVectors(_y, st.userData.dir); mesh.rotateY(spins[i]);
+      scene.add(mesh);
+      scene.remove(st); const pi = props.indexOf(st); if (pi >= 0) props.splice(pi, 1);
+      st.userData.climb.top = terrainH(st.userData.dir) + hs[i] * 0.92; st.userData.climb.radius = Math.max(0.5, Math.max(sz.x, sz.z) * k * 0.38);
+      if (DEBUG) console.log('standing stone GLB', names[i], hs[i]);
+    }).catch((e) => { if (DEBUG) console.warn('standing stone GLB 로드 실패 — 그림 판 유지', e); });
+  });
+}
 // 야영지(다리 북쪽 갈림길): 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
 const tentProp = addProp(tentTex, 4.4, 4.4, -5.8, 31.4);   // 작업 D: 텐트 앞 F로 휴식(기력 회복)
 addProp(cauldronTex, 1.2, 1.2, -4.0, 30.7);
