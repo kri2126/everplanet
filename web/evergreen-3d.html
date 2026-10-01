@@ -10,7 +10,7 @@
   #c { display: block; width: 100%; height: 100%; }
   /* 조작 힌트 (왼쪽 위) */
   #hint {
-    position: fixed; left: 14px; top: 12px; font-size: 13px; line-height: 1.6;
+    position: fixed; left: 14px; right: 180px; top: 12px; font-size: 13px; line-height: 1.6;
     text-shadow: 0 1px 2px rgba(0,0,0,.45); opacity: .9; pointer-events: none; user-select: none;
   }
   #hint b { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px;
@@ -256,6 +256,19 @@
   #settings .bot { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 2px solid rgba(120,80,40,.35); background: rgba(154,106,58,.12); }
   #settings .bot .hint { flex: 1; text-align: center; font-size: 11px; color: #8a6a44; }
   #settings a { color: #7a3f12; }
+  #settings .keys { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #settings .keys td { padding: 3px 4px; border-bottom: 1px dashed rgba(120,80,40,.22); }
+  #settings .keys td.n { width: 100%; }
+  #settings .keys th { font: 700 11px 'Gowun Dodum', sans-serif; color: #8a6a44; text-align: center; padding: 2px 4px 6px; }
+  #settings .kb { min-width: 74px; min-height: 34px; padding: 0 8px; font: 700 13px 'JetBrains Mono', monospace; color: #3a2410; background: linear-gradient(#fffaf0, #eadbbd);
+    border: 1px solid #9a7a50; border-bottom-width: 3px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  #settings .kb:hover { background: #fff; }
+  #settings .kb.empty { color: #b09a78; font-weight: 400; }
+  #settings .kb.wait { background: #ffe9a8; border-color: #c9762a; animation: kbWait 0.9s ease-in-out infinite; }
+  #settings .kb.fixed { cursor: default; opacity: .65; }
+  #settings .kb.flash { animation: kbFlash 0.45s ease-in-out 3; }
+  @keyframes kbWait { 50% { background: #fff6d8; } }
+  @keyframes kbFlash { 50% { background: #ffd166; border-color: #d9781c; } }
   @media (max-width: 560px) { #settings .tabs { width: 84px; } #settings .tabs button { font-size: 12px; padding: 0 6px; } #settings .bot .hint { display: none; } }
 </style>
 <script type="importmap">
@@ -408,6 +421,38 @@ function settingsMigrate(o) {
 let settings = (() => { let o = null; try { o = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch (e) {} return settingsMigrate(o); })();
 let settingsSaveT = 0;
 function saveSettings() { clearTimeout(settingsSaveT); settingsSaveT = setTimeout(() => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }, 300); }
+// 작업 S2: 입력은 "키 글자"가 아니라 동작 이름으로 — keys(눌린 키)는 물리 자리 e.code를 담고, isDown('moveUp')·actionsOf(code)로 읽는다.
+// e.code는 한/영 전환과 상관없이 같은 자리라, 예전 e.key 방식에서 한글 자판일 때 안 먹던 문제가 사라진다.
+let codeToActions = new Map();
+function rebuildBindIndex() {
+  codeToActions = new Map();
+  for (const a of ACTIONS) for (const c of settings.binds[a.id]) if (c) { if (!codeToActions.has(c)) codeToActions.set(c, []); codeToActions.get(c).push(a.id); }
+}
+rebuildBindIndex();
+function actionsOf(code) { return codeToActions.get(code) || []; }
+const KEY_FROM_CHAR = { ' ': 'Space', enter: 'Enter', tab: 'Tab', escape: 'Escape', backspace: 'Backspace', arrowup: 'ArrowUp', arrowdown: 'ArrowDown', arrowleft: 'ArrowLeft', arrowright: 'ArrowRight', shift: 'ShiftLeft', control: 'ControlLeft', alt: 'AltLeft' };
+function codeFromKey(k) {   // e.code가 비어 오는 드문 경우(가상 키보드 등)와 디버그 훅용: 글자 → 물리 자리
+  const l = String(k || '').toLowerCase();
+  if (KEY_FROM_CHAR[l]) return KEY_FROM_CHAR[l];
+  if (/^[a-z]$/.test(l)) return 'Key' + l.toUpperCase();
+  if (/^[0-9]$/.test(l)) return 'Digit' + l;
+  return String(k || '');
+}
+function evCode(e) { return e.code || codeFromKey(e.key); }
+const CODE_LABEL = { Space: 'Space', Enter: 'Enter', NumpadEnter: 'Num Enter', Tab: 'Tab', Escape: 'Esc', Backspace: 'Backspace', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+  ShiftLeft: 'Shift', ShiftRight: 'R Shift', ControlLeft: 'Ctrl', ControlRight: 'R Ctrl', AltLeft: 'Alt', AltRight: 'R Alt', CapsLock: 'Caps',
+  Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`',
+  Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End', PageUp: 'PgUp', PageDown: 'PgDn', IntlBackslash: '\\', Lang1: '한/영', Lang2: '한자' };
+function codeLabel(c) {
+  if (!c) return '—';
+  if (CODE_LABEL[c]) return CODE_LABEL[c];
+  let m;
+  if ((m = /^Key([A-Z])$/.exec(c))) return m[1];
+  if ((m = /^Digit(\d)$/.exec(c))) return m[1];
+  if ((m = /^Numpad(.+)$/.exec(c))) return 'Num' + m[1];
+  return c;
+}
+function keyLabel(action) { const b = settings.binds[action]; return b ? codeLabel(b[0] || b[1]) : '—'; }
 const QUALITY = {
   3: { name: '높음', dpr: Math.min(devicePixelRatio || 1, 1.5), shadow: 1536, mapEvery: 3, hull: true },
   2: { name: '중간', dpr: 1.0, shadow: 1024, mapEvery: 3, hull: true },
@@ -2147,7 +2192,7 @@ function renderQuestWin() {
     row.addEventListener('click', () => { trackedQuest = r.id; renderQuestWin(); updateQuestUI(); });
     questRowsEl.appendChild(row);
   }
-  questFootEl.textContent = 'J 닫기 · 클릭해 추적할 목표 선택';
+  questFootEl.textContent = `${keyLabel('quests')} 닫기 · 클릭해 추적할 목표 선택`;
 }
 function toggleQuestWin(force) {
   questWinOpen = force === undefined ? !questWinOpen : force;
@@ -2167,7 +2212,8 @@ function updateQuestBanner(dt) {
   if (questBannerT <= 0) questBannerEl.classList.remove('on');
 }
 // 작업 B: 스킬바 Z·X·C·V 네 칸 — Z는 기본 공격 고정, X·C·V는 로드맵 7 D에서 무직 스킬을 배우기 전까지 잠김
-const SKILL_KEYS = ['Z', 'X', 'C', 'V'];
+const SKILL_KEYS = ['Z', 'X', 'C', 'V'];   // 슬롯 이름(내부용) — 화면에 보이는 글자는 작업 S2부터 실제 키(keyLabel)
+const SLOT_ACTION = { Z: 'attack', X: 'skill1', C: 'skill2', V: 'skill3' };
 const skillEls = {};
 {
   const sk = document.getElementById('skills');
@@ -2238,10 +2284,10 @@ function renderSkillWin() {
     row.querySelector('.lv').textContent = player.skillLv[id];
     row.classList.toggle('sel', selectedSkill === id);
     let slotKey = '-';
-    for (const k in player.slotSkill) if (player.slotSkill[k] === id) slotKey = k;
+    for (const k in player.slotSkill) if (player.slotSkill[k] === id) slotKey = keyLabel(SLOT_ACTION[k]);
     row.querySelector('.slot').textContent = slotKey;
   }
-  skillFootEl.textContent = `SP ${player.sp} · K 닫기 · 클릭해 배우기/선택 → X·C·V로 등록`;
+  skillFootEl.textContent = `SP ${player.sp} · ${keyLabel('skills')} 닫기 · 클릭해 배우기/선택 → ${keyLabel('skill1')}·${keyLabel('skill2')}·${keyLabel('skill3')}로 등록`;
 }
 function toggleSkillWin(force) {
   skillWinOpen = force === undefined ? !skillWinOpen : force;
@@ -2254,7 +2300,7 @@ function bindSkillSlot(key) {
   player.slotSkill[key] = selectedSkill;
   for (const k in player.slotSkill) setSlotUI(k, player.slotSkill[k]);   // 작업 G: 불러오기와 같은 함수로 슬롯 그림 갱신
   renderSkillWin();
-  log(`${SKILLS[selectedSkill].name}을(를) ${key} 슬롯에 등록했다.`, 'sys');
+  log(`${SKILLS[selectedSkill].name}을(를) ${keyLabel(SLOT_ACTION[key])} 슬롯에 등록했다.`, 'sys');
 }
 const skillCd = { stomp: 0, spin: 0, heal: 0 };
 function castSkillById(id) {
@@ -2665,13 +2711,13 @@ function updateForage(dt) {
   }
   nearForageIdx = best;
   const blocked = dialog.open || cut.on || mapView || invOpen || skillWinOpen || questWinOpen || charWinOpen || player.dead;
-  if (best != null && !blocked && keys.has('f')) {
+  if (best != null && !blocked && isDown('interact')) {
     if (forageActiveIdx !== best) { forageActiveIdx = best; forageProgress = 0; }
     forageProgress += dt;
     if (forageBarEl) {
       forageBarEl.style.display = 'block';
       forageBarFillEl.style.width = Math.min(100, forageProgress / FORAGE_HOLD * 100).toFixed(0) + '%';
-      forageLabelEl.textContent = (forageNodes[best].kind === 'mush' ? '버섯' : '꽃') + ' 채집 중... F';
+      forageLabelEl.textContent = (forageNodes[best].kind === 'mush' ? '버섯' : '꽃') + ' 채집 중... ' + keyLabel('interact');
     }
     if (forageProgress >= FORAGE_HOLD) { harvestForage(best); forageActiveIdx = null; forageProgress = 0; if (forageBarEl) forageBarEl.style.display = 'none'; }
   } else {
@@ -2960,7 +3006,7 @@ const dlgEl = document.getElementById('dialog'), dlgWho = document.getElementByI
 let nearNpc = null;
 let nearCrateIdx = null, nearPedestal = false;   // 작업 E
 let nearDewIdx = null, nearForageIdx = null, nearCow = false, nearFarm = false;   // 작업 F
-const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';
+const tipEl = makeLabel('tip', ''); tipEl.innerHTML = '<b>F</b>대화하기'; tipEl.style.display = 'none';   // 글자는 매 프레임 keyLabel('interact')로
 const myLabel = makeLabel('me', 'Lv.1 탐사자');
 const targetLabel = makeLabel('target', '▾'); targetLabel.style.display = 'none';   // 작업 C: Tab으로 고른 대상 표시
 function buildDialog(n) {
@@ -3034,7 +3080,7 @@ for (let i = 0; i < 30; i++) {
 }
 function updateInvUI() {
   for (const id of invSlotOrder) { const c = player.inv[id] || 0; invCells[id].querySelector('.ct').textContent = c; invCells[id].classList.toggle('has', c > 0); }
-  invFootEl.textContent = 'I 닫기 · 포션·이슬은 클릭 또는 숫자키 1(HP)·2(MP)·3(이슬)로 사용';
+  invFootEl.textContent = `${keyLabel('inventory')} 닫기 · 포션·이슬은 클릭 또는 ${keyLabel('potionHp')}(HP)·${keyLabel('potionMp')}(MP)·${keyLabel('dew')}(이슬) 키로 사용`;
 }
 updateInvUI();
 // 작업 C: HP/MP HUD·피격 비네트·사망 페이드
@@ -3074,7 +3120,7 @@ function renderCharWin() {
     row.innerHTML = `<div class="info"><b>${done ? '✓ ' : ''}${a.title}</b><br><span class="d">${a.desc}</span></div>`;
     charRowsEl.appendChild(row);
   }
-  if (charFootEl) charFootEl.textContent = `모험 기록 ${achieved.size}/${ACHIEVEMENTS.length} · P 닫기`;
+  if (charFootEl) charFootEl.textContent = `모험 기록 ${achieved.size}/${ACHIEVEMENTS.length} · ${keyLabel('character')} 닫기`;
 }
 function toggleCharWin(force) {
   charWinOpen = force === undefined ? !charWinOpen : force;
@@ -3117,8 +3163,9 @@ const LABEL_DIST = 15;   // 이보다 먼 이름표는 안 그린다 (언덕 너
 function updateLabels() {
   placeLabel(myLabel, headOf(player.mesh, 1.95));
   if ((nearNpc || nearTent || nearCrateIdx != null || nearPedestal || nearDewIdx != null || nearCow || nearFarm || nearPortal) && !dialog.open && !cut.on && !portalTransit.on) {
-    tipEl.innerHTML = nearNpc ? '<b>F</b>대화하기' : nearCrateIdx != null ? '<b>F</b>상자 조사' : nearPedestal ? '<b>F</b>별 조각 바치기'
-      : nearDewIdx != null ? '<b>F</b>이슬 모으기' : nearCow ? '<b>F</b>소젖 짜기' : nearFarm ? '<b>F</b>밭 살피기' : nearPortal ? `<b>F</b>${PORTALS[0].name}으로` : '<b>F</b>휴식(기력 회복)';
+    const fk = `<b>${keyLabel('interact')}</b>`;   // 작업 S2: 바꾼 키가 말풍선에도
+    tipEl.innerHTML = fk + (nearNpc ? '대화하기' : nearCrateIdx != null ? '상자 조사' : nearPedestal ? '별 조각 바치기'
+      : nearDewIdx != null ? '이슬 모으기' : nearCow ? '소젖 짜기' : nearFarm ? '밭 살피기' : nearPortal ? `${PORTALS[0].name}으로` : '휴식(기력 회복)');
     placeLabel(tipEl, headOf(player.mesh, 1.95));
   } else tipEl.style.display = 'none';
   for (const n of NPCS) {
@@ -3135,7 +3182,8 @@ function updateLabels() {
 }
 
 // ── 입력 ─────────────────────────────────────────────────────────────────────
-const keys = new Set();
+const keys = new Set();   // 작업 S2: 눌려 있는 키의 물리 자리(e.code)
+function isDown(action) { const b = settings.binds[action]; return !!b && ((!!b[0] && keys.has(b[0])) || (!!b[1] && keys.has(b[1]))); }
 // 0 = 닫힘, 1 = 구역 지도, 2 = 에버그린 전경도 (옛 판과 같은 조작)
 let mapView = 0;
 // ── 브금(BGM) — web/audio/bgm_main.mp3 을 반복 재생. 브라우저 자동재생 규칙 때문에 첫 키 입력/클릭 때 시작한다.
@@ -3158,9 +3206,9 @@ function bgmUpdateBtn() { bgmBtn.classList.toggle('off', !bgm.on); }
 function toggleBgm() {
   bgm.on = !bgm.on; try { localStorage.setItem('ep_bgm', bgm.on ? '1' : '0'); } catch (e) {}
   if (bgm.on) bgmPlay(); else if (bgm.el) bgmFadeTo(0, 0.4);
-  bgmUpdateBtn(); log(bgm.on ? '배경 음악을 켰다. (B)' : '배경 음악을 껐다. (B)', 'sys');
+  bgmUpdateBtn(); log(bgm.on ? `배경 음악을 켰다. (${keyLabel('bgm')})` : `배경 음악을 껐다. (${keyLabel('bgm')})`, 'sys');
 }
-function bgmFirstGesture(e) { if (bgm.started || (e && e.key && e.key.toLowerCase() === 'b')) return; bgmPlay(); }   // 첫 입력이 B면 끄기로만 처리
+function bgmFirstGesture(e) { if (bgm.started || (e && e.type === 'keydown' && actionsOf(evCode(e)).includes('bgm'))) return; bgmPlay(); }   // 첫 입력이 브금 키(B)면 끄기로만 처리
 addEventListener('keydown', bgmFirstGesture, true);
 addEventListener('pointerdown', bgmFirstGesture, true);
 document.addEventListener('visibilitychange', () => { if (!bgm.el || !bgm.started) return; if (document.hidden) bgm.el.pause(); else if (bgm.on) bgmPlay(); });
@@ -3312,17 +3360,79 @@ SET_PANES.game = (pane) => {
   pane.appendChild(info);
 };
 function placeholderPane(title, text) { return (pane) => { const h = document.createElement('h4'); h.textContent = title; pane.appendChild(h); const n = document.createElement('div'); n.className = 'note'; n.textContent = text; pane.appendChild(n); }; }
-SET_PANES.controls = placeholderPane('조작', '키 다시 매기기는 다음 단계(S2)에서 들어갑니다.');
+// 작업 S2: 조작 탭 — 동작표, 칸을 누르고 새 키를 누르면 다시 매기기(Esc 취소 · Backspace 보조 키 비우기), 이미 쓰는 키면 서로 맞바꿈
+const RESERVED_CODES = ['Escape', 'F5', 'F11', 'F12', 'MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'ContextMenu', 'Backspace'];
+let rebindWait = null, rebindFlash = null, rebindMsg = '';
+function rebind(action, code, slot = 0) {
+  const a = ACTIONS.find((x) => x.id === action);
+  if (!a || a.fixed) return { ok: false, why: '고정된 동작은 바꿀 수 없어요.' };
+  if (!code || RESERVED_CODES.includes(code)) return { ok: false, why: `${codeLabel(code)}는 쓸 수 없어요 — Esc·F5·F11·F12·Backspace·윈도 키는 예약돼 있어요.` };
+  const b = settings.binds[action], old = b[slot];
+  if (old === code) return { ok: true, same: true };
+  let swapped = null;
+  for (const o of ACTIONS) {
+    const ob = settings.binds[o.id];
+    for (let k = 0; k < 2; k++) if (ob[k] === code && !(o.id === action && k === slot)) { ob[k] = old || null; swapped = { id: o.id, slot: k }; }
+  }
+  b[slot] = code;
+  for (const o of ACTIONS) { const ob = settings.binds[o.id]; if (!ob[0] && ob[1]) { ob[0] = ob[1]; ob[1] = null; } }   // 주 키가 비면 보조 키를 올린다
+  rebuildBindIndex(); saveSettings(); applySettings();
+  return { ok: true, swapped };
+}
+function clearAltBind(action) { const b = settings.binds[action]; if (!b) return; b[1] = null; rebuildBindIndex(); saveSettings(); applySettings(); }
+function resetBinds() { const d = settingsDefaults(); settings.binds = d.binds; rebuildBindIndex(); saveSettings(); applySettings(); }
+addEventListener('keydown', (e) => {   // capture: 다시 매기는 중이면 다른 처리기보다 먼저 키를 가져간다
+  if (!rebindWait) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const { id, slot } = rebindWait, code = evCode(e), name = ACTIONS.find((x) => x.id === id).name;
+  rebindWait = null;
+  if (code === 'Escape') rebindMsg = '취소했어요.';
+  else if (code === 'Backspace') { if (slot === 1) { clearAltBind(id); rebindMsg = `「${name}」 보조 키를 비웠어요.`; } else rebindMsg = '주 키는 비울 수 없어요 — 다른 키를 눌러 바꾸세요.'; }
+  else {
+    const r = rebind(id, code, slot);
+    if (!r.ok) rebindMsg = r.why;
+    else if (r.swapped) { const o = ACTIONS.find((x) => x.id === r.swapped.id); rebindFlash = r.swapped; rebindMsg = `${codeLabel(code)}는 「${o.name}」에 있던 키라 서로 맞바꿨어요.`; }
+    else rebindMsg = `「${name}」 → ${codeLabel(code)}`;
+  }
+  renderSettings();
+}, true);
+SET_PANES.controls = (pane) => {
+  const h = document.createElement('h4'); h.textContent = '조작 — 칸을 누르고 새 키를 누르세요'; pane.appendChild(h);
+  setMsg(pane, rebindMsg, /쓸 수 없어요|비울 수 없어요/.test(rebindMsg));   // 안내 줄은 표 위에(맞바꿈 알림이 바로 보이게)
+  const tools = document.createElement('div'); tools.className = 'row';
+  const lb = document.createElement('div'); lb.className = 'lbl'; lb.innerHTML = '키는 자판의 자리로 기억해요(한/영 상관없음)<small>Esc 취소 · Backspace 보조 키 비우기 · 이미 쓰는 키면 서로 맞바꿈</small>'; tools.appendChild(lb);
+  tools.appendChild(setButton('키 안내 보기', () => { closeSettings(); showKeyGuide(false); }, 'ghost'));
+  tools.appendChild(setButton('조작만 기본값', () => { resetBinds(); rebindMsg = '키를 기본값으로 되돌렸어요.'; renderSettings(); }, 'ghost'));
+  pane.appendChild(tools);
+  const t = document.createElement('table'); t.className = 'keys';
+  t.innerHTML = '<tr><th style="text-align:left">동작</th><th>주 키</th><th>보조 키</th></tr>';
+  for (const a of ACTIONS) {
+    const tr = document.createElement('tr'); const tdN = document.createElement('td'); tdN.className = 'n'; tdN.textContent = a.name; tr.appendChild(tdN);
+    for (let k = 0; k < 2; k++) {
+      const td = document.createElement('td'); const b = document.createElement('button'); b.className = 'kb';
+      const code = settings.binds[a.id][k];
+      if (a.fixed) { b.classList.add('fixed'); b.textContent = k === 0 ? codeLabel(code) + ' (고정)' : '—'; b.disabled = true; }
+      else if (rebindWait && rebindWait.id === a.id && rebindWait.slot === k) { b.classList.add('wait'); b.textContent = '키를 누르세요…'; }
+      else { b.textContent = codeLabel(code); if (!code) b.classList.add('empty'); b.addEventListener('click', () => { rebindWait = { id: a.id, slot: k }; rebindMsg = `「${a.name}」 ${k ? '보조' : '주'} 키 — 새 키를 누르세요 (Esc 취소${k ? ' · Backspace 비우기' : ''})`; renderSettings(); }); }
+      if (rebindFlash && rebindFlash.id === a.id && rebindFlash.slot === k) b.classList.add('flash');
+      b.dataset.act = a.id; b.dataset.slot = k;
+      td.appendChild(b); tr.appendChild(td);
+    }
+    t.appendChild(tr);
+  }
+  pane.appendChild(t);
+  rebindFlash = null;
+};
 SET_PANES.sound = placeholderPane('소리', '음량 슬라이더는 다음 단계(S3)에서 들어갑니다. 지금은 B 키로 배경 음악을 켜고 끌 수 있어요.');
 SET_PANES.display = placeholderPane('화면', '화질·피해 숫자·FPS 표시는 다음 단계(S4)에서 들어갑니다. 지금은 Q 키로 화질을 바꿀 수 있어요.');
 SET_PANES.map = placeholderPane('지도', '미니맵 표시·이름표는 다음 단계(S4)에서 들어갑니다.');
 function renderSettings() {
   for (const [id] of SET_TABS) setTabBtns[id].classList.toggle('on', id === settingsTab);
-  setPaneEl.innerHTML = ''; (SET_PANES[settingsTab] || (() => {}))(setPaneEl);
+  const keepScroll = setPaneEl.scrollTop; setPaneEl.innerHTML = ''; (SET_PANES[settingsTab] || (() => {}))(setPaneEl); setPaneEl.scrollTop = keepScroll;
   setSubEl.textContent = '게임이 멈춰 있어요';
   setResetBtn.textContent = settingsResetArm ? '정말 전부 되돌릴까요?' : '기본값 복원'; setResetBtn.classList.toggle('warn', settingsResetArm);
 }
-function showSettingsTab(id) { settingsTab = id; settingsResetArm = false; renderSettings(); setPaneEl.scrollTop = 0; }
+function showSettingsTab(id) { if (settingsTab !== id) setPaneEl.scrollTop = 0; settingsTab = id; settingsResetArm = false; rebindWait = null; rebindMsg = ''; renderSettings(); }
 function canOpenSettings() { return !gate.on && !cut.on && !portalTransit.on && !chatOpen && !player.dead; }
 function openSettings(tab) {
   if (!canOpenSettings()) return false;
@@ -3331,11 +3441,40 @@ function openSettings(tab) {
   if (tab) settingsTab = tab;
   setEl.classList.add('on'); renderSettings(); return true;
 }
-function closeSettings() { if (!settingsOpen) return; settingsOpen = false; setEl.classList.remove('on'); keys.clear(); }
-function applySettings() { /* S2~S4: 키 안내 글·음량·화질·미니맵을 설정값에 맞춘다 */ }
-function resetSettings() { settings = settingsDefaults(); saveSettings(); applySettings(); }
+function closeSettings() { if (!settingsOpen) return; settingsOpen = false; rebindWait = null; rebindMsg = ''; setEl.classList.remove('on'); keys.clear(); }
+// 설정값을 화면·게임에 반영 — S2: 키 안내 글(상단 줄·키 안내 팝업·스킬 슬롯 글자·대화/컷신 안내·창 아래 줄)
+const hintEl = document.getElementById('hint'), keyGuideRowsEl = document.querySelector('#keyGuide .rows'), keyGuideFootEl = document.querySelector('#keyGuide .foot');
+function updateKeyTexts() {
+  const L = keyLabel, kb = (a, w) => `<kbd${w || L(a).length > 2 ? ' class="w"' : ''}>${L(a)}</kbd>`;
+  const mv = `${L('moveUp')} ${L('moveLeft')} ${L('moveDown')} ${L('moveRight')}`;
+  hintEl.innerHTML = `<b>${mv}</b>이동 <b>${L('jump')}</b>점프(2단) <b>${L('attack')}</b>공격 <b>${L('skill1')} ${L('skill2')} ${L('skill3')}</b>스킬 <b>${L('interact')}</b>대화·상호작용 <b>${L('target')}</b>대상 ` +
+    `<b>${L('inventory')}</b>가방 <b>${L('skills')}</b>스킬창 <b>${L('quests')}</b>퀘스트 <b>${L('character')}</b>기록 <b>${L('map')}</b>지도 <b>${L('chat')}</b>채팅 <b>Esc</b>설정 <b>${L('keyGuide')}</b>키 안내 <b>${L('quality')}</b>화질 <b>${L('bgm')}</b>브금`;
+  keyGuideRowsEl.innerHTML =
+    `<div class="r"><div class="wasd"><span></span>${kb('moveUp')}<span></span>${kb('moveLeft')}${kb('moveDown')}${kb('moveRight')}</div><span class="d">이동${settings.binds.moveUp[1] ? ' (보조: ' + codeLabel(settings.binds.moveUp[1]) + codeLabel(settings.binds.moveLeft[1]) + codeLabel(settings.binds.moveDown[1]) + codeLabel(settings.binds.moveRight[1]) + ')' : ''}</span></div>` +
+    `<div class="r">${kb('jump', 1)}<span class="d">점프 · 공중에서 한 번 더 = 2단 점프</span></div>` +
+    `<div class="r">${kb('attack')}${kb('skill1')}${kb('skill2')}${kb('skill3')}<span class="d">기본 공격 · 스킬 슬롯 (${L('skills')}로 등록)</span></div>` +
+    `<div class="r">${kb('interact')}<span class="d">대화 · 조사 · 봉헌 · 휴식 · 이슬 · 소 · 밭 · 포탈 (길게: 채집)</span></div>` +
+    `<div class="r">${kb('target', 1)}<span class="d">대상 바꾸기</span></div>` +
+    `<div class="r">${kb('potionHp')}${kb('potionMp')}${kb('dew')}<span class="d">HP 포션 · MP 포션 · 이슬</span></div>` +
+    `<div class="r">${kb('inventory')}${kb('skills')}${kb('quests')}${kb('character')}<span class="d">가방 · 스킬 · 퀘스트 · 캐릭터/모험 기록</span></div>` +
+    `<div class="r">${kb('map')}<span class="d">지도 → 한 번 더 전경도</span></div>` +
+    `<div class="r">${kb('chat', 1)}<span class="d">채팅 입력</span></div>` +
+    `<div class="r"><kbd class="w">Esc</kbd><span class="d">설정 (열린 창·지도·대화가 있으면 그것만 닫기)</span></div>` +
+    `<div class="r">${kb('quality')}${kb('bgm')}<span class="d">화질 단계 · 배경 음악 켜기/끄기</span></div>`;
+  keyGuideFootEl.textContent = `${L('keyGuide')} 또는 Esc → 설정 › 조작에서 키를 바꿀 수 있어요 · 아무 키나 누르면 닫힘`;
+  for (const k of SKILL_KEYS) skillEls[k].dataset.k = L(SLOT_ACTION[k]);
+  const jl = L('jump') === 'Space' ? 'Space Bar' : L('jump');
+  dlgNextEl.innerHTML = `<b>${jl}</b>다음`;
+  document.querySelector('#cut .skip').innerHTML = `<b>${L('jump')}</b> 건너뛰기`;
+  bgmBtn.title = `${L('bgm')} 키로도 켜고 끌 수 있어요`;
+  setBtnEl.title = '설정 (Esc)';
+  if (skillWinOpen) renderSkillWin();
+}
+function applySettings() { updateKeyTexts(); }
+function resetSettings() { settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); applySettings(); }
 setResetBtn.addEventListener('click', () => { if (!settingsResetArm) { settingsResetArm = true; renderSettings(); return; } settingsResetArm = false; resetSettings(); renderSettings(); setMsg(setPaneEl, '모든 설정을 기본값으로 되돌렸어요.'); });
 document.getElementById('setClose').addEventListener('click', closeSettings);
+applySettings();   // 저장된 설정을 처음 한 번 반영
 setEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === setEl) closeSettings(); });   // 바깥(어두운 곳)을 누르면 닫힘
 setBtnEl.addEventListener('pointerdown', (e) => e.stopPropagation());
 setBtnEl.addEventListener('click', (e) => { e.stopPropagation(); if (settingsOpen) closeSettings(); else openSettings(); });
@@ -3362,38 +3501,41 @@ function escapePressed() {
 }
 
 addEventListener('keydown', (e) => {
-  const k = e.key.toLowerCase();
-  if (gate.on) { if (k === '1' || k === 'enter') continueGame(); else if (k === '2') newGame(); return; }   // 작업 G: 시작 화면
+  if (rebindWait) return;                                                                                 // 작업 S2: 키 다시 매기는 중(위의 capture 처리기가 가져감)
+  const code = evCode(e);
+  if (gate.on) { if (code === 'Digit1' || code === 'Numpad1' || code === 'Enter' || code === 'NumpadEnter') continueGame(); else if (code === 'Digit2' || code === 'Numpad2') newGame(); return; }   // 작업 G: 시작 화면(1·2 고정)
   if (chatOpen) return;                                                                                    // 작업 H: 채팅 입력 중엔 입력칸이 키를 가져간다
   if (settingsOpen) { settingsKey(e); return; }                                                            // 로드맵 9 작업 S: 설정 화면이 키를 가져간다
   if (portalTransit.on) return;                                                                            // 작업 G: 포탈 이동 중 조작 없음
-  if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
-  if (keyGuideOn()) { hideKeyGuide(); if (k === 'h' || k === 'escape') return; }   // 작업 H: 팝업은 아무 키에나 닫히고 그 키는 그대로 처리(H·ESC는 닫기만)
-  if (k === 'h') { showKeyGuide(false); return; }
-  if (k === 'enter' && !dialog.open && !mapView && !invOpen && !skillWinOpen && !questWinOpen && !charWinOpen && !player.dead) { e.preventDefault(); openChat(); return; }
-  if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); e.preventDefault(); return; }
-  if (k === 'escape') { e.preventDefault(); escapePressed(); return; }   // 작업 S
+  const A = actionsOf(code), has = (a) => A.includes(a);                                                   // 작업 S2: 이 키에 묶인 동작들
+  if (cut.on) { if (has('jump')) { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: 점프 키(Space)로 건너뛰기
+  if (keyGuideOn()) { hideKeyGuide(); if (has('keyGuide') || code === 'Escape') return; }   // 작업 H: 팝업은 아무 키에나 닫히고 그 키는 그대로 처리(키 안내·Esc는 닫기만)
+  if (code === 'Escape') { e.preventDefault(); escapePressed(); return; }   // 작업 S: 열린 것만 닫기 / 없으면 설정
+  if (has('keyGuide')) { e.preventDefault(); openSettings('controls'); return; }   // 키 안내 = 설정의 조작 탭(§7·§12-2)
+  if (has('chat') && !dialog.open && !mapView && !invOpen && !skillWinOpen && !questWinOpen && !charWinOpen && !player.dead) { e.preventDefault(); openChat(); return; }
+  if (has('map')) { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); e.preventDefault(); return; }
   if (mapView) return;
-  if (k === 'i') { toggleInv(); return; }
-  if (k === 'k') { toggleSkillWin(); return; }
-  if (k === 'j') { toggleQuestWin(); return; }
-  if (k === 'p') { toggleCharWin(); return; }   // 작업 F: 캐릭터·모험 기록 창
-  if (k === 'q') { cycleQuality(); return; }
-  if (k === 'b') { toggleBgm(); return; }   // 브금 켜기/끄기
+  if (has('inventory')) { toggleInv(); return; }
+  if (has('skills')) { toggleSkillWin(); return; }
+  if (has('quests')) { toggleQuestWin(); return; }
+  if (has('character')) { toggleCharWin(); return; }   // 작업 F: 캐릭터·모험 기록 창
+  if (has('quality')) { cycleQuality(); return; }
+  if (has('bgm')) { toggleBgm(); return; }   // 브금 켜기/끄기
   if (dialog.open) {
-    if (dialog.choicesShown) { const idx = parseInt(k, 10) - 1; if (!isNaN(idx)) pickChoice(idx); return; }
-    if (k === ' ') { e.preventDefault(); advanceDialog(); }
+    if (dialog.choicesShown) { const m = /^(?:Digit|Numpad)([1-9])$/.exec(code); if (m) pickChoice(+m[1] - 1); return; }   // 선택지 번호는 숫자 고정
+    if (has('jump')) { e.preventDefault(); advanceDialog(); }
     return;
   }
-  if (skillWinOpen) { if (k === 'x' || k === 'c' || k === 'v') bindSkillSlot(k.toUpperCase()); return; }
+  if (skillWinOpen) { const sl = has('skill1') ? 'X' : has('skill2') ? 'C' : has('skill3') ? 'V' : null; if (sl) bindSkillSlot(sl); return; }
   if (questWinOpen) return;
   if (invOpen) return;
   if (charWinOpen) return;
   if (player.dead) return;   // 작업 C: 주저앉아 있는 동안엔 조작 없음
-  keys.add(k);
-  // 작업 B: 키 정리 — Space는 오직 점프, F가 상호작용(대화·상자 조사·봉헌·휴식·이슬·소·밭), Z~V가 공격·스킬
-  if (k === ' ') { e.preventDefault(); tryJump(); }
-  if (k === 'f') {
+  keys.add(code);
+  if (A.length) e.preventDefault();   // 묶인 키는 페이지 스크롤·포커스 이동(Space·Tab·방향키) 막기
+  // 작업 B: 키 정리 — 점프 키는 오직 점프, 상호작용 키(F)가 대화·상자 조사·봉헌·휴식·이슬·소·밭, 공격·스킬 키(Z~V)
+  if (has('jump')) tryJump();
+  if (has('interact')) {
     if (nearNpc) openDialog(nearNpc);
     else if (nearCrateIdx != null) inspectCrate(nearCrateIdx);
     else if (nearPedestal) deliverStar();
@@ -3403,14 +3545,16 @@ addEventListener('keydown', (e) => {
     else if (nearPortal) enterPortal();   // 작업 G
     else if (nearTent) restAtTent();
   }
-  if (k === 'z') attack();
-  if (k === 'x' || k === 'c' || k === 'v') skillSlot(k);
-  if (k === 'tab') { e.preventDefault(); cycleTarget(); }
-  if (k === '1') usePotion('hp');   // 작업 D: 포션 사용
-  if (k === '2') usePotion('mp');
-  if (k === '3') useDew();          // 작업 F: 이슬 사용(기력 +25)
+  if (has('attack')) attack();
+  if (has('skill1')) useSlotSkill('X');
+  if (has('skill2')) useSlotSkill('C');
+  if (has('skill3')) useSlotSkill('V');
+  if (has('target')) cycleTarget();
+  if (has('potionHp')) usePotion('hp');   // 작업 D: 포션 사용
+  if (has('potionMp')) usePotion('mp');
+  if (has('dew')) useDew();               // 작업 F: 이슬 사용(기력 +25)
 });
-addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+addEventListener('keyup', (e) => keys.delete(evCode(e)));
 addEventListener('blur', () => keys.clear());
 
 const cam = { fwd: new THREE.Vector3(0, 1, 0) };   // 항상 그 자리의 북쪽
@@ -3445,10 +3589,10 @@ function step(dt) {
 
   // 이동 입력 (카메라 기준)
   let ix = 0, iy = 0;
-  if (keys.has('w') || keys.has('arrowup')) iy += 1;
-  if (keys.has('s') || keys.has('arrowdown')) iy -= 1;
-  if (keys.has('d') || keys.has('arrowright')) ix += 1;
-  if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
+  if (isDown('moveUp')) iy += 1;      // 작업 S2: 동작 이름으로 (기본 W/↑ · S/↓ · D/→ · A/←)
+  if (isDown('moveDown')) iy -= 1;
+  if (isDown('moveRight')) ix += 1;
+  if (isDown('moveLeft')) ix -= 1;
   if (cut.on || dialog.open || invOpen || player.dead || gate.on || portalTransit.on || chatOpen) { ix = 0; iy = 0; }   // 컷신·대화·가방·사망·시작 화면·포탈 이동 중엔 안 움직인다
   player.moving = (ix !== 0 || iy !== 0);
   if (player.moving) {
@@ -3830,7 +3974,7 @@ function drawMaps(t) {
     if (!cut.on) drawMiniMap();
     miniMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
   } else if (mapView === 1) {
-    zoneCap.textContent = isTouch ? '지도를 탭하면 전경도 · 바깥을 탭하면 닫힘' : 'M 한 번 더 → 전경도 · ESC 닫기';
+    zoneCap.textContent = isTouch ? '지도를 탭하면 전경도 · 바깥을 탭하면 닫힘' : `${keyLabel('map')} 한 번 더 → 전경도 · Esc 닫기`;
     drawZoneMap(W, H);
   } else {
     const dpr = Math.min(devicePixelRatio, 2);
@@ -4187,7 +4331,7 @@ function drawWorldMap(viewW, viewH, t) {
   // (상단에 두면 HUD 조작 칩과, 명판 옆에 두면 명판과 겹치는 창 비율이 있다)
   const doneN = WORLD_AREAS.filter(a => a.status !== 'planned').length;
   const titleTxt = `에버그린 전경도  ·  구현 ${doneN}/${WORLD_AREAS.length}  ·  완료 ${WORLD_AREAS.filter(a => a.cleared).length}  ·  모험 기록 ${achieved.size}/${ACHIEVEMENTS.length}`;
-  const hint = isTouch ? '바깥을 탭하면 닫힘' : 'M / ESC 닫기';
+  const hint = isTouch ? '바깥을 탭하면 닫힘' : `${keyLabel('map')} / Esc 닫기`;
   const lockTxt = small ? '🔒 미구현' : '🔒 표시는 아직 만들지 않은 지역';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -4213,8 +4357,8 @@ if (DEBUG) {
       const [lon, lat] = designLonLat(player.pos.clone().normalize());
       return { lon, lat, z: player.z };
     },
-    press(k, on) { on ? keys.add(k) : keys.delete(k); },
-    get settings() { return settings; }, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
+    press(k, on) { const c = settings.binds[k] ? settings.binds[k][0] : codeFromKey(k); on ? keys.add(c) : keys.delete(c); },   // 작업 S2: 동작 id('moveUp') 또는 옛 글자('w')
+    get settings() { return settings; }, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { return tryJump(); },
