@@ -4097,10 +4097,18 @@ function synthWoodStep(seed, sr, P) {
   for (let i = 0; i < n; i++) out[i] *= 0.9 / pk;
   return out;
 }
+// 돌 발소리(b안 '묵직한 돌 툭') — 나무와 같은 노이즈 노크 틀을 더 짧고 단단하게(속 빈 몸통 없음), 끝을 한 번 더 다듬고 크기 맞춤
+function synthStoneStep(seed, sr, P) {
+  const out = synthWoodStep(seed, sr, P), n = out.length; let pk = 0;
+  for (let i = 0; i < n; i++) { if (i > n - sr * 0.04) out[i] *= (n - i) / (sr * 0.04); pk = Math.max(pk, Math.abs(out[i])); }
+  for (let i = 0; i < n; i++) out[i] *= 0.9 / pk;
+  return out;
+}
 const SFX_DEF = {   // manifest.json이 없을 때 기본값 — 파일 쪽 값과 같다
   step_grass: { volume: 0.075, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'grass/step_grass_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { center: 4200, lp: 8500 }, synthFn: 'grass', seedMul: 104729 },
   step_dirt: { volume: 0.075, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'dirt/step_dirt_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { center: 2300, lp: 7000, thud: 0.2, grit: 1.4 }, synthFn: 'dirt', seedMul: 7727 },
   step_wood: { volume: 0.0995, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'wood/step_wood_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { knocks: [[380, 0.8, 1], [1000, 0.9, 0.35]], kdec: 0.022, thud: 0.5, comb: 7, fb: 0.45, combLp: 1100, att: 0.002, lp: 3600, scuff: 0, rattle: 0 }, synthFn: 'wood', seedMul: 3571 },   // 나무다리·데크·비행정 갑판 — 풀과 같은 간격(두 걸음에 한 번, 25% 건너뜀)
+  step_stone: { volume: 0.1704, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'stone/step_stone_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { knocks: [[520, 0.85, 1], [1350, 0.95, 0.4]], kdec: 0.012, thud: 0.5, comb: 0, att: 0.0015, lp: 4200, scuff: 0, rattle: 0 }, synthFn: 'stone', seedMul: 6151 },   // 돌계단 — 풀과 같은 간격
 };
 const sfx = { ctx: null, master: null, on: !QP.has('nosfx'), def: SFX_DEF, bufs: {}, recent: {}, count: {}, gap: {}, loading: false };
 function sfxReady() {
@@ -4115,7 +4123,7 @@ function sfxReady() {
 }
 function sfxSynthPool(name) {   // 파일을 아직 못 읽었을 때 쓸 합성 소리
   const d = sfx.def[name], sr = sfx.ctx.sampleRate;
-  const f = d.synthFn === 'dirt' ? synthDirtStep : d.synthFn === 'wood' ? synthWoodStep : synthGrassStep, mul = d.seedMul || 104729;
+  const f = d.synthFn === 'dirt' ? synthDirtStep : d.synthFn === 'wood' ? synthWoodStep : d.synthFn === 'stone' ? synthStoneStep : synthGrassStep, mul = d.seedMul || 104729;
   return d.files.map((_, i) => { const a = f((i + 1) * mul, sr, d.synth), b = sfx.ctx.createBuffer(1, a.length, sr); b.copyToChannel(a, 0); return b; });
 }
 async function sfxLoad() {
@@ -4815,10 +4823,10 @@ function step(dt) {
     }
   }
 
-  // 효과음: 걷기 그림 프레임이 바뀔 때마다 한 걸음 — 풀이면 풀 소리, 흙길(모래길)이면 흙 소리, 나무 구조물(다리·데크·갑판)이면 나무 소리(물·수영·공중 제외)
+  // 효과음: 걷기 그림 프레임이 바뀔 때마다 한 걸음 — 풀이면 풀 소리, 흙길(모래길)이면 흙 소리, 돌계단이면 돌 소리, 나무 구조물(다리·데크·갑판)이면 나무 소리(물·수영·공중 제외)
   { const sf = Math.floor(player.walkT / 2.4);
     if (sf !== player.stepFrame) { player.stepFrame = sf;
-      if (player.moving && player.grounded && !player.swimming && !player.inShallow && !onStructure) { const sfc = surfaceAt(_up); if (sfc === 'grass') sfxStep('step_grass'); else if (sfc === 'sand') sfxStep('step_dirt'); }
+      if (player.moving && player.grounded && !player.swimming && !player.inShallow && !onStructure) { const sfc = surfaceAt(_up); if (sfc === 'grass') sfxStep('step_grass'); else if (sfc === 'sand') sfxStep('step_dirt'); else if (sfc === 'stone') sfxStep('step_stone'); }
       else if (player.moving && player.grounded && !player.swimming && onStructure && woodUnderfoot(_up, player.z, ground)) sfxStep('step_wood'); } }   // 나무다리·데크·갑판
   // 헤엄 물소리: 물속에서 움직일 때만. 깊이에 따라 크기 — 헤엄칠 만큼 깊으면 100%, 얕은 물은 발목 15% → 헤엄 직전 85%
   { const depth = wl - th, sh = Math.min(1, Math.max(0, (depth + 0.25) / 1.45));
