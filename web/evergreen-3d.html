@@ -3619,6 +3619,113 @@ function surfaceAt(d) {
   if (Math.hypot(gx, gy) / (R * e) > 0.48) return 'rock';   // 칠하기의 slope 0.10(≈26°)
   return 'grass';
 }
+// ── 헤엄 물소리 — 수영하며 움직일 때만 반복 재생, 그 밖엔 무음. 사용자가 고른 B 버전(레퍼런스 구간 통계 맞춤 합성)
+// 헤엄 물소리(B) — 반복 재생용 스테레오 루프를 게임 안에서 합성. 파일 없음.
+// 레퍼런스 구간을 대역별 통계(크기·출렁 폭·출렁 빠르기·좌우 일치도)로 맞춘 새 소리. 원본 샘플·원본 시간 흐름은 쓰지 않는다.
+// 1.3kHz 위는 매끄러운 노이즈 대신 짧은 물방울 '톡' 결(속삭임처럼 들리지 않게), 짧고 가벼운 '꾸륵'(초당 1.5개).
+// 루프는 프레임 1024개(약 11.9초) — 출렁임·겹쳐더하기·물방울을 모두 원형으로 감아 이음매가 없다.
+const SWIM_T = { bf: [67, 85, 107, 135, 170, 214, 269, 339, 428, 539, 679, 855, 1078, 1358, 1711, 2155, 2715, 3421, 4310, 5431, 6842, 8621, 10861, 13684, 17241],
+  lvl: [2.96, 11.41, 12.03, 12.71, 11.52, 12.66, 7.64, 11.84, 9.72, 6.95, 3.6, 2.62, -0.63, -0.07, 5.88, 4.5, 4.69, 0.92, -4.03, -6.76, -12.73, -11.56, -10.7, -21.03, -48.62],
+  sd: [4.43, 3.74, 3.73, 3.59, 4.09, 3.91, 2.6, 3.62, 2.89, 4.57, 4.81, 5.31, 4.71, 4.91, 4.61, 5.54, 6.16, 5.66, 5.57, 4.74, 5.6, 7.46, 6.5, 6.44, 9.46],
+  fast: [0.49, 0.61, 0.5, 0.54, 0.53, 0.49, 0.54, 0.54, 0.5, 0.48, 0.43, 0.34, 0.29, 0.32, 0.34, 0.32, 0.33, 0.33, 0.37, 0.47, 0.4, 0.21, 0.27, 0.32, 0.32],
+  coh: [0.97, 0.96, 0.96, 0.95, 0.94, 0.91, 0.84, 0.82, 0.74, 0.73, 0.74, 0.76, 0.67, 0.56, 0.32, 0.25, 0.23, 0.26, 0.19, 0.21, 0.46, 0.52, 0.41, 0.59, 0.42] };
+function swimFFT(re, im, inv) {   // 제자리 복소 FFT (길이 2의 거듭제곱)
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = (inv ? 2 : -2) * Math.PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) { let cr = 1, ci = 0; for (let k = 0; k < len / 2; k++) { const u = i + k, v = u + len / 2, xr = re[v] * cr - im[v] * ci, xi = re[v] * ci + im[v] * cr; re[v] = re[u] - xr; im[v] = im[u] - xi; re[u] += xr; im[u] += xi; const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t; } }
+  }
+  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+}
+function synthSwimLoop(sr, seed) {
+  let s = seed >>> 0; const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+  const N = 2048, hop = 512, NF = 1024, len = NF * hop, nb = SWIM_T.bf.length, fps = sr / hop, nbin = N / 2 + 1;
+  const lb = SWIM_T.bf.map(Math.log2), lerpBand = (arr, lf) => { if (lf <= lb[0]) return arr[0]; if (lf >= lb[nb - 1]) return arr[nb - 1]; let j = 0; while (lb[j + 1] < lf) j++; const u = (lf - lb[j]) / (lb[j + 1] - lb[j]); return arr[j] + (arr[j + 1] - arr[j]) * u; };
+  // 칸별 목표: 크기(dB, 1.3kHz 위로 1옥타브에 걸쳐 걷어냄 — 그 자리는 물방울 결), 좌우 일치도
+  const Ldb = new Float32Array(nbin), C = new Float32Array(nbin), lfb = new Float32Array(nbin);
+  for (let k = 0; k < nbin; k++) { const f = Math.max(k * sr / N, 20), lf = Math.log2(f); lfb[k] = lf; Ldb[k] = lerpBand(SWIM_T.lvl, lf) - 60 * Math.min(1, Math.max(0, lf - Math.log2(1300))); C[k] = Math.min(1, Math.max(0, lerpBand(SWIM_T.coh, lf))); }
+  // 대역별 출렁(dB): 느린(0.2~4Hz)+빠른(4~20Hz) 무작위, 원형(루프 길이로 감김), 이웃 대역과 조금 함께
+  const band = (lo, hi) => { const out = []; for (let j = 0; j < nb; j++) { const re = new Float64Array(NF), im = new Float64Array(NF); for (let i = 0; i < NF; i++) re[i] = gauss(); swimFFT(re, im, false); for (let i = 0; i < NF; i++) { const f = Math.min(i, NF - i) * fps / NF; if (f < lo || f >= hi) { re[i] = 0; im[i] = 0; } } swimFFT(re, im, true); out.push(re); }
+    const mixd = out.map((y, j) => { const a = out[Math.max(0, j - 1)], b = out[Math.min(nb - 1, j + 1)], z = new Float64Array(NF); for (let i = 0; i < NF; i++) z[i] = y[i] + 0.5 * (a[i] + b[i]) / 2; return z; });
+    return mixd.map((z) => { let m = 0; for (const v of z) m += v * v; const sdv = Math.sqrt(m / NF) || 1; return z.map((v) => v / sdv); }); };
+  const slow = band(0.2, 4), fst = band(4, 20);
+  const modDb = slow.map((z, j) => { const fr = Math.min(0.95, SWIM_T.fast[j]), a = Math.sqrt(1 - fr), b = Math.sqrt(fr); return z.map((v, i) => (a * v + b * fst[j][i]) * SWIM_T.sd[j]); });
+  // 겹쳐더하기(원형)
+  const L = new Float32Array(len), R = new Float32Array(len), W = new Float32Array(len), win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  const reL = new Float64Array(N), imL = new Float64Array(N), reR = new Float64Array(N), imR = new Float64Array(N), md = new Float64Array(nb);
+  for (let t = 0; t < NF; t++) {
+    for (let j = 0; j < nb; j++) md[j] = modDb[j][t];
+    reL.fill(0); imL.fill(0); reR.fill(0); imR.fill(0);
+    for (let k = 1; k < nbin - 1; k++) {
+      const mag = Math.pow(10, (Ldb[k] + lerpBand(md, lfb[k])) / 20), c = Math.sqrt(C[k]), d = Math.sqrt(1 - C[k]);
+      const pc = rnd() * 6.2832, pl = rnd() * 6.2832, pr = rnd() * 6.2832;
+      const lr = mag * (c * Math.cos(pc) + d * Math.cos(pl)), li = mag * (c * Math.sin(pc) + d * Math.sin(pl));
+      const rr = mag * (c * Math.cos(pc) + d * Math.cos(pr)), ri = mag * (c * Math.sin(pc) + d * Math.sin(pr));
+      reL[k] = lr; imL[k] = li; reL[N - k] = lr; imL[N - k] = -li; reR[k] = rr; imR[k] = ri; reR[N - k] = rr; imR[N - k] = -ri;
+    }
+    swimFFT(reL, imL, true); swimFFT(reR, imR, true);
+    const st = t * hop;
+    for (let i = 0; i < N; i++) { const p = (st + i) % len; L[p] += reL[i] * N * win[i]; R[p] += reR[i] * N * win[i]; W[p] += win[i] * win[i]; }
+  }
+  let e = 0; for (let i = 0; i < len; i++) { L[i] /= W[i] || 1; R[i] /= W[i] || 1; e += L[i] * L[i] + R[i] * R[i]; }
+  const lowRms = Math.sqrt(e / (2 * len)), lowE = e / (2 * len);
+  // 1.3kHz 위 물방울 결: 초당 700개, 높이는 목표 곡선대로, 휘지 않는 짧은 '톡', 좌우로 흩어짐
+  const HL = new Float32Array(len), HR = new Float32Array(len), lmax = Math.max(...SWIM_T.lvl), sec = len / sr, nev = Math.round(700 * sec);
+  for (let q = 0; q < nev; q++) {
+    const t0 = rnd() * sec, f0 = Math.exp(Math.log(1300) + rnd() * (Math.log(9000) - Math.log(1300))), tau = 0.0005 + rnd() * 0.002;
+    const amp = Math.exp(0.6 * gauss()) * Math.pow(10, (lerpBand(SWIM_T.lvl, Math.log2(f0 * 1.15)) - lmax) / 20) / Math.sqrt(tau / 0.0015), pn = -0.8 + rnd() * 1.6;
+    const n = Math.floor(sr * tau * 6), st = Math.floor(t0 * sr), w = 2 * Math.PI * f0 / sr;
+    for (let i = 0; i < n; i++) { const v = Math.sin(w * (i + 1)) * Math.exp(-i / (sr * tau)) * amp, p = (st + i) % len; HL[p] += v * (1 - pn); HR[p] += v * (1 + pn); }
+  }
+  let he = 0; for (let i = 0; i < len; i++) he += HL[i] * HL[i] + HR[i] * HR[i]; he /= 2 * len;
+  let num = 0, den = 0; for (let j = 0; j < nb; j++) { if (SWIM_T.bf[j] >= 9000) continue; const p = Math.pow(10, SWIM_T.lvl[j] / 10); den += p; if (SWIM_T.bf[j] >= 1300) num += p; }
+  const tgt = num / den, hg = Math.sqrt(tgt / (1 - tgt) * lowE / (he || 1)) * 1.15;
+  for (let i = 0; i < len; i++) { L[i] += HL[i] * hg; R[i] += HR[i] * hg; }
+  // 짧고 가벼운 '꾸륵': 초당 1.5개, 300~700Hz, 4~10ms, 살짝만 위로
+  let rms = 0; for (let i = 0; i < len; i++) rms += L[i] * L[i] + R[i] * R[i]; rms = Math.sqrt(rms / (2 * len));
+  for (let t = rnd() * 0.3; ;) {
+    t += -Math.log(1 - rnd() * 0.999) / 1.5; if (t >= sec) break;
+    const f0 = 300 + rnd() * 400, tau = 0.004 + rnd() * 0.006, n = Math.floor(sr * tau * 6), a = rms * 1.6 * (0.4 + rnd() * 0.8), pn = -0.5 + rnd(), st = Math.floor(t * sr);
+    let ph = 0; for (let i = 0; i < n; i++) { const u = i / sr; ph += 2 * Math.PI * f0 * (1 + 0.3 * u / tau) / sr; const v = Math.sin(ph) * Math.exp(-u / tau) * Math.min(1, u / 0.002) * a, p = (st + i) % len; L[p] += v * (1 - pn); R[p] += v * (1 + pn); }
+  }
+  // 정규화: rms 1 (게임에서 음량으로 맞춤)
+  let fr = 0; for (let i = 0; i < len; i++) fr += L[i] * L[i] + R[i] * R[i]; fr = Math.sqrt(fr / (2 * len));
+  for (let i = 0; i < len; i++) { L[i] /= fr; R[i] /= fr; }
+  return [L, R];
+}
+// 합성(약 1초 계산)은 화면이 멈추지 않게 백그라운드(Web Worker)에서, 안 되면 다음 틈에 본 스레드에서
+const swimSnd = { state: 'idle', src: null, gain: null, target: 0, vol: 0.0056 };   // vol: 루프는 rms 1로 정규화돼 있음 → 미리듣기와 같은 크기
+function swimBuild() {
+  if (swimSnd.state !== 'idle' || !sfxReady()) return;
+  swimSnd.state = 'building';
+  const sr = sfx.ctx.sampleRate;
+  const done = (L, R) => {
+    const b = sfx.ctx.createBuffer(2, L.length, sr); b.copyToChannel(L, 0); b.copyToChannel(R, 1);
+    swimSnd.gain = sfx.ctx.createGain(); swimSnd.gain.gain.value = 0; swimSnd.gain.connect(sfx.master);
+    swimSnd.src = sfx.ctx.createBufferSource(); swimSnd.src.buffer = b; swimSnd.src.loop = true; swimSnd.src.connect(swimSnd.gain); swimSnd.src.start();
+    swimSnd.state = 'ready'; swimSnd.target = -1;
+  };
+  try {
+    const code = 'const SWIM_T = ' + JSON.stringify(SWIM_T) + ';\n' + swimFFT.toString() + '\n' + synthSwimLoop.toString() +
+      '\nonmessage = (e) => { const [L, R] = synthSwimLoop(e.data.sr, e.data.seed); postMessage({ L, R }, [L.buffer, R.buffer]); };';
+    const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' })), w = new Worker(url);
+    w.onmessage = (e) => { done(e.data.L, e.data.R); w.terminate(); URL.revokeObjectURL(url); };
+    w.onerror = () => { w.terminate(); URL.revokeObjectURL(url); setTimeout(() => { const [L, R] = synthSwimLoop(sr, 12345); done(L, R); }, 0); };
+    w.postMessage({ sr, seed: 12345 });
+  } catch (e) { setTimeout(() => { const [L, R] = synthSwimLoop(sr, 12345); done(L, R); }, 0); }
+}
+// 매 프레임: 켜야 하면 0.15초에 걸쳐 커지고, 아니면 0.15초에 걸쳐 사라진다
+function swimSoundUpdate(on) {
+  if (on && swimSnd.state === 'idle') swimBuild();
+  if (swimSnd.state !== 'ready') return;
+  const tgt = on ? swimSnd.vol : 0;
+  if (tgt !== swimSnd.target) { swimSnd.target = tgt; swimSnd.gain.gain.setTargetAtTime(tgt, sfx.ctx.currentTime, 0.05); }
+}
+addEventListener('keydown', () => { if (swimSnd.state === 'idle' && sfx.on) setTimeout(swimBuild, 300); }, { capture: true, once: true });   // 첫 입력 직후 미리 만들어 둠
+
 document.addEventListener('visibilitychange', () => { if (!sfx.ctx) return; if (document.hidden) sfx.ctx.suspend(); else sfx.ctx.resume(); });
 
 // ── 로드맵 9 작업 S: 설정 화면(ESC) — 지도·창·대화가 열려 있으면 ESC는 그것만 닫고, 아무것도 없을 때 설정을 연다(§12-1).
@@ -4000,6 +4107,7 @@ function step(dt) {
   { const sf = Math.floor(player.walkT / 2.4);
     if (sf !== player.stepFrame) { player.stepFrame = sf;
       if (player.moving && player.grounded && !player.swimming && !player.inShallow && !onStructure) { const sfc = surfaceAt(_up); if (sfc === 'grass') sfxStep('step_grass'); else if (sfc === 'sand') sfxStep('step_dirt'); } } }
+  swimSoundUpdate(player.swimming && player.moving && !player.dead);   // 헤엄 물소리: 수영하며 움직일 때만
   // 캐릭터 스프라이트: 진행 방향에 따라 뒤/앞/옆 그림, 걷는 동안 2프레임 교대
   player.mesh.position.copy(player.pos);
   if (player.dead) player.mesh.position.addScaledVector(_up, -0.3);   // 작업 C: 주저앉음(그림 추가 없이 판을 낮춘다)
