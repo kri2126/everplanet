@@ -1522,7 +1522,47 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   })();
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
   const bushes = [[-4.8, 44.2], [2.2, 43.6], [-8.2, 35.2], [4.4, 30.4], [-7.4, 28.6], [10.6, 24.2], [-8.4, 13.0], [2.4, 12.2], [-10.8, 10.9], [6.0, 6.8], [-3.4, -2.2], [3.2, -2.2]];
-  bushes.forEach(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); });
+  const bushSprites = bushes.map(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); return b; });
+  // 로드맵 9 (2026-10-02): 덤불을 그림 판 → 3D 모델(assets/models/bush.glb, 사용자 제작)로 교체. 못 읽으면 그림 판 유지.
+  // 나무처럼 조각을 '줄기(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색) 12포기를 InstancedMesh 2개로 그린다.
+  // 크기: 모델 높이를 재서 1.4(개체마다 0.85~1.15배) — 잎이 옆으로 넓게 퍼져 폭은 약 3. 포기마다 y축 회전을 달리한다.
+  new GLTFLoader().loadAsync(ASSET_DIR + 'models/bush.glb').then((gl) => {
+    const m = gl.scene; m.updateMatrixWorld(true);
+    const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5;
+    m.traverse((o) => { if (!o.isMesh) return;
+      const src = o.material, g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      if (!g.getAttribute('normal')) g.computeVertexNormals();
+      const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = src.color || new THREE.Color(1, 1, 1);
+      for (let j = 0; j < n; j++) { col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      if (src.map) { leafMap = src.map; if (src.alphaTest) leafCut = src.alphaTest; if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); groups.leaf.push(g); }
+      else { g.deleteAttribute('uv'); groups.solid.push(g); }
+    });
+    const bb = new THREE.Box3(), ims = [];
+    for (const key of ['solid', 'leaf']) {
+      const arr = groups[key]; if (!arr.length) continue;
+      const list = arr.every((g) => g.index) ? arr : arr.map((g) => (g.index ? g.toNonIndexed() : g));
+      const geo = mergeGeometries(list, false); if (!geo) continue;
+      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: key === 'leaf' ? leafMap : null, alphaTest: key === 'leaf' ? leafCut : 0, side: THREE.DoubleSide, fog: true });
+      if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+      geo.computeBoundingBox(); bb.union(geo.boundingBox);
+      const im = new THREE.InstancedMesh(geo, mat, bushSprites.length); im.castShadow = true; im.receiveShadow = false; im.frustumCulled = false;
+      ims.push(im); scene.add(im);
+    }
+    if (!ims.length) return;
+    const H = bb.max.y - bb.min.y, _y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), mtx = new THREE.Matrix4(), loc = new THREE.Matrix4();
+    bushSprites.forEach((b, i) => {
+      const k = (1.4 * (0.85 + ((i * 5) % 7) * 0.05)) / H;
+      q.setFromUnitVectors(_y, b.userData.dir).multiply(new THREE.Quaternion().setFromAxisAngle(_y, (i * 2.399) % (Math.PI * 2)));
+      loc.makeScale(k, k, k).setPosition(0, -bb.min.y * k, 0);   // 밑동이 지면에
+      mtx.compose(b.position, q, new THREE.Vector3(1, 1, 1)).multiply(loc);
+      for (const im of ims) im.setMatrixAt(i, mtx);
+      scene.remove(b); const di = decor.indexOf(b); if (di >= 0) decor.splice(di, 1);
+    });
+    for (const im of ims) im.instanceMatrix.needsUpdate = true;
+    if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
+  }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); });
   const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
   flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
     if (c === 'white') forageNodes.push({ mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 }); });   // 흰 꽃은 채집 대상
