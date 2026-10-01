@@ -1776,7 +1776,13 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     for (const im of ims) im.instanceMatrix.needsUpdate = true;
     if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
   }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); }));
-  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
+  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white'],
+    // 2026-10-02 추가 29송이: 빈도를 늘리고 2~4송이씩 붙어 핀 무리(0.6~1.0유닛 간격, 가끔 흰·노랑 섞임) + 홀로 핀 꽃. 길 중심 2.2유닛·물·비탈·나무·소품은 피함
+    [4.53, 44.55, 'yellow'], [4.65, 44.28, 'yellow'], [4.83, 44.66, 'yellow'], [1.78, 16.08, 'yellow'], [0.18, 34, 'yellow'], [0.29, 34.26, 'yellow'], [0.42, 33.79, 'yellow'], [0.36, 33.41, 'yellow'],
+    [-5.26, 10.22, 'yellow'], [5.26, 2.43, 'yellow'], [5.48, 2.13, 'white'], [5.43, 1.83, 'white'], [6.41, 38.55, 'yellow'], [6.5, 38.86, 'white'], [-7.19, 7.63, 'white'], [-6.99, 7.44, 'white'],
+    [-7.13, 7.95, 'white'], [-3.93, 33.79, 'white'], [-3.62, 33.77, 'white'], [5.16, 34.23, 'yellow'], [5.21, 33.8, 'yellow'], [4.99, 33.96, 'white'], [4.67, 34.16, 'yellow'], [12.35, -4.95, 'yellow'],
+    [6.02, -7.78, 'yellow'], [6.12, -8.09, 'yellow'], [6.19, -8.36, 'yellow'], [-9.87, 39.43, 'white'], [-10.28, 39.42, 'white'],
+  ];
   const flowerNodes = flowers.map(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
     const node = { mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 };
     if (c === 'white') forageNodes.push(node);   // 흰 꽃은 채집 대상
@@ -1888,7 +1894,9 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     }).catch((e) => { if (DEBUG) console.warn('reed GLB 로드 실패 — 그림 판 유지', e); }));
   }
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
-  const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
+  const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8],
+    // 2026-10-02 추가 16개: 빈도를 늘리고 가끔은 2~3개가 맞닿은 무리로(세 번째 값 = 크기 배율, 곁돌은 0.6~0.85배). 길 중심 2.8유닛·물·비탈·나무·소품은 피함
+    [-6.28, 7.83], [2.75, 29.24], [2.45, 28.61, 0.73], [-11.27, -7.89], [-11.02, -7.29, 0.66], [-11.83, -8.28, 0.69], [2.11, 35.93], [4.1, -3.62], [4.29, -4.27, 0.7], [12.15, -8.2], [12.42, -8.7, 0.64], [-3.03, 39.64], [12.64, 28.8], [12.93, 28.32, 0.82], [-0.38, 3.39], [6.89, 14.27]];
   const stoneSprites = [];
   stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); addClimb(st.userData.dir, 0.5, 0.7); st.userData.climb = climbProps[climbProps.length - 1]; stoneSprites.push(st); });
   // 로드맵 9 (2026-10-02): 돌을 그림 판 → 3D 모델(assets/models/rocks/rock_<모양 1~8>_<이끼 cap·clover·dots·rim·streak>.glb, 사용자 제작 40종)로.
@@ -1902,7 +1910,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const loader = new GLTFLoader(), _y = new THREE.Vector3(0, 1, 0);
     stoneSprites.forEach((st, i) => {
-      const name = pool[i % pool.length], width = 1.5 + 0.6 * rnd(), spin = rnd() * Math.PI * 2;
+      const name = pool[i % pool.length], width = (1.5 + 0.6 * rnd()) * (stones[i][2] || 1), spin = rnd() * Math.PI * 2;   // 무리의 곁돌은 작게(stones[i][2])
       trackLoad(loader.loadAsync(ASSET_DIR + 'models/rocks/' + name + '.glb').then((gl) => {
         const m = gl.scene; m.updateMatrixWorld(true); const geos = [];
         m.traverse((o) => { if (!o.isMesh) return;
