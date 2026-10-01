@@ -1402,6 +1402,7 @@ function tryJump() {
 }
 function respawn() {
   const d = player.safe;
+  player.swimming = false; player.mesh.material.clippingPlanes = [];   // 물속에서 불려도 캐릭터가 잘린 채로 남지 않게
   player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
   player.fwd.copy(player.safeFwd); tangentize(player.fwd, d); tangentize(cam.fwd, d);
   camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
@@ -3847,9 +3848,11 @@ function step(dt) {
     player.z = wl - 0.35; player.vz = 0; player.grounded = false; player.jumps = 2;   // 머리만 수면 위 — 점프 불가(jumps 소진 처리)
     player.pos.copy(_up).multiplyScalar(R + player.z);
     swimClipPlane.setFromNormalAndCoplanarPoint(_up, _up.clone().multiplyScalar(R + wl + 0.12));   // 캐릭터 판을 수면에서 자른다(머리만 보이게)
-    if (player.swimT > 8) { respawn(); player.swimming = false; }   // 나갈 곳 없는 물(절벽 아래 웅덩이 등) — 마지막 물가로
+    // (2026-10-01 버그 수정) 예전엔 8초 넘게 헤엄치면 "나갈 곳 없는 물"로 보고 마지막 물가로 순간이동시켰다. 수위를 올려 호수가
+    // 넓어진 뒤로는 그냥 헤엄만 쳐도 8초가 넘어 갑자기 순간이동됐고, 그 순간 아래 줄의 자르기 평면 해제가 건너뛰어져 캐릭터가
+    // 땅속에 묻힌 것처럼(이름표만 보임) 보였다. 헤엄칠 땐 땅에 붙어 있지 않아 어떤 물가로든 올라올 수 있으므로 시간 제한은 없앴다.
   } else {
-    if (wasSwimming) player.mesh.material.clippingPlanes = [];
+    if (player.mesh.material.clippingPlanes && player.mesh.material.clippingPlanes.length) player.mesh.material.clippingPlanes = [];   // 물 밖이면 언제나 자르기 해제(순간이동·부활 뒤에도)
     if (player.grounded && th > wl + 0.3) {
       // 안전 지점은 0.8초마다 갱신 — 절벽 끝이 아니라 그 조금 전 자리로 돌아오게
       player.safeT += dt;
