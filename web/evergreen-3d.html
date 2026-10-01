@@ -4504,8 +4504,12 @@ function step(dt) {
   _right.crossVectors(cam.fwd, _up).normalize();
   // (2026-10-01) 점프해도 시점은 그대로 — 카메라는 캐릭터의 "발 디딘 높이"(camZ)를 따라간다. 공중에선 뛰기 전 높이를 지키다가
   // 그보다 낮게 떨어질 때만 따라 내려가고, 더 높은 곳에 올라서면 부드럽게 따라 올라간다
-  { const target = (player.grounded || player.swimming || player.dead) ? player.z : Math.min(camZ, player.z);
-    camZ = target < camZ ? target : camZ + (target - camZ) * (1 - Math.pow(0.002, dt)); }
+  // (2026-10-02 멀미 수정) 물가 비탈에서 물로 내려갈 때 시점이 너무 아래로 갔다가 다시 올라왔다 — 헤엄치기 직전의 얕은 물 바닥(수면 아래 1.2까지)을
+  // 걸어 내려가면 캐릭터가 수면보다 1m 넘게 잠겼다가, 깊은 물에 들어서며 수영 높이(수면 −0.35)로 떠오르는데 카메라가 그걸 그대로 따라갔다.
+  // 이제 물속에선 카메라가 수영 높이 아래로 내려가지 않아 "내려간 만큼"만 움직이고, 내려갈 때도 바로 붙지 않고 부드럽게 따라간다(올라갈 때도 조금 더 천천히).
+  { let target = (player.grounded || player.swimming || player.dead) ? player.z : Math.min(camZ, player.z);
+    const wlCam = waterAt(_up); if (player.z < wlCam) target = Math.max(target, wlCam - 0.35);
+    camZ += (target - camZ) * (1 - Math.pow(target < camZ ? 0.004 : 0.01, dt)); }
   _camBase.copy(_up).multiplyScalar(R + camZ);
   _camPos.copy(_camBase).addScaledVector(_up, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
   // 카메라가 지면 아래로 들어가지 않게 (작업 B에서 지형 충돌로 확장)
@@ -5173,6 +5177,7 @@ if (DEBUG) {
       return { lon, lat, z: player.z };
     },
     press(k, on) { const c = settings.binds[k] ? settings.binds[k][0] : codeFromKey(k); on ? keys.add(c) : keys.delete(c); },   // 작업 S2: 동작 id('moveUp') 또는 옛 글자('w')
+    camZ() { return camZ; },
     get settings() { return settings; }, setQualityMode, qualityMode() { return qualityMode; }, audio, bgm, toggleMute, sfxPreview, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
