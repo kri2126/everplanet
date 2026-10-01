@@ -3794,9 +3794,11 @@ function step(dt) {
     const maxT = TURN * dt;
     d = Math.max(-maxT, Math.min(maxT, d));
     rotateAround(player.fwd, _up, -d);
-    const speed = WALK * (player.inShallow || player.swimming ? 0.55 : 1);
+    const WATER_SPEED = 0.85;   // 물속(얕은 물·수영) 이동 = 땅의 85% — 15%만 느리게(2026-10-01 요청, 예전 0.55)
+    const inWater = player.inShallow || player.swimming;
+    const speed = WALK * (inWater ? WATER_SPEED : 1);
     tryMove(_dir, speed * dt);
-    player.walkT += dt * (player.inShallow || player.swimming ? 6 : 9);
+    player.walkT += dt * 9 * (inWater ? WATER_SPEED : 1);   // 걷는 그림도 같은 비율로(예전 물속 6)
   }
 
   // 수직: 중력 / 착지 / 내리막 붙기
