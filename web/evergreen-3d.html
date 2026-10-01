@@ -3082,10 +3082,11 @@ bgmBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
 bgmBtn.addEventListener('click', (e) => { e.stopPropagation(); if (!bgm.started && bgm.on) { bgmPlay(); bgmUpdateBtn(); return; } toggleBgm(); });
 bgmUpdateBtn();
 
-// ── 효과음(SFX) — 파일 없이 Web Audio로 합성. 첫 효과음 때 AudioContext를 만들고 변형 6개를 미리 구워 둔다. ?nosfx 로 끔.
-// 풀 밟는 발소리 합성 — 게임(evergreen-3d.html)과 미리듣기 WAV가 같은 코드를 쓴다
+// ── 효과음(SFX) — web/sound/manifest.json 의 소리 파일을 읽어 쓴다. 파일이 없거나 못 읽으면 같은 소리를 코드로 합성해 대신 쓴다.
+// 첫 효과음 때 AudioContext를 만든다(자동재생 규칙). ?nosfx 로 끔.
+// 아래 합성기는 web/sound/grass/step_grass_01~16.wav 를 만든 것과 같은 코드다(web/sound/README.md).
 function sfxRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function sfxBiquad(type, f, q, sr) {   // RBJ 쿡북 2차 필터
+function sfxBiquad(type, f, q, sr) {
   const w = 2 * Math.PI * f / sr, c = Math.cos(w), s = Math.sin(w), al = s / (2 * q);
   let b0, b1, b2, a0 = 1 + al, a1 = -2 * c, a2 = 1 - al;
   if (type === 'bp') { b0 = al; b1 = 0; b2 = -al; }
@@ -3094,56 +3095,98 @@ function sfxBiquad(type, f, q, sr) {   // RBJ 쿡북 2차 필터
   let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
   return (x) => { const y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; };
 }
-function synthGrassStep(seed, sr) {
-  const r = sfxRng(seed), n = Math.floor(sr * 0.3), out = new Float32Array(n);
-  // ① 부드러운 스침: 중역 노이즈, 천천히 차오르고 천천히 사라지는 두 덩이(뒤꿈치→발끝)
-  const bp = sfxBiquad('bp', 1000 + r() * 500, 0.55, sr), hp = sfxBiquad('hp', 250, 0.7, sr), bpLo = sfxBiquad('bp', 500 + r() * 200, 0.8, sr);
-  const t2 = 0.045 + r() * 0.03, a2 = 0.55 + r() * 0.25, tau = 0.055 + r() * 0.025;
+// P.center: 소리 중심(Hz), P.lp: 윗선(Hz)
+function synthGrassStep(seed, sr, P) {
+  const r = sfxRng(seed), n = Math.floor(sr * 0.22), out = new Float32Array(n);
+  const fc = P.center * (0.8 + r() * 0.45);                       // 걸음마다 음 높이가 다르게
+  const bp = sfxBiquad('bp', fc, 0.5 + r() * 0.3, sr), hp = sfxBiquad('hp', 700, 0.7, sr);
+  const bp2 = sfxBiquad('bp', fc * (1.5 + r() * 0.5), 0.9, sr);   // 위쪽 결 한 겹
+  const mix2 = 0.2 + r() * 0.45;
+  // 덩이 수·간격·길이도 걸음마다 다르게: 1~3덩이(스윽 / 스-윽 / 스스윽)
+  const lumps = [], k = r() < 0.25 ? 1 : r() < 0.7 ? 2 : 3;
+  let t0 = 0;
+  for (let j = 0; j < k; j++) { lumps.push({ t: t0, a: j === 0 ? 1 : 0.35 + r() * 0.5, at: 0.012 + r() * 0.015, tau: 0.025 + r() * 0.03 }); t0 += 0.025 + r() * 0.04; }
   for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    let e = Math.sin(Math.min(1, t / 0.022) * Math.PI / 2) * Math.exp(-t / tau);
-    if (t > t2) e += a2 * Math.sin(Math.min(1, (t - t2) / 0.025) * Math.PI / 2) * Math.exp(-(t - t2) / (tau * 1.4));
-    const w = r() * 2 - 1; out[i] = (hp(bp(w)) * 1.2 + bpLo(w) * 0.8) * e;
+    const t = i / sr; let e = 0;
+    for (const L of lumps) if (t > L.t) { const u = t - L.t; e += L.a * Math.sin(Math.min(1, u / L.at) * Math.PI / 2) * Math.exp(-u / L.tau); }
+    // 잔결: 엔벨로프에 아주 약한 흔들림(풀잎이 하나하나 스치는 느낌)
+    e *= 0.85 + 0.15 * Math.sin(2 * Math.PI * (40 + fc / 100) * t + seed);
+    const w = r() * 2 - 1;
+    out[i] = (hp(bp(w)) + bp2(w) * mix2) * e;
   }
-  // ② 여린 풀잎 스치는 잔 소리: 아주 작고 드문 알갱이(꺾이는 소리는 뺐다)
-  const grains = 5 + Math.floor(r() * 5);
+  const grains = 3 + Math.floor(r() * 6);                           // 여린 잎 스침 알갱이(작게)
   for (let g = 0; g < grains; g++) {
-    const st = Math.floor(sr * Math.pow(r(), 1.6) * 0.13), len = Math.floor(sr * (0.004 + r() * 0.006)), amp = 0.015 + r() * 0.035;
-    const gh = sfxBiquad('bp', 1800 + r() * 1200, 1.0, sr);
+    const st = Math.floor(sr * r() * 0.12), len = Math.floor(sr * (0.003 + r() * 0.005)), amp = 0.02 + r() * 0.04;
+    const gh = sfxBiquad('bp', P.center * (1.4 + r() * 1.2), 1.0, sr);
     for (let i = 0; i < len && st + i < n; i++) out[st + i] += gh(r() * 2 - 1) * amp * Math.sin(Math.PI * i / len);
   }
-  // ③ 흙 위 아주 약한 쿵: 저음 사인
-  const f0 = 85 + r() * 25;
-  for (let i = 0; i < n; i++) { const t = i / sr; out[i] += Math.sin(2 * Math.PI * f0 * t) * Math.exp(-t / 0.025) * Math.min(1, t / 0.006) * 0.08; }
-  // 전체를 부드럽게: 저역통과 두 번(약 3.2kHz) — 바스락보다 '스윽'
-  const lp1 = sfxBiquad('lp', 3200, 0.7, sr), lp2 = sfxBiquad('lp', 4200, 0.7, sr);
+  const lp1 = sfxBiquad('lp', P.lp, 0.7, sr), lp2 = sfxBiquad('lp', P.lp * 1.3, 0.7, sr);
   for (let i = 0; i < n; i++) out[i] = lp2(lp1(out[i]));
-  // 정리: 끝 페이드, 피크 0.9
   let pk = 0; for (let i = 0; i < n; i++) { if (i > n - sr * 0.03) out[i] *= (n - i) / (sr * 0.03); pk = Math.max(pk, Math.abs(out[i])); }
   for (let i = 0; i < n; i++) out[i] *= 0.9 / pk;
   return out;
 }
-const sfx = { ctx: null, master: null, grass: null, last: -1, vol: 0.12, on: !QP.has('nosfx') };
+const SFX_DEF = {   // manifest.json이 없을 때 기본값 — 파일 쪽 값과 같다
+  step_grass: { volume: 0.075, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'grass/step_grass_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { center: 4200, lp: 8500 } },
+};
+const sfx = { ctx: null, master: null, on: !QP.has('nosfx'), def: SFX_DEF, bufs: {}, recent: {}, count: {}, gap: {}, loading: false };
 function sfxReady() {
   if (!sfx.on) return false;
   if (!sfx.ctx) {
     try { sfx.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { sfx.on = false; return false; }
-    sfx.master = sfx.ctx.createGain(); sfx.master.gain.value = sfx.vol; sfx.master.connect(sfx.ctx.destination);
-    const sr = sfx.ctx.sampleRate;
-    sfx.grass = [1, 2, 3, 4, 5, 6].map((k) => { const d = synthGrassStep(k * 7919, sr), b = sfx.ctx.createBuffer(1, d.length, sr); b.copyToChannel(d, 0); return b; });
+    sfx.master = sfx.ctx.createGain(); sfx.master.gain.value = 1; sfx.master.connect(sfx.ctx.destination);
+    sfxLoad();
   }
   if (sfx.ctx.state === 'suspended') sfx.ctx.resume();
   return sfx.ctx.state !== 'closed';
 }
-// 풀 밟는 소리 1회 — 직전과 다른 변형을 고르고, 피치 ±8%·음량 80~100%로 흔들어 반복감을 줄인다
-function sfxGrassStep() {
-  if (!sfxReady()) return;
-  let k = Math.floor(Math.random() * 6); if (k === sfx.last) k = (k + 1 + Math.floor(Math.random() * 5)) % 6; sfx.last = k;
-  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain();
-  src.buffer = sfx.grass[k]; src.playbackRate.value = 0.92 + Math.random() * 0.16; g.gain.value = 0.8 + Math.random() * 0.2;
-  src.connect(g); g.connect(sfx.master); src.start();
+function sfxSynthPool(name) {   // 파일을 아직 못 읽었을 때 쓸 합성 소리
+  const d = sfx.def[name], sr = sfx.ctx.sampleRate;
+  return d.files.map((_, i) => { const a = synthGrassStep((i + 1) * 104729, sr, d.synth), b = sfx.ctx.createBuffer(1, a.length, sr); b.copyToChannel(a, 0); return b; });
 }
-addEventListener('keydown', () => { if (sfx.ctx && sfx.ctx.state === 'suspended') sfx.ctx.resume(); }, true);
+async function sfxLoad() {
+  if (sfx.loading) return; sfx.loading = true;
+  for (const name in sfx.def) sfx.bufs[name] = sfxSynthPool(name);
+  try {
+    const m = await fetch('sound/manifest.json', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw 0; return r.json(); });
+    for (const name in m.sounds || {}) {
+      const d = Object.assign({}, sfx.def[name] || {}, m.sounds[name]); sfx.def[name] = d;
+      const got = await Promise.all(d.files.map((f) => fetch('sound/' + f + '?v=' + (m.version || 1)).then((r) => r.ok ? r.arrayBuffer() : null).then((ab) => ab && sfx.ctx.decodeAudioData(ab)).catch(() => null)));
+      const ok = got.filter(Boolean);
+      if (ok.length) sfx.bufs[name] = ok;   // 하나라도 읽히면 파일 소리로
+    }
+  } catch (e) { /* manifest가 없으면 합성 소리 그대로 */ }
+}
+// 걸음 하나 — every 걸음마다 한 번, 그중 skip 비율은 건너뛰고, maxGap 걸음 넘게 조용하면 한 번은 낸다(간헐적으로).
+// 최근 4개와 다른 소리 · 피치 ±10% · 음량 60~100% · 0~20ms 늦게 시작 → 반복감을 줄인다
+function sfxStep(name) {
+  if (!sfxReady()) return;
+  const d = sfx.def[name], pool = sfx.bufs[name]; if (!d || !pool || !pool.length) return;
+  const c = sfx.count[name] = (sfx.count[name] || 0) + 1;
+  let on = c % d.every === 0 && Math.random() > d.skip;
+  if ((sfx.gap[name] || 0) >= d.maxGap) on = true;
+  if (!on) { sfx.gap[name] = (sfx.gap[name] || 0) + 1; return; }
+  sfx.gap[name] = 0;
+  const rec = sfx.recent[name] = sfx.recent[name] || [];
+  let k, tries = 0; do { k = Math.floor(Math.random() * pool.length); } while (rec.includes(k) && ++tries < 20);
+  rec.push(k); if (rec.length > Math.min(4, pool.length - 1)) rec.shift();
+  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain();
+  src.buffer = pool[k]; src.playbackRate.value = 0.9 + Math.random() * 0.2; g.gain.value = d.volume * (0.6 + Math.random() * 0.4);
+  src.connect(g); g.connect(sfx.master); src.start(sfx.ctx.currentTime + Math.random() * 0.02);
+}
+// 발밑 바닥 재질 — 지형 칠하기(paintTerrain)와 같은 규칙: 물가 바닥 · 모래길 · 돌계단 · 가파른 바위가 아니면 풀(tile_grass)
+const _sfA = new THREE.Vector3(), _sfB = new THREE.Vector3(), _sfC = new THREE.Vector3();
+function surfaceAt(d) {
+  const h = terrainH(d);
+  if (h < waterAt(d) + 0.3) return 'water';
+  if (pathMask(d) > 0.5) return 'sand';
+  if (T.stairs.dist(d, _o) < 1.0 && _o.inside) return 'stone';
+  _sfA.set(0, 0, 1); if (Math.abs(d.z) > 0.9) _sfA.set(1, 0, 0);
+  _sfA.cross(d).normalize(); _sfB.crossVectors(d, _sfA);
+  const e = 0.003, gx = terrainH(_sfC.copy(d).addScaledVector(_sfA, e).normalize()) - h, gy = terrainH(_sfC.copy(d).addScaledVector(_sfB, e).normalize()) - h;
+  if (Math.hypot(gx, gy) / (R * e) > 0.48) return 'rock';   // 칠하기의 slope 0.10(≈26°)
+  return 'grass';
+}
 document.addEventListener('visibilitychange', () => { if (!sfx.ctx) return; if (document.hidden) sfx.ctx.suspend(); else sfx.ctx.resume(); });
 
 addEventListener('keydown', (e) => {
@@ -3285,9 +3328,9 @@ function step(dt) {
     }
   }
 
-  // 효과음: 걷기 그림 프레임이 바뀔 때마다 한 걸음 — 땅 위에서만(구조물·얕은 물·수영·공중은 제외, 그 소리는 따로 만든다)
+  // 효과음: 걷기 그림 프레임이 바뀔 때마다 한 걸음 — 발밑이 풀일 때만(구조물·물·수영·공중 제외). 다른 바닥 소리는 따로 만든다
   { const sf = Math.floor(player.walkT / 2.4);
-    if (sf !== player.stepFrame) { player.stepFrame = sf; if (player.moving && player.grounded && !player.swimming && !player.inShallow && !onStructure) sfxGrassStep(); } }
+    if (sf !== player.stepFrame) { player.stepFrame = sf; if (player.moving && player.grounded && !player.swimming && !player.inShallow && !onStructure && surfaceAt(_up) === 'grass') sfxStep('step_grass'); } }
   // 캐릭터 스프라이트: 진행 방향에 따라 뒤/앞/옆 그림, 걷는 동안 2프레임 교대
   player.mesh.position.copy(player.pos);
   if (player.dead) player.mesh.position.addScaledVector(_up, -0.3);   // 작업 C: 주저앉음(그림 추가 없이 판을 낮춘다)
