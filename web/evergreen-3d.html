@@ -768,7 +768,7 @@ function bearingFrom(center, p) {
 }
 
 // 로드맵 8: 원작 지역 지도(§1-2 좌표표) 기준. 추기 #3: 진행은 남→북 — 남쪽 착륙 들판(데크) → 별 크레이터 → 샘물 비탈 → 호수 띠(다리) → 야영지(0) → 돌계단(올라감) → 북쪽 관측소 초원(MEADOW_H, 별 받침대) → 북동 출구.
-const LAND_HILL = 0.9;                 // 2026-10-02: 착륙 언덕 높이(남쪽 들판 1.2 위로) — 1.8은 너무 높다는 지적으로 들판의 완만한 언덕(굴곡 최대 0.95) 정도로
+const LAND_HILL = 1.8;                 // 2026-10-02: 착륙 언덕 높이(남쪽 들판 1.2 위로)
 const MEADOW_H = 1.76;                 // 관측소 초원 높이 — 돌계단 4단 × 0.44 (STEP_UP 0.45 이내)
 const LAKE = { lon0: -13.2, lon1: 7.4, lat0: 17.1, lat1: 28.1 };   // 호수 띠(°)
 const T = {
@@ -904,7 +904,7 @@ function terrainH(p) {
   h += 1.2 * ss(17, 9, lat) * play;
 
   // 착륙 언덕(2026-10-02): 착륙 데크는 다른 곳보다 높은 언덕 위 — 꼭대기(데크·경사로·비행정 자리, 세계 4.8° 안)는 평평하고
-  // 8.6°까지 완만하게(기울기 약 0.15) 내려온다. 높이 0.9(처음 1.8에서 낮춤). 데크 윗면(DECK_TOP)은 언덕 꼭대기 + 1.2.
+  // 8.6°까지 완만하게(기울기 약 0.3) 내려온다. 높이 1.8. 데크 윗면(DECK_TOP)은 언덕 꼭대기 + 1.2.
   h += LAND_HILL * ss(8.6, 4.8, angDeg(p, T.deck)) * play;
 
   // 관측소 초원(북쪽 높은 지대): 원반 3개의 합. 가장자리는 가파른 절벽(0.12°)이었으나 2026-10-02 "일반 경사면은 완만하게" 지적으로
@@ -1627,6 +1627,100 @@ const player = {
 };
 scene.add(player.mesh);
 charTex.offset.set(0, 0);
+
+// 로드맵 9 (2026-10-02): 주인공을 그림 판 → 3D 모델(assets/models/hero/*.glb, 사용자 제작)로 교체.
+// 기본 몸 + 장비 4종(튜닉·반바지·샌들·나무칼)은 관절 이름이 같은 GLB라, 장비 조각을 기본 몸의 같은 이름 관절에 옮겨 붙여 한 몸으로 만들고
+// 클립도 이름별로 트랙을 합쳐(몸·표정 + 칼 잔상) 믹서 하나로 재생한다. 위치·충돌·이름표·물속 자르기는 그림 판(player.mesh)이 계속 맡고,
+// 모델은 매 프레임 그 자리를 따라간다(그림 판은 재질만 숨김). 못 읽으면 그림 판 유지.
+// 모션: 대기·달리기·점프(공중 자세 붙잡기)·내려베기/옆베기 번갈아·회전베기·피격·사망·채집(시작→반복→끝)·응급 처치(만세)
+const HERO_H = 1.7;   // 그림 판과 같은 키
+const hero = { model: null, mixer: null, acts: {}, cur: null, lock: null, airborne: false, atkFlip: false, gatherOn: false, clipMats: [] };
+trackLoad((async () => {
+  const loader = new GLTFLoader(), names = ['hero_base', 'gear_top_tunic', 'gear_bottom_shorts', 'gear_shoes_sandals', 'gear_weapon_woodsword'];
+  let gls; try { gls = await Promise.all(names.map((n) => loader.loadAsync(ASSET_DIR + 'models/hero/' + n + '.glb'))); }
+  catch (e) { if (DEBUG) console.warn('hero GLB 로드 실패 — 그림 판 유지', e); return; }
+  const base = gls[0].scene;
+  for (const gl of gls.slice(1)) {   // 장비 조각을 기본 몸의 같은 관절로
+    const moves = []; gl.scene.traverse((o) => { if (o.isMesh && o.parent && o.parent.name.startsWith('j_')) moves.push(o); });
+    for (const o of moves) { const j = base.getObjectByName(o.parent.name); if (j) j.add(o); }
+  }
+  const clips = gls[0].animations.map((c) => {   // 이름이 같은 클립끼리 트랙 합치기
+    const tr = new Map(); for (const gl of gls) { const cc = gl.animations.find((a) => a.name === c.name); if (cc) for (const t of cc.tracks) if (!tr.has(t.name)) tr.set(t.name, t); }
+    let tracks = [...tr.values()];
+    if (c.name === 'jump') tracks = tracks.filter((t) => t.name !== 'j_root.position');   // 높이는 실제 점프가 맡음
+    return new THREE.AnimationClip(c.name, c.duration, tracks);
+  });
+  base.traverse((o) => { if (!o.isMesh) return;
+    const src = o.material;
+    const mat = src.isMeshBasicMaterial ? src : new THREE.MeshLambertMaterial({ color: src.color, map: src.map || null, transparent: src.transparent, opacity: src.opacity, depthWrite: src.depthWrite, side: src.side, fog: true });
+    if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+    o.material = mat; hero.clipMats.push(mat);
+    const fx = o.name.startsWith('fx_');
+    o.castShadow = !fx && !src.isMeshBasicMaterial; o.receiveShadow = false; o.frustumCulled = false;   // 관절로 움직여 경계 상자가 안 맞음
+  });
+  base.updateMatrixWorld(true);
+  const bb = new THREE.Box3(); base.traverse((o) => { if (o.isMesh && !o.name.startsWith('fx_') && o.visible) { o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+  const k = HERO_H / (bb.max.y - bb.min.y);
+  base.scale.setScalar(k);
+  const g = new THREE.Group(); g.add(base); scene.add(g);
+  hero.model = g; hero.mixer = new THREE.AnimationMixer(base);
+  for (const c of clips) hero.acts[c.name] = hero.mixer.clipAction(c);
+  for (const n of ['jump', 'attack', 'attack2', 'skill_spin', 'hit', 'death', 'gather_start', 'gather_end', 'victory']) { const a = hero.acts[n]; if (a) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } }
+  hero.mixer.addEventListener('finished', (e) => {
+    const n = e.action.getClip().name;
+    if (n === 'gather_start') { heroPlay('gather_loop', 0.12); return; }
+    if (hero.lock === n) hero.lock = null;   // 한 번짜리가 끝나면 이동·대기로 돌아감(아래 heroUpdate가 고름)
+  });
+  heroPlay('idle', 0);
+  player.mesh.material.visible = false; player.mesh.castShadow = false;
+  if (DEBUG) console.log('hero GLB 적용, 클립', clips.map((c) => c.name).join(','));
+})());
+function heroPlay(name, fade = 0.15, speed = 1, from = 0) {
+  const a = hero.acts[name]; if (!a) return;
+  a.timeScale = speed;
+  if (hero.cur === a && a.isRunning() && !from) return;
+  a.reset(); a.paused = false; if (from) a.time = from * a.getClip().duration; a.play();
+  if (hero.cur && hero.cur !== a && fade > 0) hero.cur.crossFadeTo(a, fade, false);
+  else if (hero.cur && hero.cur !== a) hero.cur.stop();
+  hero.cur = a;
+}
+// 한 번짜리 동작(공격·스킬·피격 등): 끝날 때까지 이동 모션이 덮지 않는다
+function heroOnce(name, speed = 1, fade = 0.08) { if (!hero.model || player.dead) return; hero.lock = name; heroPlay(name, fade, speed); }
+function heroAttack() { hero.atkFlip = !hero.atkFlip; heroOnce(hero.atkFlip ? 'attack' : 'attack2', 1.6); }
+function heroUpdate(dt) {
+  if (!hero.model) return;
+  const m = hero.model;
+  m.visible = player.mesh.visible;
+  m.position.copy(player.pos);
+  // 모델 앞(+Z) = 진행 방향, 위 = 행성 바깥
+  _hx.crossVectors(_up, player.fwd).normalize(); _hz.crossVectors(_hx, _up).normalize();
+  m.quaternion.setFromRotationMatrix(_hm.makeBasis(_hx, _up, _hz));
+  // 물속 자르기: 그림 판과 같은 평면을 모델 재질에도
+  const cp = player.mesh.material.clippingPlanes || [];
+  if (hero.clipN !== cp.length) { hero.clipN = cp.length; for (const mat of hero.clipMats) { mat.clippingPlanes = cp.length ? cp : null; mat.needsUpdate = true; } }
+  // 상태 → 모션
+  const air = !player.grounded && !player.swimming;
+  if (player.dead) { if (hero.cur !== hero.acts.death) { hero.lock = 'death'; heroPlay('death', 0.1); } }
+  else {
+    if (hero.lock === 'death') hero.lock = null;   // 부활
+    const foraging = forageActiveIdx != null && forageProgress > 0;
+    if (foraging && !hero.gatherOn) { hero.gatherOn = true; hero.lock = null; heroPlay('gather_start', 0.12); }
+    else if (!foraging && hero.gatherOn) { hero.gatherOn = false; if (hero.cur === hero.acts.gather_start || hero.cur === hero.acts.gather_loop) { if (hero.harvested && !player.moving) { hero.lock = 'gather_end'; heroPlay('gather_end', 0.12); } else heroPlay(player.moving ? 'run' : 'idle', 0.2); } }
+    hero.harvested = false;
+    if (air && hero.lock === 'jump') hero.lock = null;   // 착지 마무리 중 다시 뜨면 공중 자세로
+    if (!hero.lock && !hero.gatherOn) {
+      if (air) {
+        if (!hero.airborne || hero.cur !== hero.acts.jump) heroPlay('jump', 0.06, 1.6, 0.28);   // 공중: 팔 올린 자세부터
+        const ja = hero.acts.jump; if (ja && hero.cur === ja && ja.time >= ja.getClip().duration * 0.6) ja.paused = true;   // 떨어지는 동안 붙잡기
+      } else if (hero.airborne && hero.cur === hero.acts.jump) { const ja = hero.acts.jump; ja.paused = false; ja.time = Math.max(ja.time, ja.getClip().duration * 0.8); hero.lock = 'jump'; }   // 착지: 찌그러지며 마무리
+      else if (player.moving) heroPlay('run', 0.15, player.swimming || player.inShallow ? 0.8 : 1.1);
+      else heroPlay('idle', 0.25);
+    }
+  }
+  hero.airborne = air;
+  hero.mixer.update(dt);
+}
+const _hx = new THREE.Vector3(), _hz = new THREE.Vector3(), _hm = new THREE.Matrix4();
 
 // 이동 시도: 목적지의 걷기 높이가 STEP_UP보다 높으면 벽. 막히면 앞/옆 성분으로 나눠 미끄러진다.
 const _np = new THREE.Vector3(), _nd = new THREE.Vector3(), _try = new THREE.Vector3();
@@ -3023,9 +3117,10 @@ function castSkillById(id) {
   if (id === 'heal') {
     const amt = sk.heal[lv - 1]; player.hp = Math.min(player.maxHp, player.hp + amt); updateHUD();
     const el = makeLabel('dmg heal', '+' + amt); dmgPops.push({ el, pos: player.mesh.position.clone(), dir: _up.clone(), t: 0 });
-    log('응급 처치로 HP를 회복했다.', 'sys'); return;
+    heroOnce('victory', 1.4); log('응급 처치로 HP를 회복했다.', 'sys'); return;
   }
   const dmg = sk.dmg[lv - 1], radius = id === 'stomp' ? 1.8 : 1.5;
+  if (id === 'spin') heroOnce('skill_spin', 1.3); else heroOnce('attack', 2.0);   // 3D 주인공: 회전 베기 / 내려찍기는 내려베기를 빠르게
   puff();
   for (const s of allMonsters()) { if (!s.alive) continue; if (angDeg(s.dir, _up) * DEG * R <= radius) dealDamage(s, dmg, 'skill'); }
   log(id === 'stomp' ? '내려찍기로 착지 지점을 강타했다.' : '회전 베기를 휘둘렀다.', 'sys');
@@ -3321,7 +3416,7 @@ function dealDamage(s, dmg, kind = 'basic') {
 }
 function attack() {
   if (attackT > 0 || dialog.open || cut.on || player.dead) return;
-  attackT = 0.38; slashT = 0.16;
+  attackT = 0.38; slashT = 0.16; heroAttack();
   const aim = (player.target && player.target.alive && angDeg(player.target.dir, _up) * DEG * R < 6) ? player.target : nearestMonster(6);
   if (aim) { _sd.copy(aim.dir).sub(_up); tangentize(_sd, _up); if (_sd.lengthSq() > 1e-8) { _sd.normalize(); player.fwd.copy(_sd); } }
   slash.visible = true; slash.position.copy(player.pos).addScaledVector(player.fwd, 0.9).addScaledVector(_up, 0.2); orientBillboard(slash, _up); slash.userData.dir = _up.clone();
@@ -3452,7 +3547,7 @@ function updateForage(dt) {
 function harvestForage(idx) {
   const n = forageNodes[idx]; if (!n.avail) return;
   n.avail = false; n.mesh.visible = false; n.cd = 120;
-  player.inv.forage = (player.inv.forage || 0) + 1; stats.forageCount++;
+  player.inv.forage = (player.inv.forage || 0) + 1; stats.forageCount++; hero.harvested = true;   // 3D 주인공: 다 캐면 들어 올려 보고 일어남
   updateInvUI();
   log((n.kind === 'mush' ? '버섯을' : '흰 꽃을') + ' 채집했다.', 'sys');
 }
@@ -3815,6 +3910,7 @@ function updateHUD() { hpNumEl.textContent = Math.round(player.hp); mpNumEl.text
 function hitPlayer(dmg, fromDir) {
   if (player.dead || portalTransit.on) return;   // 작업 G: 포탈 이동 중 무적
   player.hp = Math.max(0, player.hp - dmg); player.hurtT = 0;
+  if (player.hp > 0) heroOnce('hit', 1.2);   // 3D 주인공 피격 모션
   vignetteEl.classList.add('hit'); setTimeout(() => vignetteEl.classList.remove('hit'), 200);
   { const el = makeLabel('dmg taken', '-' + dmg); dmgPops.push({ el, pos: player.mesh.position.clone(), dir: _up.clone(), t: 0 }); }   // 작업 H: 받은 피해 빨강
   _sd.copy(_up).sub(fromDir); tangentize(_sd, _up);
@@ -4836,6 +4932,7 @@ function step(dt) {
   player.mesh.position.copy(player.pos);
   if (player.dead) player.mesh.position.addScaledVector(_up, -0.3);   // 작업 C: 주저앉음(그림 추가 없이 판을 낮춘다)
   orientBillboard(player.mesh, _up);
+  heroUpdate(dt);   // 3D 주인공 모델이 그림 판 자리·방향·상태를 따라감
   {
     _right.crossVectors(cam.fwd, _up).normalize();
     const a = Math.atan2(player.fwd.dot(_right), player.fwd.dot(cam.fwd)) / DEG;   // 0=북(등), ±180=남(앞), +90=동
@@ -5548,7 +5645,7 @@ function drawWorldMap(viewW, viewH, t) {
 // ── 디버그 훅 (?debug 에서만) — Playwright 검증용 ─────────────────────────────
 if (DEBUG) {
   window.__dbg = {
-    THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt,
+    THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
     terrainH, walkH, padTopAt, plantSway, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
