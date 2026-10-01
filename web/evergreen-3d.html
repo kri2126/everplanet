@@ -274,6 +274,10 @@
   #settings .stat { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; background: rgba(47,107,34,.15); color: #2f6b22; }
   #settings .stat.wait { background: rgba(154,106,58,.18); color: #7a4f24; }
   #bgmBtn.muted { color: #ffb0a0; }
+  #labels.nodmg .lb.dmg { display: none !important; }   /* 작업 S4: 피해 숫자 끄기 */
+  #zoneLabels.off { display: none !important; }        /* 작업 S4: 지도 이름표 끄기 */
+  #settings .seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  #settings .seg .sbtn { min-width: 52px; padding: 0 8px; }
   @media (pointer: coarse) { #settings input[type=range] { height: 44px; width: 180px; } }
   @keyframes kbWait { 50% { background: #fff6d8; } }
   @keyframes kbFlash { 50% { background: #ffd166; border-color: #d9781c; } }
@@ -472,8 +476,10 @@ const QUALITY = {
 const DPR_FIXED = parseFloat(QP.get('dpr')) || 0;
 const GPU_NAME = (() => { try { const gl = renderer.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { return '?'; } })();
 const SOFTWARE_GL = /swiftshader|software|llvmpipe|mesa offscreen|basic render/i.test(GPU_NAME);
-let qualityMode = { high: 3, mid: 2, low: 1, min: 0 }[QP.get('q')] ?? -1;   // -1 = 자동
-try { if (qualityMode < 0 && !QP.get('q')) { const sv = localStorage.getItem('ep_quality'); if (sv !== null && sv !== '') qualityMode = parseInt(sv); } } catch (e) {}
+// 작업 S4: 화질 선택은 설정(display.quality)에 기억 — 옛 낱개 키 ep_quality는 한 번 옮기고 지운다. ?q= 는 이번 판만 고정(설정은 안 바꿈)
+const QMODE = { auto: -1, high: 3, mid: 2, low: 1, min: 0 }, QNAME = { '-1': 'auto', 3: 'high', 2: 'mid', 1: 'low', 0: 'min' };
+try { const sv = localStorage.getItem('ep_quality'); if (sv !== null) { const n = parseInt(sv); if (QNAME[n]) settings.display.quality = QNAME[n]; localStorage.removeItem('ep_quality'); saveSettings(); } } catch (e) {}
+let qualityMode = { high: 3, mid: 2, low: 1, min: 0 }[QP.get('q')] ?? QMODE[settings.display.quality];   // -1 = 자동
 if (!(qualityMode >= 0 && qualityMode <= 3)) qualityMode = -1;
 let quality = qualityMode >= 0 ? qualityMode : (SOFTWARE_GL ? 1 : 3), dpr = DPR_FIXED || QUALITY[quality].dpr;
 renderer.setPixelRatio(dpr);
@@ -3570,8 +3576,28 @@ SET_PANES.sound = (pane) => {
   pane.appendChild(setRow('효과음 미리 듣기', '지금 음량으로 짧게', setButton('▶ 듣기', () => { sfxPreview(); setTimeout(renderSettings, 120); }, 'ghost')));
   const n = document.createElement('div'); n.className = 'note'; n.textContent = '음량은 이 브라우저에 기억돼요. 효과음은 지금 풀 밟는 발소리 하나뿐 — 나머지는 로드맵 9 작업 C에서 늘어납니다.'; pane.appendChild(n);
 };
-SET_PANES.display = placeholderPane('화면', '화질·피해 숫자·FPS 표시는 다음 단계(S4)에서 들어갑니다. 지금은 Q 키로 화질을 바꿀 수 있어요.');
-SET_PANES.map = placeholderPane('지도', '미니맵 표시·이름표는 다음 단계(S4)에서 들어갑니다.');
+// 작업 S4: 화면 탭 — 화질(Q 순환을 선택지로), 피해 숫자, FPS 표시
+function setSeg(opts, cur, onPick) {
+  const w = document.createElement('span'); w.className = 'seg';
+  for (const [val, txt] of opts) { const b = setButton(txt, () => onPick(val), val === cur ? '' : 'ghost'); w.appendChild(b); }
+  return w;
+}
+SET_PANES.display = (pane) => {
+  const h = document.createElement('h4'); h.textContent = '화면'; pane.appendChild(h);
+  const fixed = QP.get('q') || DPR_FIXED ? ' · 주소의 ?q=/?dpr= 로 이번 판은 고정됨' : '';
+  pane.appendChild(setRow(`화질 (${keyLabel('quality')}로 순환)`, `지금: ${QUALITY[quality].name}${qualityMode >= 0 ? '' : ' (자동 — 프레임 간격으로 오르내림)'}${fixed}`,
+    setSeg([[-1, '자동'], [3, '높음'], [2, '중간'], [1, '낮음'], [0, '최소']], qualityMode, (m) => { setQualityMode(m, '설정'); renderSettings(); })));
+  pane.appendChild(setRow('피해 숫자 표시', '공격·피격·회복 숫자', setToggle(settings.display.dmgNum, () => { settings.display.dmgNum = !settings.display.dmgNum; saveSettings(); applySettings(); renderSettings(); })));
+  pane.appendChild(setRow('FPS 표시', '왼쪽 위 성능 줄(주소에 ?fps 를 붙인 것과 같음)', setToggle(settings.display.fps, () => { settings.display.fps = !settings.display.fps; saveSettings(); applySettings(); renderSettings(); })));
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '화면 흔들림·시간대(낮/저녁)는 그 효과가 생기는 작업(로드맵 9 F 등)에서 이 탭에 더해집니다.'; pane.appendChild(n);
+};
+// 작업 S4: 지도 탭 — 미니맵 표시, 지도 이름표
+SET_PANES.map = (pane) => {
+  const h = document.createElement('h4'); h.textContent = '지도'; pane.appendChild(h);
+  pane.appendChild(setRow('미니맵 표시', '오른쪽 위 둥근 지도(끄면 그리는 비용도 아낌)', setToggle(settings.map.mini, () => { settings.map.mini = !settings.map.mini; saveSettings(); applySettings(); renderSettings(); })));
+  pane.appendChild(setRow(`지도 이름표 (${keyLabel('map')} 지도)`, '착륙 들판·샘물·나무다리… 이름', setToggle(settings.map.labels, () => { settings.map.labels = !settings.map.labels; saveSettings(); applySettings(); renderSettings(); })));
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '미니맵 확대 3단계와 "안 가 본 곳 가리기"는 지도 마무리(로드맵 9 작업 B)에서 이 탭에 더해집니다.'; pane.appendChild(n);
+};
 function renderSettings() {
   for (const [id] of SET_TABS) setTabBtns[id].classList.toggle('on', id === settingsTab);
   const keepScroll = setPaneEl.scrollTop; setPaneEl.innerHTML = ''; (SET_PANES[settingsTab] || (() => {}))(setPaneEl); setPaneEl.scrollTop = keepScroll;
@@ -3617,8 +3643,13 @@ function updateKeyTexts() {
   setBtnEl.title = '설정 (Esc)';
   if (skillWinOpen) renderSkillWin();
 }
-function applySettings() { updateKeyTexts(); applyAudioSettings(); if (typeof bgmUpdateBtn === 'function') bgmUpdateBtn(); }
-function resetSettings() { const wasOn = bgm.on; settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); if (wasOn !== settings.audio.bgmOn) toggleBgm(); applySettings(); }
+function applySettings() {
+  updateKeyTexts(); applyAudioSettings(); if (typeof bgmUpdateBtn === 'function') bgmUpdateBtn();
+  labelsEl.classList.toggle('nodmg', !settings.display.dmgNum);   // 작업 S4
+  applyFpsSetting();
+  const zl = document.getElementById('zoneLabels'); if (zl) zl.classList.toggle('off', !settings.map.labels);
+}
+function resetSettings() { const wasOn = bgm.on, wasQ = qualityMode; settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); if (wasOn !== settings.audio.bgmOn) toggleBgm(); if (wasQ !== QMODE[settings.display.quality]) setQualityMode(QMODE[settings.display.quality], '기본값'); applySettings(); }
 setResetBtn.addEventListener('click', () => { if (!settingsResetArm) { settingsResetArm = true; renderSettings(); return; } settingsResetArm = false; resetSettings(); renderSettings(); setMsg(setPaneEl, '모든 설정을 기본값으로 되돌렸어요.'); });
 document.getElementById('setClose').addEventListener('click', closeSettings);
 applySettings();   // 저장된 설정을 처음 한 번 반영
@@ -3904,14 +3935,15 @@ function applyQuality(q, why) {
   scene.traverse((o) => { if (o.userData.isHull) o.visible = cfg.hull; });   // 최소에서는 지형 외곽선(지형을 한 번 더 그림)을 끈다
   if (typeof log === 'function') log(`화질 ${cfg.name}${qualityMode >= 0 ? '' : ' (자동)'} — 배율 ${dpr}${why ? ' · ' + why : ''}`, 'sys');
 }
-function cycleQuality() {
-  qualityMode = qualityMode >= 3 ? -1 : qualityMode + 1;   // 자동 → 최소 → 낮음 → 중간 → 높음 → 자동
-  try { localStorage.setItem('ep_quality', String(qualityMode)); } catch (e) {}
-  if (qualityMode >= 0) applyQuality(qualityMode, 'Q 키'); else { perfWin = []; perfGood = 0; log('화질 자동 — 프레임에 맞춰 조절합니다', 'sys'); }
+function setQualityMode(mode, why) {   // 작업 S4: 설정 화면의 화질 선택과 Q 순환이 같은 길로
+  qualityMode = mode; settings.display.quality = QNAME[mode]; saveSettings();
+  if (qualityMode >= 0) applyQuality(qualityMode, why); else { perfWin = []; perfGood = 0; log('화질 자동 — 프레임에 맞춰 조절합니다', 'sys'); }
 }
+function cycleQuality() { setQualityMode(qualityMode >= 3 ? -1 : qualityMode + 1, `${keyLabel('quality')} 키`); }   // 자동 → 최소 → 낮음 → 중간 → 높음 → 자동
 
 const fpsEl = document.getElementById('fps');
-if (DEBUG || QP.has('fps')) fpsEl.style.display = 'block';
+function applyFpsSetting() { document.getElementById('fps').style.display = (DEBUG || QP.has('fps') || settings.display.fps) ? 'block' : 'none'; }   // 작업 S4: 설정의 FPS 표시 = ?fps 와 같은 줄
+applyFpsSetting();
 
 // 외부 PNG 에셋이 있으면 바꿔 끼운다 (없으면 캔버스 그림 그대로)
 loadAssets();
@@ -4117,12 +4149,13 @@ function insideZoneDisc(px, py) { return !!zoneLayout && insideRect({ x: zoneLay
 
 function drawMaps(t) {
   const W = innerWidth, H = innerHeight;
-  miniEl.style.display = mapView === 0 && !cut.on ? 'block' : 'none';
+  const miniOn = mapView === 0 && !cut.on && settings.map.mini;   // 작업 S4: 설정에서 미니맵 끄기
+  miniEl.style.display = miniOn ? 'block' : 'none';
   for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'hint', 'objBar']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';   // 추기 #5: 목표 줄도
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
-    if (!cut.on) drawMiniMap();
+    if (miniOn) drawMiniMap();
     miniMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
   } else if (mapView === 1) {
     zoneCap.textContent = isTouch ? '지도를 탭하면 전경도 · 바깥을 탭하면 닫힘' : `${keyLabel('map')} 한 번 더 → 전경도 · Esc 닫기`;
@@ -4509,7 +4542,7 @@ if (DEBUG) {
       return { lon, lat, z: player.z };
     },
     press(k, on) { const c = settings.binds[k] ? settings.binds[k][0] : codeFromKey(k); on ? keys.add(c) : keys.delete(c); },   // 작업 S2: 동작 id('moveUp') 또는 옛 글자('w')
-    get settings() { return settings; }, audio, bgm, toggleMute, sfxPreview, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
+    get settings() { return settings; }, setQualityMode, qualityMode() { return qualityMode; }, audio, bgm, toggleMute, sfxPreview, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { return tryJump(); },
