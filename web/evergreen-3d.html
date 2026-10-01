@@ -572,7 +572,8 @@ function updateVeil() { const n = loadTrack.length || 1; loadBarEl.style.width =
 function trackLoad(p) { loadTrack.push(p); updateVeil(); const done = () => { loadDone++; updateVeil(); }; Promise.resolve(p).then(done, done); return p; }
 function hideVeil() {
   if (!veilOn) return; veilOn = false;
-  requestAnimationFrame(() => requestAnimationFrame(() => { loadVeilEl.classList.add('off'); setTimeout(() => { loadVeilEl.style.display = 'none'; }, 500); }));
+  let gone = false; const go = () => { if (gone) return; gone = true; loadVeilEl.classList.add('off'); setTimeout(() => { loadVeilEl.style.display = 'none'; }, 500); };
+  requestAnimationFrame(() => requestAnimationFrame(go)); setTimeout(go, 400);   // 보통은 두 프레임 그린 뒤, 탭이 가려져 프레임이 멈춰 있어도 0.4초 뒤엔 걷힌다
 }
 function registerTex(name, tex, w, h, kind) { if (name) SPRITES[name] = { tex, w, h, kind }; return tex; }
 let ASSET_STATUS = '에셋 읽는 중'; const assetErrs = [];   // ?fps 표시줄에 에셋 로드 상태를 보여 준다
