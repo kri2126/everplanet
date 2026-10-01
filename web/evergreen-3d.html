@@ -746,6 +746,11 @@ function waterAt(p) {
   if (dSp < 3.3 * MAP_S) w = Math.max(w, lerp(WATER, SPRING_WATER, ss(3.3 * MAP_S, 2.6 * MAP_S, dSp)));
   return w;
 }
+// 폭포(assets/waterfall.js) 자리·배율 — 지형의 윗물 둑과 폭포 배치가 같은 값을 쓴다 (2026-10-01)
+// 윗물 수면 높이 = 호수 수면 + 8.4×배율(모듈 원점 0.25 + 윗물 8.15). 둑은 수면보다 0.42 높게(구 곡률로 양끝 물판이 0.17 떠도 둑이 덮게), 바닥은 0.35 낮게.
+const WF = { lon: -13.2, lat: 22.5, k: 0.635 };
+WF.water = -0.45 + 8.4 * WF.k; WF.rim = WF.water + 0.42; WF.floor = WF.water - 0.35;
+WF.halfW = 9 * WF.k; WF.zB = -6.5 * WF.k; WF.zF = -1.05 * WF.k;   // 로컬(유닛): 폭 ±9(모듈 3개), 윗물 뒤끝 z -6.5, 절벽 앞면 z -1.05
 function terrainH(p) {
   const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG / MAP_S + MAP_LAT0;   // 설계 좌표(추기 #4)
   const lon = Math.atan2(p.x, p.z) / DEG / MAP_S;
@@ -818,6 +823,22 @@ function terrainH(p) {
     if (d < 1.5) {
       const wh = 5 * ss(1.4, 0.9, d) * (0.85 + 0.3 * vnoise(p.x * 50, p.y * 50, p.z * 50));
       h = Math.max(h, wh);
+    }
+  }
+
+  // 폭포 윗물 둑 (2026-10-01): 폭포 모듈의 상자 둑·절벽이 다른 바위벽과 달리 너무 반듯하다는 지적으로, 모듈의 둑·절벽은 숨기고
+  // 지형 자체를 돋워 윗물을 담는 둑과 앞 절벽을 만든다 → 다른 벽과 같은 풀 질감·바위 줄무늬·진한 외곽선, 가장자리는 잡음으로 들쭉날쭉.
+  // 둑 안쪽 경계는 물판 사각형 안쪽에 있어(둑이 물판 가장자리를 덮음) 물가 선이 지형 잡음대로 구불구불해진다. 앞쪽은 트여 물이 넘쳐 떨어진다.
+  if (lon > -16 && lon < -12.5 && lat > 18.5 && lat < 26.5) {
+    const ux = (lat - WF.lat) * MAP_S * DEG * R, uz = (lon - WF.lon) * MAP_S * DEG * R * Math.cos((lat - MAP_LAT0) * MAP_S * DEG);
+    const e = 0.5 * (vnoise(p.x * 110, p.y * 110, p.z * 110) - 0.5), ax = Math.abs(ux);   // 가장자리 들쭉날쭉 ±0.25
+    // 앞면: 폭포 줄 안쪽은 절벽 앞면(zF)에서 끊기고, 양옆 둑은 물판 앞끝(낙구)보다 조금 더 나와 물판 모서리를 덮는다
+    const front = lerp(ss(WF.zF + 0.18, WF.zF, uz), ss(WF.zF + 0.6, WF.zF + 0.4, uz), ss(WF.halfW - 0.3, WF.halfW + 0.1, ax + e));
+    const block = ss(WF.zB - 1.0, WF.zB - 0.7, uz + e) * ss(WF.halfW + 1.1, WF.halfW + 0.8, ax + e) * front;
+    if (block > 0) {
+      h = Math.max(h, (WF.rim + 0.16 * (vnoise(p.x * 90, p.y * 90, p.z * 90) - 0.5)) * block);
+      const basin = ss(WF.zB + 0.3, WF.zB + 0.65, uz + e) * ss(WF.halfW - 0.3, WF.halfW - 0.65, ax + e) * front;   // 잡음이 커도 물판 가장자리는 늘 둑 밑
+      h = lerp(h, WF.floor, basin);
     }
   }
   return h;
@@ -1787,7 +1808,7 @@ scene.add(waterfallFoam); props.push(waterfallFoam);
 // 못 읽으면(파일 없음) 위의 그림 판 3줄과 물보라가 그대로 남는다.
 let waterfallCode = null;
 import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
-  const WF_K = 0.635, WF_LON = -13.2, WF_LAT = 22.5;
+  const WF_K = WF.k, WF_LON = WF.lon, WF_LAT = WF.lat;
   const wf = createWaterfall(THREE, { count: 3, thick: 1.4, fog: scene.fog });
   const up = dirFromLonLat(WF_LON, WF_LAT);
   const east = dirFromLonLat(WF_LON + 0.1, WF_LAT).sub(up); east.addScaledVector(up, -east.dot(up)).normalize();
@@ -1795,6 +1816,8 @@ import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
   wf.group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(north, up, east));
   wf.group.position.copy(up).multiplyScalar(R + LAKE_WATER + 0.25 * WF_K);
   wf.group.scale.setScalar(WF_K);
+  // 모듈의 상자 절벽·윗물 둑(툰 재질)은 숨긴다 — 대신 지형(terrainH의 '폭포 윗물 둑')이 둑과 앞 절벽이 된다. 물보라 구름(툰 흰 공)은 남긴다.
+  wf.group.traverse((o) => { if (o.isMesh && o.material.isMeshToonMaterial && !(o.parent && o.parent.userData.puffs)) o.visible = false; });
   scene.add(wf.group);
   for (const m of [...waterfallSprites, waterfallFoam]) { scene.remove(m); const i = props.indexOf(m); if (i >= 0) props.splice(i, 1); }
   waterfallCode = wf;
