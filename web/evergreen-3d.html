@@ -267,6 +267,14 @@
   #settings .kb.wait { background: #ffe9a8; border-color: #c9762a; animation: kbWait 0.9s ease-in-out infinite; }
   #settings .kb.fixed { cursor: default; opacity: .65; }
   #settings .kb.flash { animation: kbFlash 0.45s ease-in-out 3; }
+  #settings input[type=range] { width: 220px; height: 34px; accent-color: #c9762a; cursor: pointer; }
+  #settings .val { width: 38px; text-align: right; font: 700 13px 'JetBrains Mono', monospace; color: #5c3a1a; }
+  #settings .tog { min-width: 78px; }
+  #settings .tog.off { color: #6b4a2b; background: rgba(255,250,235,.6); border-color: rgba(120,80,40,.45); }
+  #settings .stat { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; background: rgba(47,107,34,.15); color: #2f6b22; }
+  #settings .stat.wait { background: rgba(154,106,58,.18); color: #7a4f24; }
+  #bgmBtn.muted { color: #ffb0a0; }
+  @media (pointer: coarse) { #settings input[type=range] { height: 44px; width: 180px; } }
   @keyframes kbWait { 50% { background: #fff6d8; } }
   @keyframes kbFlash { 50% { background: #ffd166; border-color: #d9781c; } }
   @media (max-width: 560px) { #settings .tabs { width: 84px; } #settings .tabs button { font-size: 12px; padding: 0 6px; } #settings .bot .hint { display: none; } }
@@ -3222,25 +3230,70 @@ const keys = new Set();   // 작업 S2: 눌려 있는 키의 물리 자리(e.cod
 function isDown(action) { const b = settings.binds[action]; return !!b && ((!!b[0] && keys.has(b[0])) || (!!b[1] && keys.has(b[1]))); }
 // 0 = 닫힘, 1 = 구역 지도, 2 = 에버그린 전경도 (옛 판과 같은 조작)
 let mapView = 0;
+// ── 로드맵 9 작업 S3: 소리 한 줄기 — AudioContext 하나에 master → bgmGain / sfxGain (§12-4). 설정 화면 소리 탭의 슬라이더가 이 GainNode 3개에 바로 걸린다.
+// 음소거는 master를 0으로(음량 값은 그대로 기억). 브라우저 자동재생 규칙 때문에 첫 키 입력·클릭(또는 설정 화면을 연 순간)에 만들고 깨운다.
+const audio = { ctx: null, master: null, bgm: null, sfx: null, bgmSrc: null };
+function audioCtx() {
+  if (!audio.ctx) {
+    try { audio.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    audio.master = audio.ctx.createGain(); audio.master.connect(audio.ctx.destination);
+    audio.bgm = audio.ctx.createGain(); audio.bgm.connect(audio.master);
+    audio.sfx = audio.ctx.createGain(); audio.sfx.connect(audio.master);
+    applyAudioSettings();
+  }
+  if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  return audio.ctx;
+}
+function audioOn() { return !!audio.ctx && audio.ctx.state === 'running'; }
+function applyAudioSettings() {
+  const A = settings.audio;
+  if (audio.ctx) { audio.master.gain.value = A.mute ? 0 : A.master / 100; audio.bgm.gain.value = A.bgm / 100; audio.sfx.gain.value = A.sfx / 100; }
+  if (typeof bgmApplyVolume === 'function') bgmApplyVolume();
+}
+function toggleMute(force) {
+  settings.audio.mute = force === undefined ? !settings.audio.mute : !!force; saveSettings(); applyAudioSettings();
+  if (typeof bgmUpdateBtn === 'function') bgmUpdateBtn();
+  log(settings.audio.mute ? `소리를 껐다 — 음소거 (${keyLabel('mute')})` : `소리를 켰다 (${keyLabel('mute')})`, 'sys');
+}
+// "효과음 미리 듣기" — C에서 ui_click 효과음이 생기기 전까지는 짧은 합성음(0.08초)
+function sfxPreview() {
+  const c = audioCtx(); if (!c) return;
+  const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+  o.type = 'triangle'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.06);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+  o.connect(g); g.connect(audio.sfx); o.start(t); o.stop(t + 0.1);
+}
+
 // ── 브금(BGM) — web/audio/bgm_main.mp3 을 반복 재생. 브라우저 자동재생 규칙 때문에 첫 키 입력/클릭 때 시작한다.
 // B 키(또는 오른쪽 아래 ♪ 단추)로 켜고 끄며 localStorage('ep_bgm')에 기억. 탭을 내리면 멈췄다가 돌아오면 이어서. ?nobgm 으로 끔.
-const bgm = { el: null, on: true, started: false, vol: 0.45, fadeT: 0 };
-try { if (localStorage.getItem('ep_bgm') === '0') bgm.on = false; } catch (e) {}
+const bgm = { el: null, on: true, started: false, vol: 1, fadeT: 0, fade: 0 };   // 작업 S3: fade는 0~1(켜고 끌 때 서서히), 실제 크기는 bgmGain·master가 정한다
+try { const old = localStorage.getItem('ep_bgm'); if (old !== null) { settings.audio.bgmOn = old !== '0'; localStorage.removeItem('ep_bgm'); saveSettings(); } } catch (e) {}   // 옛 낱개 키를 설정으로 옮김
+bgm.on = settings.audio.bgmOn;
 if (QP.has('nobgm')) bgm.on = false;
 const bgmBtn = document.getElementById('bgmBtn');
 function bgmEl() {
-  if (!bgm.el) { bgm.el = new Audio('audio/bgm_main.mp3'); bgm.el.loop = true; bgm.el.preload = 'auto'; bgm.el.volume = 0; }
+  if (!bgm.el) {
+    bgm.el = new Audio('audio/bgm_main.mp3'); bgm.el.loop = true; bgm.el.preload = 'auto'; bgm.el.volume = 0;
+    const c = audioCtx();   // 작업 S3: 소리 줄기(bgmGain)로 보낸다 — 못 만들면 요소 음량으로 직접
+    if (c) { try { audio.bgmSrc = c.createMediaElementSource(bgm.el); audio.bgmSrc.connect(audio.bgm); } catch (e) { audio.bgmSrc = null; } }
+  }
   return bgm.el;
 }
+// 요소 음량 = 켜고 끄는 페이드 × (소리 줄기로 가면 1, 아니면 설정 음량을 직접 곱함)
+function bgmApplyVolume() {
+  if (!bgm.el) return;
+  const A = settings.audio, direct = audio.bgmSrc ? 1 : (A.mute ? 0 : (A.master / 100) * (A.bgm / 100));
+  bgm.el.volume = Math.max(0, Math.min(1, bgm.fade * direct));
+}
 function bgmFadeTo(target, sec) {
-  const a = bgmEl(), from = a.volume, t0 = performance.now(), id = ++bgm.fadeT;
-  const step = () => { if (id !== bgm.fadeT) return; const k = Math.min(1, (performance.now() - t0) / (sec * 1000)); a.volume = from + (target - from) * k; if (k < 1) requestAnimationFrame(step); else if (target === 0) a.pause(); };
+  bgmEl(); const from = bgm.fade, t0 = performance.now(), id = ++bgm.fadeT;
+  const step = () => { if (id !== bgm.fadeT) return; const k = Math.min(1, (performance.now() - t0) / (sec * 1000)); bgm.fade = from + (target - from) * k; bgmApplyVolume(); if (k < 1) requestAnimationFrame(step); else if (target === 0) bgm.el.pause(); };
   step();
 }
 function bgmPlay() { if (!bgm.on || document.hidden) return; const a = bgmEl(); const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); bgm.started = true; bgmFadeTo(bgm.vol, 1.5); }
-function bgmUpdateBtn() { bgmBtn.classList.toggle('off', !bgm.on); }
+function bgmUpdateBtn() { bgmBtn.classList.toggle('off', !bgm.on); bgmBtn.classList.toggle('muted', !!settings.audio.mute); bgmBtn.textContent = settings.audio.mute ? '♪ 음소거' : '♪ BGM'; }
 function toggleBgm() {
-  bgm.on = !bgm.on; try { localStorage.setItem('ep_bgm', bgm.on ? '1' : '0'); } catch (e) {}
+  bgm.on = !bgm.on; settings.audio.bgmOn = bgm.on; saveSettings();   // 작업 S3: 설정(ep.settings.v1)에 기억
   if (bgm.on) bgmPlay(); else if (bgm.el) bgmFadeTo(0, 0.4);
   bgmUpdateBtn(); log(bgm.on ? `배경 음악을 켰다. (${keyLabel('bgm')})` : `배경 음악을 껐다. (${keyLabel('bgm')})`, 'sys');
 }
@@ -3337,8 +3390,8 @@ const sfx = { ctx: null, master: null, on: !QP.has('nosfx'), def: SFX_DEF, bufs:
 function sfxReady() {
   if (!sfx.on) return false;
   if (!sfx.ctx) {
-    try { sfx.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { sfx.on = false; return false; }
-    sfx.master = sfx.ctx.createGain(); sfx.master.gain.value = 1; sfx.master.connect(sfx.ctx.destination);
+    sfx.ctx = audioCtx(); if (!sfx.ctx) { sfx.on = false; return false; }   // 작업 S3: 소리 줄기 하나(audio.sfx → master)를 같이 쓴다
+    sfx.master = sfx.ctx.createGain(); sfx.master.gain.value = 1 / 0.64; sfx.master.connect(audio.sfx);   // 기본 설정(전체 80 × 효과음 80 = 0.64)에서 예전과 같은 크기가 되도록
     sfxLoad();
   }
   if (sfx.ctx.state === 'suspended') sfx.ctx.resume();
@@ -3494,7 +3547,29 @@ SET_PANES.controls = (pane) => {
   pane.appendChild(t);
   rebindFlash = null;
 };
-SET_PANES.sound = placeholderPane('소리', '음량 슬라이더는 다음 단계(S3)에서 들어갑니다. 지금은 B 키로 배경 음악을 켜고 끌 수 있어요.');
+// 작업 S3: 소리 탭 — 슬라이더 3개(전체·BGM·효과음)가 GainNode에 바로, 음소거(N), 배경 음악 켜기/끄기(B), 미리 듣기, 상태 줄
+function setToggle(on, onClick, onTxt = '켜짐', offTxt = '꺼짐') { const b = setButton(on ? onTxt : offTxt, onClick, 'tog' + (on ? '' : ' off')); return b; }
+function setSlider(get, set) {
+  const wrap = document.createElement('span'); wrap.style.display = 'inline-flex'; wrap.style.alignItems = 'center'; wrap.style.gap = '8px';
+  const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.step = 1; r.value = get();
+  const v = document.createElement('span'); v.className = 'val'; v.textContent = get();
+  r.addEventListener('input', () => { set(+r.value); v.textContent = r.value; });
+  r.addEventListener('keydown', (e) => { if (e.code !== 'Escape') e.stopPropagation(); });   // 방향키로 값 조절할 때 탭이 넘어가지 않게
+  wrap.appendChild(r); wrap.appendChild(v); return wrap;
+}
+SET_PANES.sound = (pane) => {
+  const h = document.createElement('h4'); h.textContent = '소리'; pane.appendChild(h);
+  const st = document.createElement('span'); st.className = 'stat' + (audioOn() ? '' : ' wait'); st.textContent = audioOn() ? '소리 켜짐' : '아무 키나 누르면 소리가 켜져요';
+  pane.appendChild(setRow('상태', settings.audio.mute ? '음소거 중' : '', st));
+  const A = settings.audio, ch = (k) => (v) => { A[k] = v; saveSettings(); applyAudioSettings(); };
+  pane.appendChild(setRow('전체 음량', '배경 음악·효과음 모두', setSlider(() => A.master, ch('master'))));
+  pane.appendChild(setRow('배경 음악', '', setSlider(() => A.bgm, ch('bgm'))));
+  pane.appendChild(setRow('효과음', '발소리 등', setSlider(() => A.sfx, ch('sfx'))));
+  pane.appendChild(setRow(`음소거 (${keyLabel('mute')})`, '음량 값은 그대로 두고 소리만 끔', setToggle(A.mute, () => { toggleMute(); renderSettings(); }, '음소거', '끔')));
+  pane.appendChild(setRow(`배경 음악 켜기/끄기 (${keyLabel('bgm')})`, '', setToggle(bgm.on, () => { toggleBgm(); renderSettings(); })));
+  pane.appendChild(setRow('효과음 미리 듣기', '지금 음량으로 짧게', setButton('▶ 듣기', () => { sfxPreview(); setTimeout(renderSettings, 120); }, 'ghost')));
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '음량은 이 브라우저에 기억돼요. 효과음은 지금 풀 밟는 발소리 하나뿐 — 나머지는 로드맵 9 작업 C에서 늘어납니다.'; pane.appendChild(n);
+};
 SET_PANES.display = placeholderPane('화면', '화질·피해 숫자·FPS 표시는 다음 단계(S4)에서 들어갑니다. 지금은 Q 키로 화질을 바꿀 수 있어요.');
 SET_PANES.map = placeholderPane('지도', '미니맵 표시·이름표는 다음 단계(S4)에서 들어갑니다.');
 function renderSettings() {
@@ -3510,6 +3585,7 @@ function openSettings(tab) {
   hideKeyGuide(); mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false);
   settingsOpen = true; settingsResetArm = false; keys.clear(); player.moving = false;
   if (tab) settingsTab = tab;
+  audioCtx();   // 설정 화면은 사용자 입력으로 열리니 여기서 소리를 깨워도 된다(§12-4)
   setEl.classList.add('on'); renderSettings(); return true;
 }
 function closeSettings() { if (!settingsOpen) return; settingsOpen = false; rebindWait = null; rebindMsg = ''; setEl.classList.remove('on'); keys.clear(); }
@@ -3541,8 +3617,8 @@ function updateKeyTexts() {
   setBtnEl.title = '설정 (Esc)';
   if (skillWinOpen) renderSkillWin();
 }
-function applySettings() { updateKeyTexts(); }
-function resetSettings() { settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); applySettings(); }
+function applySettings() { updateKeyTexts(); applyAudioSettings(); if (typeof bgmUpdateBtn === 'function') bgmUpdateBtn(); }
+function resetSettings() { const wasOn = bgm.on; settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); if (wasOn !== settings.audio.bgmOn) toggleBgm(); applySettings(); }
 setResetBtn.addEventListener('click', () => { if (!settingsResetArm) { settingsResetArm = true; renderSettings(); return; } settingsResetArm = false; resetSettings(); renderSettings(); setMsg(setPaneEl, '모든 설정을 기본값으로 되돌렸어요.'); });
 document.getElementById('setClose').addEventListener('click', closeSettings);
 applySettings();   // 저장된 설정을 처음 한 번 반영
@@ -3592,6 +3668,7 @@ addEventListener('keydown', (e) => {
   if (has('character')) { toggleCharWin(); return; }   // 작업 F: 캐릭터·모험 기록 창
   if (has('quality')) { cycleQuality(); return; }
   if (has('bgm')) { toggleBgm(); return; }   // 브금 켜기/끄기
+  if (has('mute')) { toggleMute(); return; }   // 작업 S3: 음소거(N)
   if (dialog.open) {
     if (dialog.choicesShown) { const m = /^(?:Digit|Numpad)([1-9])$/.exec(code); if (m) pickChoice(+m[1] - 1); return; }   // 선택지 번호는 숫자 고정
     if (has('jump')) { e.preventDefault(); advanceDialog(); }
@@ -4432,7 +4509,7 @@ if (DEBUG) {
       return { lon, lat, z: player.z };
     },
     press(k, on) { const c = settings.binds[k] ? settings.binds[k][0] : codeFromKey(k); on ? keys.add(c) : keys.delete(c); },   // 작업 S2: 동작 id('moveUp') 또는 옛 글자('w')
-    get settings() { return settings; }, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
+    get settings() { return settings; }, audio, bgm, toggleMute, sfxPreview, rebind, resetBinds, keyLabel, codeLabel, isDown, actionsOf, ACTIONS, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { return tryJump(); },
