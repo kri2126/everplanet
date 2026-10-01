@@ -1645,8 +1645,59 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
-  const reeds = [[-11.0, 28.9], [-7.6, 28.7], [-1.4, 28.8], [2.2, 28.9], [5.8, 28.6], [-11.4, 16.4], [-7.8, 16.3], [-1.6, 16.5], [1.8, 16.6], [5.4, 16.8], [8.0, 19.0], [8.2, 26.0], [2.0, 14.3], [3.8, 14.9], [2.2, 12.5], [4.0, 12.1], [0.8, 23.0], [3.55, 24.2], [3.3, 22.0]];   // 샘물 둘레 4곳은 추기 #3로 이동, 섬 물가 2곳은 추기 #12로 섬 턱 위로(비탈이 물에 잠겨서)
-  reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
+  // 2026-10-02: 갈대는 물가에만 — 호수·섬·샘물 둘레의 마른 물가(수면보다 0~0.9 높고 0.5° 안에 물이 있는 자리)만 훑어,
+  // 모래길·다리·계단·폭포 앞을 피하고 나무·소품과 1.8, 갈대끼리 3.0 이상 떨어지게 고른 28곳(다른 구역엔 없음).
+  const reeds = [[2.6, 11.2], [1, 12], [5.4, 13.2], [0.8, 13.4], [4.4, 15], [2.8, 15.6], [-10.4, 17], [-8.2, 17], [-6.4, 17], [0.2, 17], [2, 17.2], [3.4, 17.2], [4.8, 17.4], [6.8, 18.2], [7.8, 19.2], [7.8, 20.6], [7.8, 22.4], [7.6, 24], [7.6, 25.4], [-10.8, 27.4], [6, 27.4], [-9.4, 27.6], [-1.8, 27.6], [-7.8, 27.8], [0, 27.8], [2.2, 27.8], [4.4, 27.8], [-6, 28]];
+  const reedSprites = reeds.map(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); return r; });
+  // 로드맵 9 (2026-10-02): 갈대를 그림 판 → 3D 모델(assets/models/reed_A.glb·reed_B.glb, 사용자 제작)로. 자리마다 A·B를 섞고(고정 씨앗),
+  // 키 2.0~2.6·방향을 다르게. 모델마다 줄기(텍스처 없음)·잎(텍스처 있음) 두 덩어리로 합쳐 InstancedMesh로 그린다. 못 읽으면 그림 판 유지.
+  {
+    let seed = 4242; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    const pickT = reedSprites.map(() => (rnd() < 0.5 ? 0 : 1)), hs = reedSprites.map(() => 2.0 + 0.6 * rnd()), spins = reedSprites.map(() => rnd() * Math.PI * 2);
+    const build = (gl) => {
+      const m = gl.scene; m.updateMatrixWorld(true);
+      const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5;
+      m.traverse((o) => { if (!o.isMesh) return;
+        const src = o.material, g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+        if (!g.getAttribute('normal')) g.computeVertexNormals();
+        const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = src.color || new THREE.Color(1, 1, 1);
+        for (let j = 0; j < n; j++) { col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        if (src.map) { leafMap = src.map; if (src.alphaTest) leafCut = src.alphaTest; if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); groups.leaf.push(g); }
+        else { g.deleteAttribute('uv'); groups.solid.push(g); }
+      });
+      const parts = [], bb = new THREE.Box3();
+      for (const key of ['solid', 'leaf']) {
+        const arr = groups[key]; if (!arr.length) continue;
+        const list = arr.every((g) => g.index) ? arr : arr.map((g) => (g.index ? g.toNonIndexed() : g));
+        const geo = mergeGeometries(list, false); if (!geo) continue;
+        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: key === 'leaf' ? leafMap : null, alphaTest: key === 'leaf' ? leafCut : 0, side: THREE.DoubleSide, fog: true });
+        if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+        geo.computeBoundingBox(); bb.union(geo.boundingBox); parts.push({ geo, mat });
+      }
+      return { parts, bb };
+    };
+    const loader = new GLTFLoader();
+    Promise.all(['reed_A', 'reed_B'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
+      const types = gls.map(build), _y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), mtx = new THREE.Matrix4(), loc = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
+      types.forEach((tp, ti) => {
+        const idx = reedSprites.map((_, i) => i).filter((i) => pickT[i] === ti); if (!idx.length) return;
+        const H = tp.bb.max.y - tp.bb.min.y, cx = (tp.bb.min.x + tp.bb.max.x) / 2, cz = (tp.bb.min.z + tp.bb.max.z) / 2;
+        const ims = tp.parts.map(({ geo, mat }) => { const im = new THREE.InstancedMesh(geo, mat, idx.length); im.castShadow = true; im.receiveShadow = false; im.frustumCulled = false; scene.add(im); return im; });
+        idx.forEach((i, s) => {
+          const b = reedSprites[i], k = hs[i] / H;
+          q.setFromUnitVectors(_y, b.userData.dir).multiply(new THREE.Quaternion().setFromAxisAngle(_y, spins[i]));
+          loc.makeScale(k, k, k).setPosition(-cx * k, -tp.bb.min.y * k, -cz * k);   // 밑동 가운데가 지면에
+          mtx.compose(b.position, q, one).multiply(loc);
+          for (const im of ims) im.setMatrixAt(s, mtx);
+        });
+        for (const im of ims) im.instanceMatrix.needsUpdate = true;
+      });
+      for (const b of reedSprites) { scene.remove(b); const di = decor.indexOf(b); if (di >= 0) decor.splice(di, 1); }
+      if (DEBUG) console.log('reed GLB 적용:', reedSprites.length);
+    }).catch((e) => { if (DEBUG) console.warn('reed GLB 로드 실패 — 그림 판 유지', e); });
+  }
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
   const stoneSprites = [];
