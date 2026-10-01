@@ -423,7 +423,7 @@ const SETTINGS_KEY = 'ep.settings.v1';
 function settingsDefaults() {
   const binds = {}; for (const a of ACTIONS) binds[a.id] = a.def.slice();
   return { v: 1, binds,
-    audio: { master: 80, bgm: 30, sfx: 80, mute: false, bgmOn: true, bgmV2: true },   // 2026-10-02: 배경음악 기본 60 → 30(소리 크기 절반, 약 -6dB) — 효과음에 비해 너무 컸음
+    audio: { master: 80, bgm: 9, sfx: 80, mute: false, bgmOn: true, bgmV3: true },   // 2026-10-02: 배경음악 기본 60 → 30(-6dB) → 9(다시 약 -10dB) — 효과음에 비해 너무 컸음
     display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day' },
     map: { mini: true, zoom: 1, fog: false, labels: true },
     cheat: { speed: 1 } };   // 2026-10-02 치트(테스트용): 이동 속도 배율 1.0~5.0
@@ -440,7 +440,7 @@ function settingsMigrate(o) {
   const bool = (v, def) => typeof v === 'boolean' ? v : def;
   if (o.audio) { d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
   if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; }
-  if (o.audio && !o.audio.bgmV2 && d.audio.bgm === 60) d.audio.bgm = 30;   // 예전 기본값(60) 그대로 저장된 설정은 새 기본값(30)으로 — 직접 바꾼 값은 그대로
+  if (o.audio && !o.audio.bgmV3 && ((!o.audio.bgmV2 && d.audio.bgm === 60) || (o.audio.bgmV2 && d.audio.bgm === 30))) d.audio.bgm = 9;   // 예전 기본값(60, 30) 그대로 저장된 설정은 새 기본값(9)으로 — 직접 바꾼 값은 그대로
   if (o.cheat && typeof o.cheat.speed === 'number' && isFinite(o.cheat.speed)) d.cheat.speed = Math.max(1, Math.min(5, Math.round(o.cheat.speed * 10) / 10));
   if (o.map) { d.map.mini = bool(o.map.mini, true); d.map.zoom = num(o.map.zoom, 0, 2, 1); d.map.fog = bool(o.map.fog, false); d.map.labels = bool(o.map.labels, true); }
   return d;
