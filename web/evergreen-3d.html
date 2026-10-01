@@ -420,10 +420,11 @@ const ACTIONS = [
   { id: 'settings', name: '설정 열기/닫기', def: ['Escape', null], fixed: true },
 ];
 const SETTINGS_KEY = 'ep.settings.v1';
+const BGM_SCALE = 0.18;   // 배경음악 실제 크기 = 설정값/100 × 0.18 → 기본 50에서 0.09(효과음 밑에 깔리는 크기)
 function settingsDefaults() {
   const binds = {}; for (const a of ACTIONS) binds[a.id] = a.def.slice();
   return { v: 1, binds,
-    audio: { master: 80, bgm: 9, sfx: 80, mute: false, bgmOn: true, bgmV3: true },   // 2026-10-02: 배경음악 기본 60 → 30(-6dB) → 9(다시 약 -10dB) — 효과음에 비해 너무 컸음
+    audio: { master: 80, bgm: 50, sfx: 80, mute: false, bgmOn: true, bgmV4: true },   // 2026-10-02: 배경음악 기본 50 — 실제 크기는 BGM_SCALE로 줄여, 50에서 예전 9와 같은 소리(효과음에 비해 너무 컸음)
     display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day' },
     map: { mini: true, zoom: 1, fog: false, labels: true },
     cheat: { speed: 1 } };   // 2026-10-02 치트(테스트용): 이동 속도 배율 1.0~5.0
@@ -440,7 +441,7 @@ function settingsMigrate(o) {
   const bool = (v, def) => typeof v === 'boolean' ? v : def;
   if (o.audio) { d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
   if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; }
-  if (o.audio && !o.audio.bgmV3 && ((!o.audio.bgmV2 && d.audio.bgm === 60) || (o.audio.bgmV2 && d.audio.bgm === 30))) d.audio.bgm = 9;   // 예전 기본값(60, 30) 그대로 저장된 설정은 새 기본값(9)으로 — 직접 바꾼 값은 그대로
+  if (o.audio && !o.audio.bgmV4 && ((!o.audio.bgmV2 && !o.audio.bgmV3 && d.audio.bgm === 60) || (o.audio.bgmV2 && d.audio.bgm === 30) || (o.audio.bgmV3 && d.audio.bgm === 9))) d.audio.bgm = 50;   // 예전 기본값(60·30·9) 그대로 저장된 설정은 새 기본값(50)으로 — 직접 바꾼 값은 그대로
   if (o.cheat && typeof o.cheat.speed === 'number' && isFinite(o.cheat.speed)) d.cheat.speed = Math.max(1, Math.min(5, Math.round(o.cheat.speed * 10) / 10));
   if (o.map) { d.map.mini = bool(o.map.mini, true); d.map.zoom = num(o.map.zoom, 0, 2, 1); d.map.fog = bool(o.map.fog, false); d.map.labels = bool(o.map.labels, true); }
   return d;
@@ -3800,7 +3801,7 @@ function audioCtx() {
 function audioOn() { return !!audio.ctx && audio.ctx.state === 'running'; }
 function applyAudioSettings() {
   const A = settings.audio;
-  if (audio.ctx) { audio.master.gain.value = A.mute ? 0 : A.master / 100; audio.bgm.gain.value = A.bgm / 100; audio.sfx.gain.value = A.sfx / 100; }
+  if (audio.ctx) { audio.master.gain.value = A.mute ? 0 : A.master / 100; audio.bgm.gain.value = A.bgm / 100 * BGM_SCALE; audio.sfx.gain.value = A.sfx / 100; }
   if (typeof bgmApplyVolume === 'function') bgmApplyVolume();
 }
 function toggleMute(force) {
@@ -3835,7 +3836,7 @@ function bgmEl() {
 // 요소 음량 = 켜고 끄는 페이드 × (소리 줄기로 가면 1, 아니면 설정 음량을 직접 곱함)
 function bgmApplyVolume() {
   if (!bgm.el) return;
-  const A = settings.audio, direct = audio.bgmSrc ? 1 : (A.mute ? 0 : (A.master / 100) * (A.bgm / 100));
+  const A = settings.audio, direct = audio.bgmSrc ? 1 : (A.mute ? 0 : (A.master / 100) * (A.bgm / 100) * BGM_SCALE);
   bgm.el.volume = Math.max(0, Math.min(1, bgm.fade * direct));
 }
 function bgmFadeTo(target, sec) {
