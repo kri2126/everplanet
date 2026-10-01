@@ -617,9 +617,10 @@ function terrainH(p) {
     h = lerp(h, 0.6 + 0.05 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.2 * MAP_S, 1.6 * MAP_S, dI));
   }
 
-  // 샘물 웅덩이: 너무 깊게 파인 느낌이라는 지적으로 -3.3 → -0.5(살짝 패인 정도)로 완화 (2026-10-01)
+  // 샘물 웅덩이: -0.5로 완화했더니 물이 안 고여 보인다는 재지적 — WATER(-2.5)보다 아래인 -2.8로 다시 낮추되,
+  // 급한 절벽처럼 보이지 않도록 완전히 꺼지는 반경과 퍼지는 반경을 둘 다 넓혀 완만한 웅덩이 모양으로 만들었다 (2026-10-01 #2)
   const dSp = angDeg(p, T.spring);
-  if (dSp < 1.6 * MAP_S) h = lerp(h, -0.5, ss(1.4 * MAP_S, 0.7 * MAP_S, dSp));
+  if (dSp < 2.6 * MAP_S) h = lerp(h, -2.8, ss(2.2 * MAP_S, 1.1 * MAP_S, dSp));
 
   // 별 크레이터: 접시(안쪽 -0.4) + 둘레 턱(1.0, 가파름 — 걸어선 못 넘고 점프로) + 북동쪽 길 트임
   const dC = angDeg(p, T.starCrater);
@@ -1525,10 +1526,15 @@ addProp(starTex, 2.2, 2.2, -5.9, 38.7);
 // 로드맵 8: 폭포는 애초엔 원작 지도에 없어 제거했지만(§11-5), 나무다리 서쪽 호숫가가 휑해 보인다는
 // 지적으로 되살렸다(2026-10-01) — 서쪽 바위벽이 호수로 거의 바로 떨어지는 자리(lon -13.7→-14.0에서
 // 높이가 0.5→4+로 급하게 치솟는 절벽)를 찾아, 그 절벽 발치 물가에 세워 물이 자연스럽게 흘러드는 것처럼 보이게 한다.
-const waterfall = placeSprite(makeBillboard(waterfallTex, 2.6, 5.3, { shadow: false }), -13.3, 22.5);
-waterfall.material.alphaTest = 0.1; waterfall.material.opacity = 0.95;
-scene.add(waterfall); props.push(waterfall);
-const waterfallFoam = placeSprite(makeBillboard(foamTex, 3.4, 1.0, { shadow: false }), -13.0, 22.5);
+// 줄기 하나는 좁아 보인다는 재지적으로(2026-10-01 #2) 세 줄기를 위도를 따라 나란히 세우고 물보라를 하나의
+// 넓은 띠로 합쳐, 절벽과 물이 맞닿는 구간 전체가 폭포처럼 보이도록 넓혔다.
+const waterfallLats = [20.2, 22.5, 24.8];
+for (const wfLat of waterfallLats) {
+  const wf = placeSprite(makeBillboard(waterfallTex, 2.4, 5.3, { shadow: false }), -13.3, wfLat);
+  wf.material.alphaTest = 0.1; wf.material.opacity = 0.95;
+  scene.add(wf); props.push(wf);
+}
+const waterfallFoam = placeSprite(makeBillboard(foamTex, 8.6, 1.2, { shadow: false }), -13.0, 22.5);
 waterfallFoam.material.alphaTest = 0.1;
 scene.add(waterfallFoam); props.push(waterfallFoam);
 // 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
