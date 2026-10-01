@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sounds": {
+    "step_grass": {
+      "volume": 0.075,
+      "every": 2,
+      "skip": 0.25,
+      "maxGap": 5,
+      "files": [
+        "grass/step_grass_01.wav", "grass/step_grass_02.wav", "grass/step_grass_03.wav", "grass/step_grass_04.wav",
+        "grass/step_grass_05.wav", "grass/step_grass_06.wav", "grass/step_grass_07.wav", "grass/step_grass_08.wav",
+        "grass/step_grass_09.wav", "grass/step_grass_10.wav", "grass/step_grass_11.wav", "grass/step_grass_12.wav",
+        "grass/step_grass_13.wav", "grass/step_grass_14.wav", "grass/step_grass_15.wav", "grass/step_grass_16.wav"
+      ]
+    }
+  }
+}
