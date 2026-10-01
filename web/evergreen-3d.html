@@ -635,63 +635,54 @@ const rockTex = makeTex(256, (g, S) => {
   }
 }, 1, 'tile_rock');
 
-// 2026-10-02 절벽 타일 3종(코드로 그림, 이름 등록 — 나중에 같은 이름 PNG를 manifest에 넣으면 그 그림으로 바뀐다).
-// 원작 지도 절벽처럼 밝은 살구빛 바탕(정점 색)이 비치게 거의 흰 바탕에 둥근 돌판·부드러운 갈색 외곽선만 그린다.
-//   tile_cliff_edge  맵 가장자리: 가로로 층층이 쌓인 넓적한 돌판(높은 벽)
-//   tile_cliff_hill  중간 언덕: 작고 둥근 조약돌 무늬(완만한 비탈)
-//   tile_cliff_water 물가 가파른 곳: 세로로 선 기둥 모양 돌(물에 깎인 벽)
+// 2026-10-02 절벽 타일 2차(사용자 참고 사진 기준): 불규칙한 돌판(보로노이) + 부드러운 황토색 틈 + 돌판마다 볼록한 음영.
+//   tile_cliff_steep  가파른 절벽: 세로로 길쭉한 큰 돌판, 밝은 모래빛
+//   tile_cliff_gentle 완만한 경사면: 넓적한 판석(디딤돌) 모양, 연한 노란 모래빛
+// 바탕색을 그림이 직접 갖는다(정점의 바위색은 거의 흰색). 이음매 없이 반복되게 씨앗을 격자로 뿌리고 가장자리를 감싸 계산한다.
 function cliffRng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
-function cliffBlock(g, S, x, y, w, h, r, shade, rn, vertical) {
-  for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
-    const X = x + ox, Y = y + oy;
-    if (X > S + 4 || X + w < -4 || Y > S + 4 || Y + h < -4) continue;
-    const c0 = [255, 250, 242], c1 = [242, 218, 188], c = c0.map((v, i) => Math.round(v + (c1[i] - v) * shade));
-    g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-    g.beginPath(); g.roundRect(X + 3, Y + 3, w - 6, h - 6, r); g.fill();
-    // 그늘(아래·오른쪽)과 밝은 면(위·왼쪽)
-    g.fillStyle = 'rgba(205,140,80,0.16)';
-    if (vertical) { g.beginPath(); g.roundRect(X + w * 0.62, Y + 6, w * 0.32, h - 12, r * 0.6); g.fill(); }
-    else { g.beginPath(); g.roundRect(X + 6, Y + h * 0.62, w - 12, h * 0.32, r * 0.6); g.fill(); }
-    g.fillStyle = 'rgba(255,255,255,0.55)';
-    if (vertical) { g.beginPath(); g.roundRect(X + w * 0.14, Y + 10, w * 0.2, h - 20, r * 0.5); g.fill(); }
-    else { g.beginPath(); g.roundRect(X + 12, Y + 9, w - 24, h * 0.2, r * 0.5); g.fill(); }
-    g.strokeStyle = 'rgba(165,100,55,0.42)'; g.lineWidth = 4;
-    g.beginPath(); g.roundRect(X + 3, Y + 3, w - 6, h - 6, r); g.stroke();
-    // 잔금 한두 줄
-    g.strokeStyle = 'rgba(165,100,55,0.22)'; g.lineWidth = 2.5;
-    if (rn() < 0.6) { g.beginPath(); const sx = X + w * (0.3 + 0.4 * rn()), sy = Y + h * (0.3 + 0.4 * rn());
-      if (vertical) { g.moveTo(sx, sy); g.quadraticCurveTo(sx + 6, sy + h * 0.15, sx - 2, sy + h * 0.3); }
-      else { g.moveTo(sx, sy); g.quadraticCurveTo(sx + w * 0.12, sy + 5, sx + w * 0.25, sy - 2); }
-      g.stroke(); }
+function stoneTile(g, S, o) {
+  const rn = cliffRng(o.seed), GX = o.gx, GY = o.gy, cw = S / GX, chh = S / GY, sy = o.stretch;   // sy < 1 이면 세로로 길쭉
+  const seeds = [], cols = [];
+  for (let j = 0; j < GY; j++) for (let i = 0; i < GX; i++) {
+    seeds.push([(i + 0.15 + 0.7 * rn()) * cw, (j + 0.15 + 0.7 * rn()) * chh]);
+    const t = rn(); cols.push(o.base0.map((v, k) => v + (o.base1[k] - v) * t));
   }
+  const img = g.createImageData(S, S), D = img.data, L = [-0.55, -0.83];
+  const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
+  for (let y = 0; y < S; y++) {
+    const gj = Math.floor(y / chh);
+    for (let x = 0; x < S; x++) {
+      const gi = Math.floor(x / cw);
+      let d1 = 1e9, d2 = 1e9, i1 = 0, v1x = 0, v1y = 0, s1x = 0, s1y = 0, s2x = 0, s2y = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const ii = ((gi + di) % GX + GX) % GX, jj = ((gj + dj) % GY + GY) % GY, sd = seeds[jj * GX + ii];
+        const sxp = sd[0] + Math.floor((gi + di) / GX) * S, syp = sd[1] + Math.floor((gj + dj) / GY) * S;
+        const dx = x - sxp, dy = (y - syp) * sy, dd = dx * dx + dy * dy;
+        if (dd < d1) { d2 = d1; s2x = s1x; s2y = s1y; d1 = dd; i1 = jj * GX + ii; v1x = dx; v1y = dy; s1x = sxp; s1y = syp * sy; }
+        else if (dd < d2) { d2 = dd; s2x = sxp; s2y = syp * sy; }
+      }
+      const sep = Math.hypot(s2x - s1x, s2y - s1y) || 1, e = (d2 - d1) / (2 * sep);   // 경계까지 거리(px)
+      const r1 = Math.sqrt(d1);
+      const dl = r1 > 1e-3 ? (v1x * L[0] + v1y * L[1]) / r1 : 0;
+      let c = cols[i1].slice();
+      const bev = dl * o.bevel * Math.pow(1 - Math.min(1, e / o.bevW), 1.5) * Math.min(1, r1 / 12);   // 가장자리 띠만 빛 쪽은 밝게·반대쪽은 어둡게(볼록) — 가운데는 평평
+      for (let k = 0; k < 3; k++) c[k] += bev > 0 ? (o.hi[k] - c[k]) * bev : (c[k] - o.lo[k]) * bev;
+      const nz = (hash(x >> 2, y >> 2) - 0.5) * o.grain;                               // 잔 알갱이
+      const ao = 1 - o.ao * (1 - Math.min(1, e / o.aoW));                              // 틈 가까이 살짝 어둡게
+      const seam = Math.min(1, Math.max(0, (e - o.seam0) / (o.seam1 - o.seam0)));      // 틈(부드럽게 번진 황토 선)
+      const p = (y * S + x) * 4;
+      for (let k = 0; k < 3; k++) { const v = (c[k] * ao + nz) * seam + o.seamC[k] * (1 - seam); D[p + k] = Math.max(0, Math.min(255, v)); }
+      D[p + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
 }
-const splitTo = (S, n0, n1, rn) => { const a = []; let t = 0; while (t < S) { const v = n0 + rn() * (n1 - n0); a.push(v); t += v; } const k = S / t; return a.map((v) => v * k); };
-const cliffEdgeTex = makeTex(512, (g, S) => {
-  const rn = cliffRng(101); g.fillStyle = '#fdf4e8'; g.fillRect(0, 0, S, S);
-  let y = 0;
-  for (const h of splitTo(S, 72, 130, rn)) {
-    let x = rn() * S;
-    for (const w of splitTo(S, 100, 210, rn)) { cliffBlock(g, S, x, y, w, h, 14 + rn() * 16, rn(), rn, false); x += w; }
-    y += h;
-  }
-}, 1, 'tile_cliff_edge');
-const cliffWaterTex = makeTex(512, (g, S) => {
-  const rn = cliffRng(202); g.fillStyle = '#fdf4e8'; g.fillRect(0, 0, S, S);
-  let x = 0;
-  for (const w of splitTo(S, 48, 92, rn)) {
-    let y = rn() * S;
-    for (const h of splitTo(S, 150, 300, rn)) { cliffBlock(g, S, x, y, w, h, 16 + rn() * 12, rn(), rn, true); y += h; }
-    x += w;
-  }
-}, 1, 'tile_cliff_water');
-const cliffHillTex = makeTex(256, (g, S) => {
-  const rn = cliffRng(303); g.fillStyle = '#fdf5ea'; g.fillRect(0, 0, S, S);
-  const n = 5, c = S / n;
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const w = c * (0.7 + 0.25 * rn()), h = c * (0.55 + 0.25 * rn()), x = i * c + (c - w) * rn() + (j % 2) * c * 0.5, y = j * c + (c - h) * rn();
-    cliffBlock(g, S, x, y, w, h, Math.min(w, h) * 0.45, rn() * 0.8, rn, false);
-  }
-}, 1, 'tile_cliff_hill');
+const cliffSteepTex = makeTex(512, (g, S) => stoneTile(g, S, {
+  seed: 707, gx: 5, gy: 3, stretch: 0.5, base0: [236, 214, 162], base1: [246, 230, 186], hi: [255, 247, 220], lo: [200, 166, 104],
+  bevel: 0.8, bevW: 26, grain: 6, ao: 0.12, aoW: 12, seam0: 0.4, seam1: 3.6, seamC: [178, 146, 80] }), 1, 'tile_cliff_steep');
+const cliffGentleTex = makeTex(512, (g, S) => stoneTile(g, S, {
+  seed: 909, gx: 5, gy: 5, stretch: 0.9, base0: [232, 214, 142], base1: [243, 229, 166], hi: [252, 244, 200], lo: [204, 182, 106],
+  bevel: 0.6, bevW: 22, grain: 5, ao: 0.18, aoW: 14, seam0: 0.8, seam1: 6, seamC: [176, 156, 80] }), 1, 'tile_cliff_gentle');
 
 // ── 값 노이즈 (지면 얼룩용) ──────────────────────────────────────────────────
 function hash3(x, y, z) {
@@ -1105,7 +1096,7 @@ const COL = {
   grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
   grassDeep: new THREE.Color(0x6fc23e), grassPale: new THREE.Color(0xd4f0a2),   // 2026-10-02: 진한 풀 덩어리 · 길가의 연한 풀
   sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
-  rock: new THREE.Color(0xf3c088), rockDark: new THREE.Color(0xe6aa6c), rockLight: new THREE.Color(0xfadcae), moss: new THREE.Color(0x6fbf46),   // 2026-10-02: 경사면이 칙칙하다는 지적 → 원작 지도 같은 밝고 부드러운 살구빛(옛 0xd9b26f/0xa9803f/0xecd39a)
+  rock: new THREE.Color(0xfff8ee), rockDark: new THREE.Color(0xf6ead8), rockLight: new THREE.Color(0xffffff), moss: new THREE.Color(0x6fbf46),   // 2026-10-02 절벽 타일 2차: 색은 타일 그림이 갖고 정점 바위색은 거의 흰색(옛 0xf3c088·0xe6aa6c·0xfadcae)   // 2026-10-02: 경사면이 칙칙하다는 지적 → 원작 지도 같은 밝고 부드러운 살구빛(옛 0xd9b26f/0xa9803f/0xecd39a)
   bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
   stone: new THREE.Color(0xd6cbb4), stoneDark: new THREE.Color(0xbfb39b),
 };
@@ -1171,12 +1162,10 @@ function paintTerrain(geo, withPaths) {
       const mossy = vnoise(d.x * 35 + 2, d.y * 35, d.z * 35);
       if (mossy > 0.5 && slope < 0.3) tmp.lerp(COL.moss, k * 0.8);
     }
-    // 절벽 타일 종류(2026-10-02): 맵 가장자리 벽 → tile_cliff_edge, 물가(수면 위 2.4 안) → tile_cliff_water, 돌계단 → 옛 돌 무늬, 나머지 → tile_cliff_hill
-    // 폭포 둘레 서쪽 벽(위도 16~29)은 가장자리지만 물이 있는 가파른 벽이라 물가 타일로
-    const [dLo, dLa] = designLonLat(d), wfZ = ss(15.5, 18.5, dLa) * ss(29.5, 26.5, dLa) * ss(-10.5, -12.5, dLo);
-    const eW = ss(4.2, 3.2, edgeInDir(d)) * (1 - wfZ), wW = Math.max(ss(2.4, 1.4, h - wl), wfZ) * (1 - eW), sW = (withPaths && T.stairs.dist(d, _o) < 1.0 && _o.inside) ? 1 : 0;
+    // 절벽 타일(2026-10-02 2차): 가파른 곳(경사 약 40°→54°) → tile_cliff_steep, 완만한 경사면 → tile_cliff_gentle, 돌계단 → 옛 돌 무늬
+    const stW = ss(0.24, 0.42, slope), sW = (withPaths && T.stairs.dist(d, _o) < 1.0 && _o.inside) ? 1 : 0;
     col.setXYZ(i, tmp.r, tmp.g, tmp.b);
-    rockA.setX(i, rockK); bareA.setX(i, bare); tuftA.setX(i, tuft); cliffA.setXYZ(i, eW, wW, sW);
+    rockA.setX(i, rockK); bareA.setX(i, bare); tuftA.setX(i, tuft); cliffA.setXYZ(i, stW, 0, sW);
   }
   col.needsUpdate = true; rockA.needsUpdate = true; bareA.needsUpdate = true; tuftA.needsUpdate = true; cliffA.needsUpdate = true;
 }
@@ -1203,7 +1192,7 @@ const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors
 // 정점 속성 rock(0=풀, 1=바위)으로 풀 질감과 바위 줄무늬 질감을 섞는다
 terrainMat.onBeforeCompile = (sh) => {
   sh.uniforms.rockMap = { value: rockTex }; sh.uniforms.tuftMap = { value: tuftTex };
-  sh.uniforms.cliffEdge = { value: cliffEdgeTex }; sh.uniforms.cliffWater = { value: cliffWaterTex }; sh.uniforms.cliffHill = { value: cliffHillTex }; sh.uniforms.planetR = { value: R };
+  sh.uniforms.cliffSteep = { value: cliffSteepTex }; sh.uniforms.cliffGentle = { value: cliffGentleTex }; sh.uniforms.planetR = { value: R };
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float rock; varying float vRock; attribute float bare; varying float vBare; attribute float tuft; varying float vTuft;\nattribute vec3 cliff; varying vec3 vCliff; varying float vH; varying vec2 vWall; uniform float planetR;')
     .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1213,20 +1202,19 @@ vRock = rock; vBare = bare; vTuft = tuft; vCliff = cliff;
   vec3 nt = normal - rad * dot( normal, rad ); vec3 ea = normalize( cross( vec3( 0.0, 1.0, 0.0 ), rad ) ); vec3 no = cross( rad, ea );
   vWall = vec2( abs( dot( nt, ea ) ), abs( dot( nt, no ) ) ); }`);
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D cliffEdge; uniform sampler2D cliffWater; uniform sampler2D cliffHill; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
+    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D cliffSteep; uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
     .replace('#include <opaque_fragment>', `
       outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
       #include <opaque_fragment>
     `)
     .replace('#include <map_fragment>', `
       vec4 grassC = texture2D( map, vMapUv );
-      // 절벽 타일 3종(2026-10-02): 가장자리·물가는 벽을 따라 × 높이로(한 장 ≈ 4유닛), 언덕은 바닥 좌표로. 돌계단은 옛 돌 무늬.
-      vec2 wwt = vWall / max( vWall.x + vWall.y, 1e-4 ); float hv = vH * 0.245;
-      vec4 eC = texture2D( cliffEdge, vec2( vMapUv.y * 0.55, hv * 0.55 ) ) * wwt.x + texture2D( cliffEdge, vec2( vMapUv.x * 0.55, hv * 0.55 ) ) * wwt.y;   // 가장자리 돌판은 크게(한 장 ≈ 7.4유닛)
-      vec4 wC = texture2D( cliffWater, vec2( vMapUv.y * 0.9, hv * 0.7 ) ) * wwt.x + texture2D( cliffWater, vec2( vMapUv.x * 0.9, hv * 0.7 ) ) * wwt.y;
-      vec4 hC = texture2D( cliffHill, vMapUv * 1.6 );
+      // 절벽 타일 2차(2026-10-02): 가파른 곳은 벽을 따라 × 높이로(한 장 ≈ 5유닛, 세로로 길쭉한 돌판), 완만한 경사면은 바닥 좌표로(판석). 돌계단은 옛 돌 무늬.
+      vec2 wwt = vWall / max( vWall.x + vWall.y, 1e-4 ); float hv = vH * 0.2;
+      vec4 stC = texture2D( cliffSteep, vec2( vMapUv.y * 0.8, hv ) ) * wwt.x + texture2D( cliffSteep, vec2( vMapUv.x * 0.8, hv ) ) * wwt.y;
+      vec4 geC = texture2D( cliffGentle, vMapUv * 1.1 );
       vec4 sC = mix( texture2D( rockMap, vMapUv * vec2(1.4, 2.6) ), vec4( 1.0 ), 0.6 );
-      vec4 rockC = mix( mix( mix( hC, wC, vCliff.y ), eC, vCliff.x ), sC, vCliff.z );
+      vec4 rockC = mix( mix( geC, stC, vCliff.x ), sC, vCliff.z );
       grassC = mix( grassC, vec4( 1.0 ), vBare );   // 길 위·길가: 풀 그림을 지워 맨땅처럼 (2026-10-02)
       diffuseColor *= mix( grassC, rockC, vRock );
       // 진한 풀포기 (2026-10-02): 배율·각도가 다른 두 겹(약 7유닛·5유닛 주기)
