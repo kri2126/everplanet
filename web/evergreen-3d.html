@@ -1770,16 +1770,35 @@ addProp(starTex, 2.2, 2.2, -5.9, 38.7);
 // 높이가 0.5→4+로 급하게 치솟는 절벽)를 찾아, 그 절벽 발치 물가에 세워 물이 자연스럽게 흘러드는 것처럼 보이게 한다.
 // 줄기 하나는 좁아 보인다는 재지적으로(2026-10-01 #2) 세 줄기를 위도를 따라 나란히 세우고 물보라를 하나의
 // 넓은 띠로 합쳐, 절벽과 물이 맞닿는 구간 전체가 폭포처럼 보이도록 넓혔다.
-const waterfallLats = [20.2, 22.5, 24.8];
+const waterfallLats = [20.2, 22.5, 24.8], waterfallSprites = [];
 for (const wfLat of waterfallLats) {
   const wf = placeSprite(makeBillboard(waterfallTex, 2.4, 5.3, { shadow: false }), -13.3, wfLat);
   wf.material.alphaTest = 0.1; wf.material.opacity = 0.95;
-  scene.add(wf); props.push(wf);
+  scene.add(wf); props.push(wf); waterfallSprites.push(wf);
 }
 // 추기 #12: 물보라 판은 호수 바닥이 아니라 수면에 걸치게(밑단이 수면 0.4 아래) — 수위를 올리면서 같이 맞췄다
 const waterfallFoam = placeSprite(makeBillboard(foamTex, 8.6, 1.2, { shadow: false }), -13.0, 22.5, false, LAKE_WATER - 0.4 - terrainH(dirFromLonLat(-13.0, 22.5)));
 waterfallFoam.material.alphaTest = 0.1;
 scene.add(waterfallFoam); props.push(waterfallFoam);
+// 로드맵 9 (2026-10-01): 폭포를 그림 판 3줄 → 코드 에셋(assets/waterfall.js, 사용자 제작 카툰 폭포 모듈)으로 교체.
+// 모듈 3개를 이어 붙인 하나의 넓은 폭포(폭 6×3, 높이 8 → 게임에선 ×0.635: 뒤 절벽 꼭대기가 서쪽 바위벽 높이 4.6에 맞음).
+// 로컬 +Y = 그 자리의 위, +Z = 동쪽(호수 쪽, 물이 떨어지는 앞), 모듈은 남북(+X = 북)으로 늘어선다. 물결 고리판(로컬 y -0.25)이 호수 수면에 오게 세운다.
+// 못 읽으면(파일 없음) 위의 그림 판 3줄과 물보라가 그대로 남는다.
+let waterfallCode = null;
+import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
+  const WF_K = 0.635, WF_LON = -13.2, WF_LAT = 22.5;
+  const wf = createWaterfall(THREE, { count: 3, thick: 1.4, fog: scene.fog });
+  const up = dirFromLonLat(WF_LON, WF_LAT);
+  const east = dirFromLonLat(WF_LON + 0.1, WF_LAT).sub(up); east.addScaledVector(up, -east.dot(up)).normalize();
+  const north = new THREE.Vector3().crossVectors(up, east).normalize();
+  wf.group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(north, up, east));
+  wf.group.position.copy(up).multiplyScalar(R + LAKE_WATER + 0.25 * WF_K);
+  wf.group.scale.setScalar(WF_K);
+  scene.add(wf.group);
+  for (const m of [...waterfallSprites, waterfallFoam]) { scene.remove(m); const i = props.indexOf(m); if (i >= 0) props.splice(i, 1); }
+  waterfallCode = wf;
+  if (DEBUG) console.log('waterfall.js 적용');
+}).catch((e) => { if (DEBUG) console.warn('waterfall.js 로드 실패 — 그림 판 유지', e); });
 // 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳 (추기 #3: 앞 2개는 샘물과 함께 이동, 추기 #12: 수위가 올라 잠기지 않게 둘레 턱 위로)
 const dewNodes = [[0.95, 15.5], [4.3, 11.45], [1.4, 22.6]].map(([lon, lat]) => {
   const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
@@ -3865,6 +3884,7 @@ function step(dt) {
     const bd = _bn.copy(airship.userData.base).normalize();
     airship.position.copy(airship.userData.base).addScaledVector(bd, Math.sin(nowS * 0.9) * 0.08 + (airship.userData.alt || 0));
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
+    if (waterfallCode) waterfallCode.update(dt);
     for (const b of beams) b.material.uniforms.uT.value = nowS; pedestalBeam.material.uniforms.uT.value = nowS;
     // E·F·G: 슬라임·전투·별·퀘스트 빛기둥·튜토리얼 화살표·근처 NPC
     updateSlimes(dt); updateSpikes(dt); separateMonsters(); updateCombat(dt); updateStars(dt); updatePuff(dt); updateRipple(dt); updateCooldowns(dt); updateQuestBanner(dt);
