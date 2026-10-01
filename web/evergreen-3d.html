@@ -963,8 +963,11 @@ const DECK_TOP = terrainH(T.deck) + 1.2;   // 추기 #3: 데크 윗면 = 그 자
 const PAD_SNAP = 0.35;
 function padTopAt(pd, dd) { const f = dd / pd.r; return pd.top - (pd.top - pd.edge) * f * f; }
 // 걷기 판정 높이. z = 지금 발 높이(나무 꼭대기 발판을 셀지 정함). 생략하면(부활·불러오기·순간이동) 그 자리 가장 높은 바닥 — 나무 위에서 저장했으면 나무 위에 선다
+// 2026-10-02 비행정 충돌(아래 SHIP_SHAPES): 비행정이 만들어진 뒤 shipCol이 채워진다(그 전엔 없음)
+let shipCol = null;
 function walkH(p, z = Infinity) {
   let h = terrainH(p);
+  if (shipCol) h = Math.max(h, shipCol.standH(p, z));
   const dD = angDeg(p, T.deck);
   if (dD < 2.25) h = Math.max(h, DECK_TOP);
   const dR = T.ramp.dist(p, _o);
@@ -1575,6 +1578,7 @@ function canStand(dirUnit) {
       }
     } else if (h - player.z > LEDGE_UP) return false;
   }
+  if (shipCol && shipCol.blocks(dirUnit, _cs, player.z)) return false;   // 2026-10-02: 비행정 몸통에 부딪침
   for (const t of trees) {
     const u = t.userData, dd = angDeg(dirUnit, u.dir) * DEG * R;
     if (u.pads && dd < u.padReach) {   // 잎 덩어리 옆구리: 그 단 윗면보다 낮은 높이로 안쪽으로 파고드는 걸음은 막힘(잎에 부딪침)
@@ -2175,6 +2179,43 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
   airshipModel = g;
   if (DEBUG) console.log('airship GLB 적용, 프로펠러', g.userData.props.length);
 }).catch((e) => { if (DEBUG) console.warn('airship GLB 로드 실패 — 그림 판 유지', e); }));
+// 2026-10-02 비행정 위에 서기·몸통에 막히기 + 배 위에서 시작. 모델(airship.glb)의 조각 크기를 재서(게임 단위, 배 밑바닥 = 0) 배 좌표(옆 x · 뱃머리 z)의 도형으로:
+//   선체 타원(옆 1.34 · 앞뒤 1.91): 안쪽 갑판(1.13 × 1.61) 윗면 1.30, 가장자리 뱃전 1.66, 몸통 아래끝 0.26
+//   양옆 프로펠러 통(x ±1.5~2.5, z ±0.78): 윗면 1.87, 아래끝 0.86 — 올라설 수 있음
+//   돛대(가운데 반지름 0.22, 4.63까지)·돛과 활대(z −1.51~0.03, x ±1.18, 1.64부터) — 올라설 수 없고 갑판에서도 막힘
+// 발판은 나무 단과 같은 "한쪽 방향"(PAD_SNAP). 몸통은 캐릭터 키(SHIP_CHAR_H)만큼 겹치면 안쪽으로 못 들어간다 — 땅에서는 막히고, 2단 점프로 뱃전(땅 위 약 2.0)에 올라선다.
+// 배가 내려오거나(컷신) 둥실거려도 airship.position 높이를 그대로 따라간다.
+{
+  const up = airship.userData.dir.clone(), east = dirFromLonLat(-5.5, -3.6).sub(up), south = dirFromLonLat(-5.6, -3.7).sub(up);   // 모델 방향과 같은 계산
+  east.addScaledVector(up, -east.dot(up)).normalize(); south.addScaledVector(up, -south.dot(up)).normalize();
+  const fwd = east.multiplyScalar(Math.cos(35 * DEG)).addScaledVector(south, Math.sin(35 * DEG)).normalize();
+  const side = new THREE.Vector3().crossVectors(up, fwd).normalize();
+  const SHIP_SHAPES = [
+    { ell: true, cx: 0, cz: 0, a: 1.34, b: 1.91, bottom: 0.26, top: (x, z) => ((x / 1.13) ** 2 + (z / 1.61) ** 2 < 1 ? 1.30 : 1.66) },
+    { cx: 2.0, cz: 0, a: 0.5, b: 0.78, bottom: 0.86, top: () => 1.87 },
+    { cx: -2.0, cz: 0, a: 0.5, b: 0.78, bottom: 0.86, top: () => 1.87 },
+    { ell: true, cx: 0, cz: 0, a: 0.22, b: 0.22, bottom: 1.27, top: () => 4.63, noStand: true },
+    { cx: 0, cz: -0.74, a: 1.18, b: 0.77, bottom: 1.64, top: () => 4.5, noStand: true },
+  ];
+  const SHIP_CHAR_H = 1.6, SHIP_NEAR = Math.cos(4.5 / R), _v = new THREE.Vector3();
+  const local = (p) => { _v.subVectors(p, up); return [_v.dot(side) * R, _v.dot(fwd) * R]; };
+  const inside = (sh, x, z) => sh.ell ? ((x - sh.cx) / sh.a) ** 2 + ((z - sh.cz) / sh.b) ** 2 : Math.max(Math.abs(x - sh.cx) / sh.a, Math.abs(z - sh.cz) / sh.b);
+  const baseH = () => airship.position.length() - R;
+  shipCol = {
+    up, fwd, side, SHIP_SHAPES,
+    standH(p, z) { if (p.dot(up) < SHIP_NEAR) return -1e9; const [x, y] = local(p), b = baseH(); let h = -1e9;
+      for (const sh of SHIP_SHAPES) { if (sh.noStand || inside(sh, x, y) >= 1) continue; const tt = b + sh.top(x, y); if (z >= tt - PAD_SNAP) h = Math.max(h, tt); }
+      return h; },
+    blocks(pNew, pCur, z) { if (pNew.dot(up) < SHIP_NEAR) return false; const [x, y] = local(pNew), [x0, y0] = local(pCur), b = baseH();
+      for (const sh of SHIP_SHAPES) { const fn = inside(sh, x, y); if (fn >= 1 || fn >= inside(sh, x0, y0)) continue;   // 안쪽으로 파고드는 걸음만
+        if (z + SHIP_CHAR_H > b + sh.bottom && z < b + sh.top(x, y) - PAD_SNAP) return true; }
+      return false; },
+    spot() { return up.clone().multiplyScalar(R).addScaledVector(fwd, 0.95).normalize(); },   // 갑판 뱃머리 쪽(돛·돛대 앞) — 시작·컷신 자리
+  };
+  // 새 판은 배 위에서 시작(이어하기는 저장된 자리). 안전 지점(떨어졌을 때 돌아오는 곳)도 처음엔 배 위
+  const d = shipCol.spot(), z0 = walkH(d);
+  player.pos.copy(d).multiplyScalar(R + z0); player.z = z0; player.safe.copy(d); player.safeNext.copy(d);
+}
 addProp(signTex, 1.3, 1.75, -8.0, -4.4);        // 들판 길 초입(크레이터 방향 안내)
 addProp(lanternTex, 1.1, 1.5, -8.4, -7.9);       // 데크 경사로 입구
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
@@ -3685,7 +3726,7 @@ const cut = { on: !DEBUG && !new URLSearchParams(location.search).has('nocut'), 
 const cutEl = document.getElementById('cut');
 const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _cn = new THREE.Vector3(), _ce = new THREE.Vector3();
 const easeOut = (x) => 1 - Math.pow(1 - x, 3), smooth = (x) => x * x * (3 - 2 * x);
-function startCutscene() { cut.on = true; cut.t = 0; cutEl.style.display = 'block'; player.mesh.visible = false; myLabel.style.display = 'none'; setObjBarHidden(true); }   // 작업 H
+function startCutscene() { cut.on = true; cut.t = 0; cutEl.style.display = 'block'; player.mesh.visible = true; myLabel.style.display = 'none'; setObjBarHidden(true); }   // 2026-10-02: 캐릭터는 처음부터 배 위에 보인다   // 작업 H
 function endCutscene() { cut.on = false; cutEl.style.display = 'none'; player.mesh.visible = true; airship.userData.alt = 0; zoneShown = true; showZoneName(); log('별내림 천문대 남쪽 착륙 들판에 도착했다. 항해사 미르에게 말을 걸어 보자 (F 키).', 'sys'); setObjBarHidden(false); scheduleKeyGuide(); }   // 작업 H: 목표 줄 표시·키 안내
 function updateCutscene(dt) {
   cut.t += dt;
@@ -3696,8 +3737,12 @@ function updateCutscene(dt) {
   // 카메라: 비행정 뒤 위에서 함께 내려오며 비행정을 본다
   _cp.copy(base).addScaledVector(bd, 30 - 16 * e).addScaledVector(_cn, -22 + 6 * e).addScaledVector(_ce, 5);
   _cl.copy(base).addScaledVector(bd, airship.userData.alt + 1.5);
+  // 2026-10-02: 캐릭터가 배 갑판에 타고 함께 내려온다(배가 빨리 내려와 중력으로는 못 따라가니 매 프레임 갑판 위에 붙여 둔다)
+  { airship.position.copy(base).addScaledVector(bd, Math.sin(performance.now() * 0.0009) * 0.08 + airship.userData.alt);
+    const d = shipCol.spot(), zd = walkH(d); player.pos.copy(d).multiplyScalar(R + zd); player.z = zd; player.vz = 0; player.grounded = true; player.jumps = 0; camZ = zd;
+    player.mesh.position.copy(player.pos); if (airshipModel) airshipModel.position.copy(airship.position); }   // 이번 프레임 그림도 같은 자리로
   if (cut.t >= cut.land) {
-    if (!player.mesh.visible) { player.mesh.visible = true; myLabel.style.display = 'block'; }
+    if (myLabel.style.display === 'none') myLabel.style.display = 'block';
     const k = smooth(Math.min(1, (cut.t - cut.land) / (cut.dur - cut.land)));
     _cp.lerp(_camPos, k); _cl.lerp(_look, k);
   }
@@ -5290,7 +5335,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt,
-    terrainH, walkH, padTopAt, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
