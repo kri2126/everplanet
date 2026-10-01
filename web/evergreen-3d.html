@@ -3095,35 +3095,35 @@ function sfxBiquad(type, f, q, sr) {   // RBJ 쿡북 2차 필터
   return (x) => { const y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x; y2 = y1; y1 = y; return y; };
 }
 function synthGrassStep(seed, sr) {
-  const r = sfxRng(seed), n = Math.floor(sr * 0.26), out = new Float32Array(n);
-  // ① 사각거림: 중고역 노이즈, 뒤꿈치→발끝 두 덩이
-  const bp = sfxBiquad('bp', 1500 + r() * 900, 0.6, sr), hp = sfxBiquad('hp', 350, 0.7, sr), bpLo = sfxBiquad('bp', 650 + r() * 250, 0.9, sr);
-  const t2 = 0.03 + r() * 0.025, a2 = 0.45 + r() * 0.3, tau = 0.04 + r() * 0.02;
+  const r = sfxRng(seed), n = Math.floor(sr * 0.3), out = new Float32Array(n);
+  // ① 부드러운 스침: 중역 노이즈, 천천히 차오르고 천천히 사라지는 두 덩이(뒤꿈치→발끝)
+  const bp = sfxBiquad('bp', 1000 + r() * 500, 0.55, sr), hp = sfxBiquad('hp', 250, 0.7, sr), bpLo = sfxBiquad('bp', 500 + r() * 200, 0.8, sr);
+  const t2 = 0.045 + r() * 0.03, a2 = 0.55 + r() * 0.25, tau = 0.055 + r() * 0.025;
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    let e = Math.min(1, t / 0.006) * Math.exp(-t / tau);
-    if (t > t2) e += a2 * Math.min(1, (t - t2) / 0.008) * Math.exp(-(t - t2) / (tau * 1.3));
-    const w = r() * 2 - 1; out[i] = (hp(bp(w)) * 1.4 + bpLo(w) * 0.9) * e;
+    let e = Math.sin(Math.min(1, t / 0.022) * Math.PI / 2) * Math.exp(-t / tau);
+    if (t > t2) e += a2 * Math.sin(Math.min(1, (t - t2) / 0.025) * Math.PI / 2) * Math.exp(-(t - t2) / (tau * 1.4));
+    const w = r() * 2 - 1; out[i] = (hp(bp(w)) * 1.2 + bpLo(w) * 0.8) * e;
   }
-  // ② 풀잎 꺾이는 잔 소리: 1~3ms 짜리 아주 짧은 고역 알갱이
-  const grains = 14 + Math.floor(r() * 12);
+  // ② 여린 풀잎 스치는 잔 소리: 아주 작고 드문 알갱이(꺾이는 소리는 뺐다)
+  const grains = 5 + Math.floor(r() * 5);
   for (let g = 0; g < grains; g++) {
-    const st = Math.floor(sr * Math.pow(r(), 1.6) * 0.13), len = Math.floor(sr * (0.001 + r() * 0.002)), amp = 0.04 + r() * 0.12;
-    const gh = sfxBiquad('bp', 2800 + r() * 2200, 1.2, sr);
+    const st = Math.floor(sr * Math.pow(r(), 1.6) * 0.13), len = Math.floor(sr * (0.004 + r() * 0.006)), amp = 0.015 + r() * 0.035;
+    const gh = sfxBiquad('bp', 1800 + r() * 1200, 1.0, sr);
     for (let i = 0; i < len && st + i < n; i++) out[st + i] += gh(r() * 2 - 1) * amp * Math.sin(Math.PI * i / len);
   }
   // ③ 흙 위 아주 약한 쿵: 저음 사인
   const f0 = 85 + r() * 25;
-  for (let i = 0; i < n; i++) { const t = i / sr; out[i] += Math.sin(2 * Math.PI * f0 * t) * Math.exp(-t / 0.02) * Math.min(1, t / 0.003) * 0.22; }
-  // 전체를 부드럽게: 저역통과 두 번(약 5kHz)
-  const lp1 = sfxBiquad('lp', 5200, 0.7, sr), lp2 = sfxBiquad('lp', 6500, 0.7, sr);
+  for (let i = 0; i < n; i++) { const t = i / sr; out[i] += Math.sin(2 * Math.PI * f0 * t) * Math.exp(-t / 0.025) * Math.min(1, t / 0.006) * 0.08; }
+  // 전체를 부드럽게: 저역통과 두 번(약 3.2kHz) — 바스락보다 '스윽'
+  const lp1 = sfxBiquad('lp', 3200, 0.7, sr), lp2 = sfxBiquad('lp', 4200, 0.7, sr);
   for (let i = 0; i < n; i++) out[i] = lp2(lp1(out[i]));
   // 정리: 끝 페이드, 피크 0.9
   let pk = 0; for (let i = 0; i < n; i++) { if (i > n - sr * 0.03) out[i] *= (n - i) / (sr * 0.03); pk = Math.max(pk, Math.abs(out[i])); }
   for (let i = 0; i < n; i++) out[i] *= 0.9 / pk;
   return out;
 }
-const sfx = { ctx: null, master: null, grass: null, last: -1, vol: 0.35, on: !QP.has('nosfx') };
+const sfx = { ctx: null, master: null, grass: null, last: -1, vol: 0.12, on: !QP.has('nosfx') };
 function sfxReady() {
   if (!sfx.on) return false;
   if (!sfx.ctx) {
