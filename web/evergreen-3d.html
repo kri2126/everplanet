@@ -2649,7 +2649,7 @@ function mainDialogFor(n) {
 }
 function acceptMainQuest() {
   mq.accepted = true;
-  log(`행성 퀘스트 수락: "${MAIN_QUEST.title}"`, 'sys');
+  log(`행성 퀘스트 수락: "${MAIN_QUEST.title}"`, 'sys'); sfxQuest('accept');
   advanceMainStage();
 }
 function advanceMainStage() {
@@ -2676,7 +2676,7 @@ function deliverStar() {
   pedestalBeam.scale.setScalar(1.6);
   gainExp(MAIN_QUEST.rewardExp); player.seeds += MAIN_QUEST.rewardSeeds; updateSeedsUI();
   log(`별이 다시 빛나기 시작했다! 행성 퀘스트 완료 — 경험치 +${MAIN_QUEST.rewardExp}·별씨앗 +${MAIN_QUEST.rewardSeeds}`, 'sys');
-  showQuestBanner(MAIN_QUEST.title, `경험치 +${MAIN_QUEST.rewardExp} · 별씨앗 +${MAIN_QUEST.rewardSeeds}`);
+  showQuestBanner(MAIN_QUEST.title, `경험치 +${MAIN_QUEST.rewardExp} · 별씨앗 +${MAIN_QUEST.rewardSeeds}`); sfxQuest('complete');
   updateQuestUI();
   openPortal();            // 작업 G: 완료 조건 — 포탈 개방·전경도 표시
   requestSave('행성 퀘스트 완료');
@@ -2724,7 +2724,7 @@ function pickSideDef(npcId) {
 function acceptSide(id) {
   sq[id].accepted = true;
   const def = SIDE_QUESTS.find(x => x.id === id);
-  log(`일반 퀘스트 수락: ${def.title}`, 'sys');
+  log(`일반 퀘스트 수락: ${def.title}`, 'sys'); sfxQuest('accept');
   updateQuestUI();
   requestSave('퀘스트');   // 작업 G
 }
@@ -2736,7 +2736,7 @@ function completeSide(id) {
   if (def.rewardPot) { player.inv[def.rewardPot] = (player.inv[def.rewardPot] || 0) + 1; updateInvUI(); }
   const potTxt = def.rewardPot ? ` · ${def.rewardPot === 'hpPot' ? 'HP' : 'MP'}포션 +1` : '';
   log(`퀘스트 완료: ${def.title} — 경험치 +${def.rewardExp}·별씨앗 +${def.rewardSeeds}${potTxt}`, 'sys');
-  showQuestBanner(def.title, `경험치 +${def.rewardExp} · 별씨앗 +${def.rewardSeeds}${potTxt}`);
+  showQuestBanner(def.title, `경험치 +${def.rewardExp} · 별씨앗 +${def.rewardSeeds}${potTxt}`); sfxQuest('complete');
   updateQuestUI();
   requestSave('퀘스트 완료');   // 작업 G
 }
@@ -4436,6 +4436,38 @@ function jmpDouble(sr) {
   const oL = new Float32Array(n), oR = new Float32Array(n);
   for (let i = 0; i < n; i++) { const a = i < j.length ? j[i] : 0; oL[i] = a + (i < L.length ? L[i] / g * jr * 0.5 : 0); oR[i] = a + (i < R.length ? R[i] / g * jr * 0.5 : 0); }
   return [oL, oR];
+}
+// ── 퀘스트 수락음·완료음(오르골) — 수락: '도-미-솔' 띠링. 완료: 일곱 음이 빠르게 올라가 높은 '도'+화음, 반짝임. 파일 없이 합성
+const QS_NOTE = { G4: 392, C5: 523.25, C6: 1046.5, D6: 1174.66, E6: 1318.51, F6: 1396.91, G6: 1567.98, A6: 1760, B6: 1975.53, C7: 2093 };
+function qsEnv(i, sr, att, dec) { const t = i / sr, a = Math.min(1, t / att); return a * a * Math.exp(-t / dec); }
+function qsMusicBox(sr, f, dur) {   // 맑은 사인 + 3배음이 빨리 사라짐, 끝 60ms 서서히
+  const n = Math.floor(sr * dur), o = new Float32Array(n), m = Math.floor(sr * 0.06);
+  for (let i = 0; i < n; i++) { const t = i / sr; let v = Math.sin(2 * Math.PI * f * t) * qsEnv(i, sr, 0.002, 0.3) + 0.2 * Math.sin(2 * Math.PI * f * 3 * t) * qsEnv(i, sr, 0.001, 0.06);
+    v *= qsEnv(i, sr, 0.001, 10); if (i >= n - m) { const r = (n - i) / m; v *= r * r; } o[i] = v; }
+  return o;
+}
+function qsSparkle(sr, dur, dens, lo, hi, seed) {   // 높은 반짝이 알갱이들(앞쪽에 많고 점점 줄어듦)
+  const r = uiRng(seed), n = Math.floor(sr * dur), o = new Float32Array(n), m = Math.floor(0.12 * sr), cnt = Math.floor(dens * dur);
+  for (let q = 0; q < cnt; q++) { const st = Math.floor(r() * n * 0.7), f = Math.exp(Math.log(lo) + r() * (Math.log(hi) - Math.log(lo))), a = (0.3 + 0.7 * r()) * Math.exp(-st / n * 2) * 0.25;
+    for (let i = 0; i < m && st + i < n; i++) { const t = i / sr; o[st + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / 0.03) * a; } }
+  return o;
+}
+function qsSeq(sr, total, ev) { const o = new Float32Array(Math.floor(sr * total)); for (const [t0, s, g] of ev) { const st = Math.floor(t0 * sr); for (let i = 0; i < s.length && st + i < o.length; i++) o[st + i] += s[i] * g; } return o; }
+function qsLoudNorm(o, sr, db) {   // 가장 큰 150ms 창의 크기를 db로
+  const w = Math.floor(0.15 * sr); let s = 0, best = 0; for (let i = 0; i < o.length; i++) { s += o[i] * o[i]; if (i >= w) s -= o[i - w] * o[i - w]; if (i >= w - 1) best = Math.max(best, s / w); }
+  const g = Math.pow(10, db / 20) / Math.sqrt(best || 1e-12); for (let i = 0; i < o.length; i++) o[i] *= g; return o;
+}
+function qsAccept(sr) { const mb = (x, d) => qsMusicBox(sr, QS_NOTE[x], d || 0.7); return qsLoudNorm(qsSeq(sr, 0.9, [[0, mb('C6'), 0.9], [0.07, mb('E6'), 0.9], [0.14, mb('G6'), 1]]), sr, -24); }
+function qsComplete(sr) {
+  const mb = (x, d) => qsMusicBox(sr, QS_NOTE[x], d || 0.7), ev = ['C6', 'D6', 'E6', 'F6', 'G6', 'A6', 'B6'].map((x, i) => [i * 0.045, mb(x, 0.6), 0.7]);
+  ev.push([0.33, mb('C7', 1.5), 1], [0.33, mb('C6', 1.5), 0.45], [0.33, mb('E6', 1.5), 0.45], [0.33, mb('G6', 1.5), 0.45], [0.33, mb('C5', 1.5), 0.5], [0.35, qsSparkle(sr, 1.0, 20, 3000, 7500, 77), 0.8]);
+  return qsLoudNorm(qsSeq(sr, 1.9, ev), sr, -23);
+}
+const questSnd = { bufs: null };
+function sfxQuest(kind) {   // 'accept' | 'complete'
+  if (!sfxReady()) return;
+  if (!questSnd.bufs) { const sr = sfx.ctx.sampleRate, mk = (a) => { const b = sfx.ctx.createBuffer(1, a.length, sr); b.copyToChannel(a, 0); return b; }; questSnd.bufs = { accept: mk(qsAccept(sr)), complete: mk(qsComplete(sr)) }; }
+  const src = sfx.ctx.createBufferSource(); src.buffer = questSnd.bufs[kind]; src.connect(sfx.master); src.start();
 }
 const jumpSnd = { bufs: null, vol: 0.0302 };
 function sfxJump(n) {   // n: 1 = 1단, 2 = 2단
