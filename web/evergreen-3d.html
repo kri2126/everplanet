@@ -4093,7 +4093,7 @@ function synthWoodStep(seed, sr, P) {
 const SFX_DEF = {   // manifest.json이 없을 때 기본값 — 파일 쪽 값과 같다
   step_grass: { volume: 0.075, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'grass/step_grass_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { center: 4200, lp: 8500 }, synthFn: 'grass', seedMul: 104729 },
   step_dirt: { volume: 0.075, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'dirt/step_dirt_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { center: 2300, lp: 7000, thud: 0.2, grit: 1.4 }, synthFn: 'dirt', seedMul: 7727 },
-  step_wood: { volume: 0.0995, every: 1, skip: 0.1, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'wood/step_wood_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { knocks: [[380, 0.8, 1], [1000, 0.9, 0.35]], kdec: 0.022, thud: 0.5, comb: 7, fb: 0.45, combLp: 1100, att: 0.002, lp: 3600, scuff: 0, rattle: 0 }, synthFn: 'wood', seedMul: 3571 },   // 나무다리·데크·비행정 갑판 — 거의 매 걸음
+  step_wood: { volume: 0.0995, every: 2, skip: 0.25, maxGap: 5, files: Array.from({ length: 16 }, (_, i) => 'wood/step_wood_' + String(i + 1).padStart(2, '0') + '.wav'), synth: { knocks: [[380, 0.8, 1], [1000, 0.9, 0.35]], kdec: 0.022, thud: 0.5, comb: 7, fb: 0.45, combLp: 1100, att: 0.002, lp: 3600, scuff: 0, rattle: 0 }, synthFn: 'wood', seedMul: 3571 },   // 나무다리·데크·비행정 갑판 — 풀과 같은 간격(두 걸음에 한 번, 25% 건너뜀)
 };
 const sfx = { ctx: null, master: null, on: !QP.has('nosfx'), def: SFX_DEF, bufs: {}, recent: {}, count: {}, gap: {}, loading: false };
 function sfxReady() {
