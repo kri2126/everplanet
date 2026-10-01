@@ -539,7 +539,7 @@ const T = {
   stairCut: makeSeg(-1.5, 35.7, -1.5, 33.2),    // 초원 절벽에서 계단 통로를 깎아내는 범위(계단과 같은 구간)
   bridge: makeSeg(-3.9, 28.6, -3.9, 16.6),      // 남북 나무다리 (호수 띠 전체, 양쪽 물가 너머까지 — 약 19 유닛)
   island: dirFromLonLat(2.4, 23.2),             // 호수 속 섬(반지름 약 1.8°, 높이 0.6)
-  spring: dirFromLonLat(-4.8, 14.4),            // 샘물 웅덩이(얕은 물)
+  spring: dirFromLonLat(3.0, 13.5),             // 샘물 웅덩이(얕은 물). 추기 #3(2026-10-01): 길(간선3·4) 오른쪽으로 이동(원래 -4.8,14.4)
   starCrater: dirFromLonLat(-10.5, 33.5),       // 별 크레이터 중심(접시 + 둘레 턱). 추기 #5: 지도 북서쪽(야영지 서쪽), 남동쪽 트임으로 야영지에서 들어온다
   // 바위벽(능선): 놀이 구역 가장자리
   // walls: 추기 #4부터 terrainH 안에서 설계 경위도(남 -11 · 북 48 · 동서 ±14.6)로 직접 판정 (makeSeg 대원은 확대된 지도에서 위선을 벗어난다)
@@ -607,20 +607,23 @@ function terrainH(p) {
     h = Math.max(h, Math.min(MEADOW_H, (1 - tS) * MEADOW_H + 0.6) * ss(1.5, 1.05, dS));
   }
 
-  // 호수 띠: 가장자리 1.2°는 여울(걸어서 드나듦), 안쪽은 깊은 물(수영)
+  // 호수 띠: 가장자리는 여울(걸어서 드나듦), 안쪽은 깊은 물(수영)
+  // 나무다리 밑 호수가 경사면(마른 호숫가)이 두드러져 보인다는 지적으로 물가 전환 폭을 1.5°→0.55°로 좁혀
+  // 뭍에서 물로 더 빨리 떨어지게 했다 — 가득 차 보이도록, 여울 자체는 좁아졌을 뿐 없어지지 않았다 (2026-10-01 #3)
   const li = lakeInside(lon, lat);
-  if (li > -0.4) {
-    const m = ss(-0.3, 1.2, li);
+  if (li > -0.25) {
+    const m = ss(-0.15, 0.4, li);
     h = lerp(h, -4.2 + 0.4 * vnoise(p.x * 30, p.y * 30, p.z * 30), m);
     // 섬: 호수 위 0.6, 물가는 완만해 헤엄쳐 올라온다
     const dI = angDeg(p, T.island);
     h = lerp(h, 0.6 + 0.05 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.2 * MAP_S, 1.6 * MAP_S, dI));
   }
 
-  // 샘물 웅덩이: -0.5로 완화했더니 물이 안 고여 보인다는 재지적 — WATER(-2.5)보다 아래인 -2.8로 다시 낮추되,
-  // 급한 절벽처럼 보이지 않도록 완전히 꺼지는 반경과 퍼지는 반경을 둘 다 넓혀 완만한 웅덩이 모양으로 만들었다 (2026-10-01 #2)
+  // 샘물 웅덩이: 길(간선 3·4번)과 너무 가까워 통행을 막는다는 지적으로 길 오른쪽(동쪽)의 빈 터로 옮겼다(원작 좌표와는
+  // 다름). 옮긴 김에 "경사면이 보이지 않게 물을 채워달라"는 지적도 반영 — 물이 차는 반경(1.1→1.6×MAP_S)을 넓히고
+  // 마른 둘레(물~풀 전환대)는 좁혀(2.2→2.1×MAP_S) 깊이는 그대로(-2.8)인 채 대부분이 물로 보이게 했다 (2026-10-01 #3)
   const dSp = angDeg(p, T.spring);
-  if (dSp < 2.6 * MAP_S) h = lerp(h, -2.8, ss(2.2 * MAP_S, 1.1 * MAP_S, dSp));
+  if (dSp < 2.5 * MAP_S) h = lerp(h, -2.8, ss(2.1 * MAP_S, 1.6 * MAP_S, dSp));
 
   // 별 크레이터: 접시(안쪽 -0.4) + 둘레 턱(1.0, 가파름 — 걸어선 못 넘고 점프로) + 북동쪽 길 트임
   const dC = angDeg(p, T.starCrater);
@@ -1266,7 +1269,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
-  const reeds = [[-11.0, 28.9], [-7.6, 28.7], [-1.4, 28.8], [2.2, 28.9], [5.8, 28.6], [-11.4, 16.4], [-7.8, 16.3], [-1.6, 16.5], [1.8, 16.6], [5.4, 16.8], [8.0, 19.0], [8.2, 26.0], [-5.8, 15.2], [-4.0, 15.8], [-5.6, 13.4], [-3.8, 13.0], [0.8, 23.0], [4.0, 24.6], [3.6, 21.6]];
+  const reeds = [[-11.0, 28.9], [-7.6, 28.7], [-1.4, 28.8], [2.2, 28.9], [5.8, 28.6], [-11.4, 16.4], [-7.8, 16.3], [-1.6, 16.5], [1.8, 16.6], [5.4, 16.8], [8.0, 19.0], [8.2, 26.0], [2.0, 14.3], [3.8, 14.9], [2.2, 12.5], [4.0, 12.1], [0.8, 23.0], [4.0, 24.6], [3.6, 21.6]];   // 샘물 둘레 4곳은 추기 #3로 이동
   reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
@@ -1537,8 +1540,8 @@ for (const wfLat of waterfallLats) {
 const waterfallFoam = placeSprite(makeBillboard(foamTex, 8.6, 1.2, { shadow: false }), -13.0, 22.5);
 waterfallFoam.material.alphaTest = 0.1;
 scene.add(waterfallFoam); props.push(waterfallFoam);
-// 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
-const dewNodes = [[-5.9, 15.1], [-4.1, 13.3], [1.4, 22.6]].map(([lon, lat]) => {
+// 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳 (추기 #3: 앞 2개는 샘물과 함께 이동)
+const dewNodes = [[1.9, 14.2], [3.7, 12.4], [1.4, 22.6]].map(([lon, lat]) => {
   const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
   scene.add(m);
   return { mesh: m, dir: m.userData.dir, avail: true, cd: 0 };
@@ -1762,7 +1765,7 @@ const NPCS = [
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
   { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -4.5, lat: 29.8, lift: 0,
     idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
-  { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: -2.9, lat: 15.4, lift: 0,
+  { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 4.9, lat: 14.5, lift: 0,   // 샘물과 함께 이동(추기 #3)
     idle: '이 근방 슬라임들, 방심하면 안 돼.' },
 ];
 for (const n of NPCS) {
@@ -3240,7 +3243,7 @@ const zoneCap = document.getElementById('zoneCap'), zoneTitle = document.getElem
 const ui2d = document.getElementById('ui2d'), ctx = ui2d.getContext('2d');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const ZONE_LABELS = [
-  ['착륙 들판', -7.4, -8.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', -4.8, 14.0], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
+  ['착륙 들판', -7.4, -8.2], ['서쪽 샛길', -10.6, 10.0], ['샘물', 3.0, 13.1], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
   ['야영지', -4.4, 30.8], ['별 크레이터', -10.5, 36.6], ['돌계단', -1.5, 34.4], ['관측소 초원', -0.9, 41.6], ['겸손한 사원 →', 10.6, 44.6],
 ];
 const zoneLabelEls = ZONE_LABELS.map(([name]) => { const d = document.createElement('div'); d.className = 'lbl'; d.textContent = name; zoneLabels.appendChild(d); return d; });
