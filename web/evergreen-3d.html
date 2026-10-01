@@ -927,11 +927,15 @@ function addClimb(dir, radius, heightAboveGround) { climbProps.push({ dir, radiu
 // 걷기 판정 높이: 지형 + 구조물(데크·경사로·다리) + 오를 수 있는 소품
 const BRIDGE_H = 0.0;   // 로드맵 8: 다리 양끝 땅이 0이라 상판도 0 기준 아치
 const DECK_TOP = terrainH(T.deck) + 1.2;   // 추기 #3: 데크 윗면 = 그 자리 땅(남쪽 비탈 위 1.2) + 1.2
-// 2026-10-02 나무 위에 올라타기: 나무 꼭대기(잎 덩어리 윗면)는 가운데가 볼록한 접시 모양 발판 — 가운데 = 나무 키, 가장자리(crownR) = 키의 0.65~0.75.
-// "한쪽 방향 발판"이라 그 높이 근처(TREE_TOP_SNAP 아래까지)나 위에 있을 때만 바닥이 된다 — 땅에서는 예전처럼 줄기 옆·잎 밑을 지나다닌다.
-// 올라가는 길: 점프한 채 줄기에 부딪치면 타고 오른다(CLIMB_V, step()).
-const TREE_TOP_SNAP = 0.6, CLIMB_V = 10;
-function treeTopAt(u, dd) { const f = dd / u.crownR; return u.top - (u.top - u.edge) * f * f; }
+// 2026-10-02 나무 위에 올라타기(2차): 1차의 "점프한 채 줄기에 부딪치면 어느 나무든 타고 오름"을 없애고, 점프로 닿는 높이의 단(段)에만 올라선다.
+// 나무마다 잎 덩어리 윗면을 발판(pad) 몇 개로 — 모델 세 개의 잎 윗면 높이를 0.04H 격자로 재서 맞춤(H = 나무 키):
+//   tree_A 둥근 한 덩이: 꼭대기 접시 하나(반지름 0.46H, 가운데 1.0H → 가장자리 0.72H) — 작은 나무(키 약 2.9 이하)만 땅에서 2단 점프로 닿는다
+//   tree_B 큰 덩이 + 옆에 붙은 작은 덩이: 옆 덩이 윗면(0.52H, 모델 +x 쪽 0.44H 떨어진 자리, 반지름 0.10H) → 큰 덩이 꼭대기(반지름 0.42H, 1.0H → 0.74H)
+//   tree_C 두 단: 아랫단 어깨(반지름 0.43H, 0.56H) → 윗단(반지름 0.33H, 1.0H → 0.78H, 아랫단 위로 솟은 몸통은 0.55H부터 막힘)
+// 발판은 "한쪽 방향" — 발이 그 높이 −PAD_SNAP보다 위일 때만 바닥이 된다. 땅에서는 예전처럼 줄기 옆·잎 밑을 지나다니고,
+// 공중에서 잎 덩어리 옆구리(bottom~윗면)로 파고드는 걸음은 막힌다(잎에 부딪침). 점프(2단 최고 약 2.3)로 단 높이에 닿아야 올라선다.
+const PAD_SNAP = 0.35;
+function padTopAt(pd, dd) { const f = dd / pd.r; return pd.top - (pd.top - pd.edge) * f * f; }
 // 걷기 판정 높이. z = 지금 발 높이(나무 꼭대기 발판을 셀지 정함). 생략하면(부활·불러오기·순간이동) 그 자리 가장 높은 바닥 — 나무 위에서 저장했으면 나무 위에 선다
 function walkH(p, z = Infinity) {
   let h = terrainH(p);
@@ -943,9 +947,9 @@ function walkH(p, z = Infinity) {
   if (dB < 0.8 && _o.t >= 0 && _o.t <= 1) h = Math.max(h, BRIDGE_H + 0.35 * Math.sin(Math.PI * _o.t));
   for (const c of climbProps) { if (angDeg(p, c.dir) * DEG * R < c.radius) h = Math.max(h, c.top); }
   for (const t of trees) {
-    const u = t.userData; if (!u.crownR) continue;
-    const dd = angDeg(p, u.dir) * DEG * R;
-    if (dd < u.crownR) { const tt = treeTopAt(u, dd); if (z >= tt - TREE_TOP_SNAP) h = Math.max(h, tt); }
+    const pads = t.userData.pads; if (!pads) continue;
+    if (angDeg(p, t.userData.dir) * DEG * R > t.userData.padReach) continue;   // 멀면 건너뜀(빠르게)
+    for (const pd of pads) { const dd = angDeg(p, pd.dir) * DEG * R; if (dd < pd.r) { const tt = padTopAt(pd, dd); if (z >= tt - PAD_SNAP) h = Math.max(h, tt); } }
   }
   return h;
 }
@@ -1471,23 +1475,42 @@ const _np = new THREE.Vector3(), _nd = new THREE.Vector3(), _try = new THREE.Vec
 // 굽이치는 벽선(edgeIn)의 안쪽 벽 밑동(EDGE_IN_MIN, 세계 °)을 보이지 않는 경계로 — 공중이든 나무 위든 그 바깥으로는 한 걸음도 못 간다.
 // 이미 바깥에 있으면(옛 저장) 안쪽으로 가는 걸음만 허용한다.
 const EDGE_IN_MIN = 1.3;
-let treeClimb = null;   // 이번 프레임에 공중에서 부딪친 나무(타고 오르기)
-const _cs = new THREE.Vector3();
+const _cs = new THREE.Vector3(), _mv = new THREE.Vector3(), _ah = new THREE.Vector3();
+// 2026-10-02 걸어서는 못 오르는 지형: 예전엔 한 걸음(1프레임, 약 0.075)마다 턱이 STEP_UP(0.45)만 안 넘으면 돼서 가파른 비탈은 아무리 높아도
+// 걸어 올라갔다(관측소 초원 절벽 1.6~1.8 등). 이제 오르막을 디딜 때 앞으로 1.0 안에서 CLIFF_RISE(1.2)보다 더 솟으면 "벽"으로 보고 막는다 —
+// 그런 곳은 점프로만. 계단(한 칸 0.44)·데크 경사로·다리·섬 물가(약 1.05)·완만한 언덕은 그대로 걸어 오른다.
+// 공중에서는 발이 닿는 높이(지금 발 + LEDGE_UP)까지만 옆으로 올라설 수 있다 — 예전엔 공중에서 벽에 부딪치면 벽 꼭대기로 바로 올라서졌다.
+const CLIFF_RISE = 1.2, CLIFF_LOOK = 1.0, LEDGE_UP = 0.35;
 function edgeInDir(d) { const [lon, lat] = designLonLat(d); return edgeIn(lon, lat); }
 function canStand(dirUnit) {
   _cs.copy(player.pos).normalize();
   const ein = edgeInDir(dirUnit);
   if (ein < EDGE_IN_MIN && ein <= edgeInDir(_cs)) return false;
   const h = walkH(dirUnit, player.z);
-  // 땅 위를 걸을 땐 STEP_UP(0.45)보다 높은 턱을 못 넘는다. 공중(점프 중)이면 옆/위로 지나갈 수 있게 풀어 주고,
-  // 실제로 올라서는지는 수직 낙하 판정(step()의 ground 스냅)이 소품 높이에 닿아야만 결정한다 — 그래서 2단 점프라야 선돌(1.6)에 닿는다.
-  if (h - player.z > STEP_UP && player.grounded) return false;
-  for (const t of trees) {                      // 나무 기둥 충돌
+  // 땅 위를 걸을 땐 STEP_UP(0.45)보다 높은 턱을 못 넘고, 공중이면 발 높이 + LEDGE_UP까지만 올라선다(헤엄칠 땐 물가로 나오게 따지지 않음).
+  if (!player.swimming) {
+    if (player.grounded) {
+      if (h - player.z > STEP_UP) return false;
+      if (h > player.z + 0.02 && player.z > waterAt(_cs) - 0.05) {   // 오르막: 앞쪽이 캐릭터만큼 높이 솟는 벽이면 막는다(물속에서 걸어 나올 땐 따지지 않고, 물 위로 올라온 뒤부터)
+        _mv.subVectors(dirUnit, _cs); _mv.addScaledVector(dirUnit, -_mv.dot(dirUnit));
+        if (_mv.lengthSq() > 1e-14) {
+          _mv.normalize();
+          for (let s = 0.25; s <= CLIFF_LOOK + 1e-6; s += 0.25) { _ah.copy(dirUnit).addScaledVector(_mv, s / R).normalize(); if (walkH(_ah, player.z) - player.z > CLIFF_RISE) return false; }
+        }
+      }
+    } else if (h - player.z > LEDGE_UP) return false;
+  }
+  for (const t of trees) {
     const u = t.userData, dd = angDeg(dirUnit, u.dir) * DEG * R;
-    if (dd >= u.radius + 0.35) continue;
-    if (u.crownR && player.z >= treeTopAt(u, dd) - TREE_TOP_SNAP) continue;   // 이미 나무 위 — 꼭대기를 걸어 다닌다
-    if (dd >= angDeg(_cs, u.dir) * DEG * R) continue;                          // 줄기에서 멀어지는 걸음은 허용(줄기 안에 끼었을 때 빠져나오게)
-    if (u.crownR && !player.grounded && !player.swimming && !player.dead && player.jumps >= 1) treeClimb = u;   // 점프한 채 부딪침 → 타고 오른다(그냥 떨어지는 중이면 아님)
+    if (u.pads && dd < u.padReach) {   // 잎 덩어리 옆구리: 그 단 윗면보다 낮은 높이로 안쪽으로 파고드는 걸음은 막힘(잎에 부딪침)
+      for (const pd of u.pads) {
+        const dn = angDeg(dirUnit, pd.dir) * DEG * R; if (dn >= pd.r) continue;
+        if (player.z > (player.grounded ? pd.bottom : pd.bottomAir) && player.z < padTopAt(pd, dn) - PAD_SNAP && dn < angDeg(_cs, pd.dir) * DEG * R) return false;
+      }
+    }
+    if (dd >= u.radius + 0.35) continue;        // 나무 기둥 충돌(잎 덩어리 밑, 땅 높이에서만)
+    if (u.pads && player.z >= u.trunkTop) continue;
+    if (dd >= angDeg(_cs, u.dir) * DEG * R) continue;   // 줄기에서 멀어지는 걸음은 허용(줄기 안에 끼었을 때 빠져나오게)
     return false;
   }
   return true;
@@ -1551,9 +1574,18 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     const sc = treeScale(i);
     const t = placeSprite(makeBillboard(treeTex[i % 3], 4.6 * sc, 6.1 * sc), lon, lat);
     t.userData.radius = 0.55 * Math.max(0.75, sc / 1.14);
-    // 나무 꼭대기 발판(2026-10-02): 나무 모델(tree_A/B/C) 잎 덩어리 윗면을 재서 — A·B는 둥글고 넓게(반지름 키의 0.42), C는 좁고 뾰족하게(0.33)
-    { const H = 6.1 * sc, g = terrainH(t.userData.dir), wide = i % 3 !== 2;
-      t.userData.top = g + H; t.userData.edge = g + H * (wide ? 0.75 : 0.65); t.userData.crownR = H * (wide ? 0.42 : 0.33); }
+    // 나무 발판(2026-10-02, 위 walkH 설명): 모델 모양별 단. 옆 덩이(tree_B)의 방향은 아래 GLB 교체 때와 같은 회전((i×2.399) rad)으로 계산
+    // bottom = 걸어서 그 밑을 지나갈 수 있는 높이(땅에선 잎 밑으로 다님), bottomAir = 공중에서 부딪치는 잎 덩어리 아래끝(점프로 옆구리에 뛰어들면 막힘)
+    { const H = 6.1 * sc, g = terrainH(t.userData.dir), d0 = t.userData.dir, low = g + Math.max(0.15 * H, 1.2), lowAir = g + 0.12 * H, ti = i % 3;
+      const pad = (dir, r, top, edge, bottom, bottomAir = Math.min(bottom, lowAir)) => ({ dir, r: r * H, top: g + top * H, edge: g + edge * H, bottom, bottomAir });
+      const pads = [];
+      if (ti === 0) pads.push(pad(d0, 0.46, 1.0, 0.72, low));
+      else if (ti === 1) {
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d0).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (i * 2.399) % (Math.PI * 2)));
+        const side = new THREE.Vector3(1, 0, 0).applyQuaternion(q), lobe = d0.clone().multiplyScalar(R).addScaledVector(side, 0.44 * H).normalize();
+        pads.push(pad(d0, 0.42, 1.0, 0.74, low), pad(lobe, 0.10, 0.52, 0.50, low));
+      } else pads.push(pad(d0, 0.43, 0.56, 0.52, low), pad(d0, 0.33, 1.0, 0.78, g + 0.55 * H, g + 0.55 * H));
+      t.userData.pads = pads; t.userData.padReach = 0.56 * H; t.userData.trunkTop = g + 0.5 * H; }
     t.userData.sway = i * 1.7;
     scene.add(t); trees.push(t);
     mapDot(t.userData.dir, 1.6, 0x3f9a2a);
@@ -4361,10 +4393,7 @@ function step(dt) {
     const WATER_SPEED = 0.85;   // 물속(얕은 물·수영) 이동 = 땅의 85% — 15%만 느리게(2026-10-01 요청, 예전 0.55)
     const inWater = player.inShallow || player.swimming;
     const speed = WALK * (inWater ? WATER_SPEED : 1);
-    treeClimb = null;
     tryMove(_dir, speed * dt);
-    // 나무 타고 오르기(2026-10-02): 점프한 채 줄기 쪽으로 밀고 있으면 위로 올라간다 — 꼭대기 높이에 닿으면 줄기 위로 넘어가 꼭대기에 선다. 손을 떼면(방향키) 떨어진다
-    if (treeClimb && !player.grounded && !player.swimming) { player.vz = Math.max(player.vz, CLIMB_V); player.jumps = 1; }
     player.walkT += dt * 9 * (inWater ? WATER_SPEED : 1);   // 걷는 그림도 같은 비율로(예전 물속 6)
   }
 
@@ -5130,7 +5159,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt,
-    terrainH, walkH, treeTopAt, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
