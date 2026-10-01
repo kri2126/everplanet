@@ -617,9 +617,9 @@ function terrainH(p) {
     h = lerp(h, 0.6 + 0.05 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.2 * MAP_S, 1.6 * MAP_S, dI));
   }
 
-  // 샘물 웅덩이: 얕은 물(-3.3)
+  // 샘물 웅덩이: 너무 깊게 파인 느낌이라는 지적으로 -3.3 → -0.5(살짝 패인 정도)로 완화 (2026-10-01)
   const dSp = angDeg(p, T.spring);
-  if (dSp < 1.6 * MAP_S) h = lerp(h, -3.3, ss(1.4 * MAP_S, 0.7 * MAP_S, dSp));
+  if (dSp < 1.6 * MAP_S) h = lerp(h, -0.5, ss(1.4 * MAP_S, 0.7 * MAP_S, dSp));
 
   // 별 크레이터: 접시(안쪽 -0.4) + 둘레 턱(1.0, 가파름 — 걸어선 못 넘고 점프로) + 북동쪽 길 트임
   const dC = angDeg(p, T.starCrater);
@@ -1522,7 +1522,16 @@ addProp(starTex, 1.9, 1.9, -11.2, 32.4);   // 추기 #5: 크레이터 안
 addProp(starTex, 1.9, 1.9, -8.2, 36.4);    // 크레이터 북동쪽 언덕
 addProp(starTex, 1.9, 1.9, 2.4, 23.2);     // 호수 섬
 addProp(starTex, 2.2, 2.2, -5.9, 38.7);
-// 로드맵 8: 폭포는 원작 지도에 없어 제거(§11-5). 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
+// 로드맵 8: 폭포는 애초엔 원작 지도에 없어 제거했지만(§11-5), 나무다리 서쪽 호숫가가 휑해 보인다는
+// 지적으로 되살렸다(2026-10-01) — 서쪽 바위벽이 호수로 거의 바로 떨어지는 자리(lon -13.7→-14.0에서
+// 높이가 0.5→4+로 급하게 치솟는 절벽)를 찾아, 그 절벽 발치 물가에 세워 물이 자연스럽게 흘러드는 것처럼 보이게 한다.
+const waterfall = placeSprite(makeBillboard(waterfallTex, 2.6, 5.3, { shadow: false }), -13.3, 22.5);
+waterfall.material.alphaTest = 0.1; waterfall.material.opacity = 0.95;
+scene.add(waterfall); props.push(waterfall);
+const waterfallFoam = placeSprite(makeBillboard(foamTex, 3.4, 1.0, { shadow: false }), -13.0, 22.5);
+waterfallFoam.material.alphaTest = 0.1;
+scene.add(waterfallFoam); props.push(waterfallFoam);
+// 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳
 const dewNodes = [[-5.9, 15.1], [-4.1, 13.3], [1.4, 22.6]].map(([lon, lat]) => {
   const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
   scene.add(m);
