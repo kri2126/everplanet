@@ -174,6 +174,17 @@
   /* 작업 D: 회복 데미지팝(초록) */
   .lb.dmg.heal { color: #baffb0; -webkit-text-stroke: 1px #1f6b1a; }
   /* 작업 G: 시작 화면(이어하기/새로 시작) · 포탈 이동 페이드 · 포탈 안내판 */
+  /* 2026-10-02 불러오기 가림막: 새로고침 때 옛 그림(캔버스 그림·그림 판)이 잠깐 보였다가 3D 모델·PNG로 바뀌는 게 보이지 않게,
+     에셋을 다 읽을 때까지 하늘색 화면으로 가린다(최대 15초). 게임 시간도 그동안 멈춘다. */
+  #loadVeil { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(#3f9df2, #bfe7ff 75%); transition: opacity .45s ease; }
+  #loadVeil.off { opacity: 0; pointer-events: none; }
+  #loadVeil .box { text-align: center; color: #fdf4de; }
+  #loadVeil small { display: block; font: 700 11px 'JetBrains Mono', monospace; letter-spacing: .3em; color: #ffd166; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  #loadVeil b { display: block; margin: 6px 0 14px; font: 700 26px 'Gowun Dodum', sans-serif; letter-spacing: .1em; text-shadow: 0 2px 4px rgba(20,40,80,.45); }
+  #loadVeil i { display: block; width: 220px; height: 10px; margin: 0 auto 8px; border-radius: 6px; background: rgba(40,60,90,.35); border: 2px solid rgba(253,244,222,.85); overflow: hidden; }
+  #loadVeil em { display: block; height: 100%; width: 0; background: #ffd166; transition: width .2s; }
+  #loadVeil span { font: 700 12px 'Gowun Dodum', sans-serif; text-shadow: 0 1px 2px rgba(20,40,80,.5); }
   #startScreen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,12,20,.45); z-index: 8; }
   #startScreen.on { display: flex; }
   #startScreen .box { background: #6b4a2b; border: 4px solid #c99354; outline: 3px solid #4a2f14; border-radius: 12px; padding: 18px 26px 16px; width: 340px; text-align: center; box-shadow: 0 12px 50px rgba(0,0,0,.6); }
@@ -331,6 +342,7 @@
   <div class="r"><kbd>B</kbd><span class="d">배경 음악 켜기/끄기</span></div>
 </div><div class="foot">H 키로 언제든 다시 볼 수 있어요 · 아무 키나 누르면 닫힘</div></div>
 <div id="chat"><b>탐사자:</b><input id="chatIn" maxlength="80" placeholder="메시지 입력 후 Enter · Esc 취소" autocomplete="off"></div>
+<div id="loadVeil"><div class="box"><small>✦ EVERGREEN ✦</small><b>별내림 천문대</b><i><em id="loadBar"></em></i><span id="loadTxt">불러오는 중…</span></div></div>
 <div id="startScreen"><div class="box"><small>✦ EVERGREEN ✦</small><h2>별내림 천문대</h2><div class="sv" id="startInfo"></div>
   <div class="btns"><button id="btnContinue"><b>1</b>이어하기</button><button id="btnNew"><b>2</b>새로 시작</button></div>
   <div class="foot" id="startFoot">저장된 모험이 있어요 — 버튼을 누르거나 숫자키 1·2</div></div></div>
@@ -552,6 +564,16 @@ function withOutline(mesh, thickness = 0.025, colorHex) {
 // 규격은 web/assets/README.md — 그림은 투명 PNG, 발 자리는 아래 가운데, 가로세로 비율은 표의 값.
 const SPRITES = {};
 const ASSET_DIR = 'assets/';
+// 2026-10-02 불러오기 가림막(#loadVeil): 에셋 읽기(PNG 묶음·3D 모델·폭포 코드)를 trackLoad로 모아, 전부 끝나면(성공이든 실패든) 두 프레임 그린 뒤 걷는다.
+// 15초가 지나도 안 끝나면 그냥 걷는다(느린 망). 걷히기 전엔 게임 시간이 멈추고 키 입력도 받지 않는다 — 시작 컷신·시작 화면은 걷힌 뒤 보인다.
+const loadTrack = []; let loadDone = 0, veilOn = true;
+const loadVeilEl = document.getElementById('loadVeil'), loadBarEl = document.getElementById('loadBar'), loadTxtEl = document.getElementById('loadTxt');
+function updateVeil() { const n = loadTrack.length || 1; loadBarEl.style.width = Math.round(100 * loadDone / n) + '%'; loadTxtEl.textContent = `불러오는 중… ${loadDone}/${loadTrack.length}`; }
+function trackLoad(p) { loadTrack.push(p); updateVeil(); const done = () => { loadDone++; updateVeil(); }; Promise.resolve(p).then(done, done); return p; }
+function hideVeil() {
+  if (!veilOn) return; veilOn = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => { loadVeilEl.classList.add('off'); setTimeout(() => { loadVeilEl.style.display = 'none'; }, 500); }));
+}
 function registerTex(name, tex, w, h, kind) { if (name) SPRITES[name] = { tex, w, h, kind }; return tex; }
 let ASSET_STATUS = '에셋 읽는 중'; const assetErrs = [];   // ?fps 표시줄에 에셋 로드 상태를 보여 준다
 async function loadAssets() {
@@ -1614,7 +1636,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   });
   // 로드맵 9 (2026-10-01): 나무를 그림 판 → 3D 모델(assets/models/tree_A/B/C.glb, 사용자 제작)로 교체.
   // GLB를 못 읽으면(파일 없음·CDN 차단) 위의 그림 판이 그대로 남는다. 충돌·미니맵·바람은 userData를 그대로 물려받아 그대로 동작.
-  (async () => {
+  trackLoad((async () => {
     const loader = new GLTFLoader(); const names = ['tree_A', 'tree_B', 'tree_C']; const models = [];
     try {
       for (const n of names) { const g = await loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'); models.push(g.scene); }
@@ -1672,7 +1694,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     };
     treeSway(0); applyTreeShadow(quality);
     if (DEBUG) console.log('tree GLB 적용:', trees.filter(t => t.userData.model).length);
-  })();
+  })());
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
   // 2026-10-02: 덤불은 풀 위에만 — 물(샘물 이동 후 물에 잠긴 1포기)·모래길·가파른 바위 위나 그 가장자리에 걸치던 6포기를
   // 가장 가까운 풀밭으로 옮겼다(포기 중심과 반경 0.8·1.6 둘레 24곳이 모두 풀, 나무·텐트 등 소품과 3.0, 덤불끼리 3.0 이상 떨어지게).
@@ -1681,7 +1703,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 로드맵 9 (2026-10-02): 덤불을 그림 판 → 3D 모델(assets/models/bush.glb, 사용자 제작)로 교체. 못 읽으면 그림 판 유지.
   // 나무처럼 조각을 '줄기(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색) 12포기를 InstancedMesh 2개로 그린다.
   // 크기: 모델 높이를 재서 1.4(개체마다 0.85~1.15배) — 잎이 옆으로 넓게 퍼져 폭은 약 3. 포기마다 y축 회전을 달리한다.
-  new GLTFLoader().loadAsync(ASSET_DIR + 'models/bush.glb').then((gl) => {
+  trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/bush.glb').then((gl) => {
     const m = gl.scene; m.updateMatrixWorld(true);
     const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5;
     m.traverse((o) => { if (!o.isMesh) return;
@@ -1717,7 +1739,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     });
     for (const im of ims) im.instanceMatrix.needsUpdate = true;
     if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
-  }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); });
+  }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); }));
   const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
   const flowerNodes = flowers.map(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
     const node = { mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 };
@@ -1755,7 +1777,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
       }
       return { parts, bb };
     };
-    Promise.all(['flower_white', 'flower_yellow'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
+    trackLoad(Promise.all(['flower_white', 'flower_yellow'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
       const types = { white: build(gls[0]), yellow: build(gls[1]) }, _y = new THREE.Vector3(0, 1, 0);
       flowerNodes.forEach(({ f, c, node }, i) => {
         const tp = types[c]; if (!tp.parts.length) return;
@@ -1770,7 +1792,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
         scene.remove(f); const di = decor.indexOf(f); if (di >= 0) decor.splice(di, 1);
       });
       if (DEBUG) console.log('flower GLB 적용:', flowerNodes.length);
-    }).catch((e) => { if (DEBUG) console.warn('flower GLB 로드 실패 — 그림 판 유지', e); });
+    }).catch((e) => { if (DEBUG) console.warn('flower GLB 로드 실패 — 그림 판 유지', e); }));
   }
   const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-2.8, -3.6, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
@@ -1810,7 +1832,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
       return { parts, bb };
     };
     const loader = new GLTFLoader();
-    Promise.all(['reed_A', 'reed_B'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
+    trackLoad(Promise.all(['reed_A', 'reed_B'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
       const types = gls.map(build), _y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), mtx = new THREE.Matrix4(), loc = new THREE.Matrix4(), one = new THREE.Vector3(1, 1, 1);
       types.forEach((tp, ti) => {
         const idx = reedSprites.map((_, i) => i).filter((i) => pickT[i] === ti); if (!idx.length) return;
@@ -1827,7 +1849,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
       });
       for (const b of reedSprites) { scene.remove(b); const di = decor.indexOf(b); if (di >= 0) decor.splice(di, 1); }
       if (DEBUG) console.log('reed GLB 적용:', reedSprites.length);
-    }).catch((e) => { if (DEBUG) console.warn('reed GLB 로드 실패 — 그림 판 유지', e); });
+    }).catch((e) => { if (DEBUG) console.warn('reed GLB 로드 실패 — 그림 판 유지', e); }));
   }
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
@@ -1845,7 +1867,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     const loader = new GLTFLoader(), _y = new THREE.Vector3(0, 1, 0);
     stoneSprites.forEach((st, i) => {
       const name = pool[i % pool.length], width = 1.5 + 0.6 * rnd(), spin = rnd() * Math.PI * 2;
-      loader.loadAsync(ASSET_DIR + 'models/rocks/' + name + '.glb').then((gl) => {
+      trackLoad(loader.loadAsync(ASSET_DIR + 'models/rocks/' + name + '.glb').then((gl) => {
         const m = gl.scene; m.updateMatrixWorld(true); const geos = [];
         m.traverse((o) => { if (!o.isMesh) return;
           const g = o.geometry.clone().applyMatrix4(o.matrixWorld), vc = g.getAttribute('color');   // 돌 몸통은 정점 색(COLOR_0) × 재질 색, 이끼는 재질 색
@@ -1868,7 +1890,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
         scene.remove(st); const di = decor.indexOf(st); if (di >= 0) decor.splice(di, 1);
         if (st.userData.climb) { st.userData.climb.top = terrainH(st.userData.dir) + sz.y * k * 0.92; st.userData.climb.radius = Math.max(0.5, width * 0.38); }
         if (DEBUG) console.log('rock GLB', name, (sz.y * k).toFixed(2));
-      }).catch((e) => { if (DEBUG) console.warn('rock GLB 로드 실패 — 그림 판 유지', name, e); });
+      }).catch((e) => { if (DEBUG) console.warn('rock GLB 로드 실패 — 그림 판 유지', name, e); }));
     });
   }
 }
@@ -2101,7 +2123,7 @@ const airship = addProp(airshipTex, 6.4, 4.8, -5.6, -3.6, { lift: 0.35 }); airsh
 // 위치·내려오기·둥실거림은 그림 판(airship)이 계속 계산하고, 모델은 매 프레임 그 자리를 따라간다. 그림 판은 안 보이게(그림자도 끔). 못 읽으면 그림 판 유지.
 // 크기: 높이 4.8(그림 판과 같은 키). 뱃머리(+Z)는 동쪽에서 남쪽(카메라 쪽)으로 35° 돌려 옆모습이 3/4로 보이게. 양옆 프로펠러는 돈다.
 let airshipModel = null;
-new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl) => {
+trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl) => {
   const m = gl.scene;
   m.traverse((o) => { if (!o.isMesh) return;
     const src = o.material, mat = new THREE.MeshLambertMaterial({ color: src.color, map: src.map || null, alphaTest: src.alphaTest || 0, side: src.side, fog: true });
@@ -2121,7 +2143,7 @@ new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl) => {
   airship.material.visible = false; airship.castShadow = false;
   airshipModel = g;
   if (DEBUG) console.log('airship GLB 적용, 프로펠러', g.userData.props.length);
-}).catch((e) => { if (DEBUG) console.warn('airship GLB 로드 실패 — 그림 판 유지', e); });
+}).catch((e) => { if (DEBUG) console.warn('airship GLB 로드 실패 — 그림 판 유지', e); }));
 addProp(signTex, 1.3, 1.75, -8.0, -4.4);        // 들판 길 초입(크레이터 방향 안내)
 addProp(lanternTex, 1.1, 1.5, -8.4, -7.9);       // 데크 경사로 입구
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
@@ -2133,7 +2155,7 @@ standingStones.forEach(m => { addClimb(m.userData.dir, 0.5, 1.6); m.userData.cli
 {
   const names = ['rock_3_dots', 'rock_3_cap', 'rock_3_streak'], hs = [2.0, 1.8, 1.9], spins = [0.6, 2.4, 4.3], _y = new THREE.Vector3(0, 1, 0), loader = new GLTFLoader();
   standingStones.forEach((st, i) => {
-    loader.loadAsync(ASSET_DIR + 'models/rocks/' + names[i] + '.glb').then((gl) => {
+    trackLoad(loader.loadAsync(ASSET_DIR + 'models/rocks/' + names[i] + '.glb').then((gl) => {
       const m = gl.scene; m.updateMatrixWorld(true); const geos = [];
       m.traverse((o) => { if (!o.isMesh) return;
         const g = o.geometry.clone().applyMatrix4(o.matrixWorld), vc = g.getAttribute('color');
@@ -2155,7 +2177,7 @@ standingStones.forEach(m => { addClimb(m.userData.dir, 0.5, 1.6); m.userData.cli
       scene.remove(st); const pi = props.indexOf(st); if (pi >= 0) props.splice(pi, 1);
       st.userData.climb.top = terrainH(st.userData.dir) + hs[i] * 0.92; st.userData.climb.radius = Math.max(0.5, Math.max(sz.x, sz.z) * k * 0.38);
       if (DEBUG) console.log('standing stone GLB', names[i], hs[i]);
-    }).catch((e) => { if (DEBUG) console.warn('standing stone GLB 로드 실패 — 그림 판 유지', e); });
+    }).catch((e) => { if (DEBUG) console.warn('standing stone GLB 로드 실패 — 그림 판 유지', e); }));
   });
 }
 // 야영지(다리 북쪽 갈림길): 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
@@ -2198,7 +2220,7 @@ scene.add(waterfallFoam); props.push(waterfallFoam);
 // 로컬 +Y = 그 자리의 위, +Z = 동쪽(호수 쪽, 물이 떨어지는 앞), 모듈은 남북(+X = 북)으로 늘어선다. 물결 고리판(로컬 y -0.25)이 호수 수면에 오게 세운다.
 // 못 읽으면(파일 없음) 위의 그림 판 3줄과 물보라가 그대로 남는다.
 let waterfallCode = null;
-import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
+trackLoad(import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
   const WF_K = WF.k, WF_LON = WF.lon, WF_LAT = WF.lat;
   const wf = createWaterfall(THREE, { count: 3, thick: 1.4, fog: scene.fog });
   const up = dirFromLonLat(WF_LON, WF_LAT);
@@ -2213,7 +2235,7 @@ import('./' + ASSET_DIR + 'waterfall.js?v=1').then(({ createWaterfall }) => {
   for (const m of [...waterfallSprites, waterfallFoam]) { scene.remove(m); const i = props.indexOf(m); if (i >= 0) props.splice(i, 1); }
   waterfallCode = wf;
   if (DEBUG) console.log('waterfall.js 적용');
-}).catch((e) => { if (DEBUG) console.warn('waterfall.js 로드 실패 — 그림 판 유지', e); });
+}).catch((e) => { if (DEBUG) console.warn('waterfall.js 로드 실패 — 그림 판 유지', e); }));
 // 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳 (추기 #3: 앞 2개는 샘물과 함께 이동, 추기 #12: 수위가 올라 잠기지 않게 둘레 턱 위로)
 const dewNodes = [[0.95, 15.5], [4.3, 11.45], [1.4, 22.6]].map(([lon, lat]) => {
   const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
@@ -2895,7 +2917,7 @@ function updateQuestBeam() {
 const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35, { shadow: false }); m.userData.side = s; scene.add(m); return m; });
 // 로드맵 9 (2026-10-01): 방향표(6시)를 그림 판 → 3D 모델(assets/models/arrow.glb, 사용자 제작)로 교체. 못 읽으면 위의 그림 판(dir_down)이 그대로 남는다.
 // 자리·통통 움직임·좌우 반전은 updateTutArrows가 그룹에 그대로 적용(position/orientBillboard/scale.x/visible 전부 Group에서도 동작).
-(async () => {
+trackLoad((async () => {
   let g; try { g = await new GLTFLoader().loadAsync(ASSET_DIR + 'models/arrow.glb'); } catch (e) { if (DEBUG) console.warn('arrow GLB 로드 실패 — 그림 판 유지', e); return; }
   const box = new THREE.Box3().setFromObject(g.scene), size = new THREE.Vector3(); box.getSize(size);
   const k = 1.35 / size.y;   // 그림 판과 같은 키(1.35)
@@ -2906,7 +2928,7 @@ const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35
     scene.remove(a); a.geometry.dispose(); scene.add(grp); tutArrows[i] = grp;
   });
   if (DEBUG) console.log('arrow GLB 적용');
-})();
+})());
 function updateTutArrows(nowS) {
   const n = NPCS[0]; const show = !mq.accepted;
   for (const a of tutArrows) {
@@ -4321,6 +4343,7 @@ function escapePressed() {
 }
 
 addEventListener('keydown', (e) => {
+  if (veilOn) return;                                                                                     // 2026-10-02: 불러오는 중엔 키를 받지 않는다
   if (rebindWait) return;                                                                                 // 작업 S2: 키 다시 매기는 중(위의 capture 처리기가 가져감)
   const code = evCode(e);
   if (gate.on) { if (code === 'Digit1' || code === 'Numpad1' || code === 'Enter' || code === 'NumpadEnter') continueGame(); else if (code === 'Digit2' || code === 'Numpad2') newGame(); return; }   // 작업 G: 시작 화면(1·2 고정)
@@ -4612,7 +4635,7 @@ function applyFpsSetting() { document.getElementById('fps').style.display = (DEB
 applyFpsSetting();
 
 // 외부 PNG 에셋이 있으면 바꿔 끼운다 (없으면 캔버스 그림 그대로)
-loadAssets();
+trackLoad(loadAssets());
 
 // ── 지도 ─────────────────────────────────────────────────────────────────────
 // 추기 #5: 미니맵과 M 지도는 원작 지역 지도처럼 파스텔 그림 지도. 지형(terrainH)을 설계 좌표 격자로 훑어 물·모래길·초원·절벽·바위벽을
@@ -4853,7 +4876,7 @@ function adaptQuality(dtMs) {
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;   // 첫 rAF 시각이 모듈 실행 시각보다 앞설 수 있어 음수 방지
   const t0 = performance.now(); renderer.info.reset();
-  if (!mapView && !settingsOpen) step(dt); else { keys.clear(); }   // 지도·설정 화면이 열려 있으면 멈춤
+  if (!mapView && !settingsOpen && !veilOn) step(dt); else { keys.clear(); }   // 지도·설정 화면·불러오기 가림막(2026-10-02)이 있으면 멈춤
   renderer.shadowMap.needsUpdate = (frameNo++ % (quality <= 1 ? 4 : 2) === 0);   // 그림자 맵은 2프레임(낮음: 4)에 한 번 (태양이 플레이어를 따라가므로 한 프레임 늦어도 안 보임)
   renderer.render(scene, camera);
   if (mapView === 0) updateLabels();
@@ -4867,6 +4890,7 @@ function frame(now) {
 }
 camera.position.copy(player.pos).addScaledVector(player.pos.clone().normalize(), CAM_UP).addScaledVector(cam.fwd, -CAM_BACK); camZ = player.z;
 requestAnimationFrame(frame);
+Promise.allSettled(loadTrack).then(hideVeil); setTimeout(hideVeil, 15000);   // 불러오기 가림막 걷기(위 trackLoad 설명)
 
 // ── 전경도 (옛 판 evergreen-exploration.html에서 그대로 이식) ─────────────────
 // 원작 에버그린 월드맵을 참고한 그림책풍 전경도.
