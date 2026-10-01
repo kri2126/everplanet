@@ -1042,7 +1042,7 @@ const COL = {
   grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
   grassDeep: new THREE.Color(0x6fc23e), grassPale: new THREE.Color(0xd4f0a2),   // 2026-10-02: 진한 풀 덩어리 · 길가의 연한 풀
   sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
-  rock: new THREE.Color(0xd9b26f), rockDark: new THREE.Color(0xa9803f), rockLight: new THREE.Color(0xecd39a), moss: new THREE.Color(0x6fbf46),
+  rock: new THREE.Color(0xf0c995), rockDark: new THREE.Color(0xdcae74), rockLight: new THREE.Color(0xf9e6c0), moss: new THREE.Color(0x6fbf46),   // 2026-10-02: 경사면이 칙칙하다는 지적 → 밝고 부드러운 살구·모래빛(옛 0xd9b26f/0xa9803f/0xecd39a)
   bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
   stone: new THREE.Color(0xd6cbb4), stoneDark: new THREE.Color(0xbfb39b),
 };
@@ -1104,7 +1104,7 @@ function paintTerrain(geo, withPaths) {
       const band = Math.sin(h * 3.6 + vnoise(d.x * 40, d.y * 40, d.z * 40) * 2.2);
       const rock = band > 0.25 ? COL.rockDark : (band < -0.45 ? COL.rockLight : COL.rock);
       tmp.lerp(rock, k);
-      tmp.multiplyScalar(1 - 0.18 * k * ss(-0.2, 0.6, band));   // 어두운 층은 더 어둡게 — 음영
+      tmp.multiplyScalar(1 - 0.07 * k * ss(-0.2, 0.6, band));   // 어두운 층은 살짝만 어둡게 — 2026-10-02: 0.18 → 0.07(부드러운 톤)
       const mossy = vnoise(d.x * 35 + 2, d.y * 35, d.z * 35);
       if (mossy > 0.5 && slope < 0.3) tmp.lerp(COL.moss, k * 0.8);
     }
@@ -1141,9 +1141,13 @@ terrainMat.onBeforeCompile = (sh) => {
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = rock; vBare = bare; vTuft = tuft;');
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;')
+    .replace('#include <opaque_fragment>', `
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
+      #include <opaque_fragment>
+    `)
     .replace('#include <map_fragment>', `
       vec4 grassC = texture2D( map, vMapUv );
-      vec4 rockC = texture2D( rockMap, vMapUv * vec2(1.4, 2.6) );
+      vec4 rockC = mix( texture2D( rockMap, vMapUv * vec2(1.4, 2.6) ), vec4( 1.0 ), 0.45 );   // 2026-10-02: 바위 줄무늬 대비를 낮춰 부드럽게
       grassC = mix( grassC, vec4( 1.0 ), vBare );   // 길 위·길가: 풀 그림을 지워 맨땅처럼 (2026-10-02)
       diffuseColor *= mix( grassC, rockC, vRock );
       // 진한 풀포기 (2026-10-02): 배율·각도가 다른 두 겹(약 7유닛·5유닛 주기)
