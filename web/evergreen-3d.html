@@ -1713,9 +1713,16 @@ function drawSlimeSprite(g, W, H, frame) {
   blob(g, cx - rx * 0.35, cy + ry * 0.05, 4, 6, '#1b2a4a'); blob(g, cx + rx * 0.35, cy + ry * 0.05, 4, 6, '#1b2a4a');
   g.strokeStyle = '#1b2a4a'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy + ry * 0.3, 5, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
 }
-function drawArrowSprite(g, W, H) {   // 파란 아래 화살표 (튜토리얼)
-  g.fillStyle = '#4aa6f5'; g.strokeStyle = '#fff'; g.lineWidth = 4;
-  g.beginPath(); g.moveTo(W * 0.5, H * 0.95); g.lineTo(W * 0.08, H * 0.52); g.lineTo(W * 0.3, H * 0.52); g.lineTo(W * 0.3, H * 0.05); g.lineTo(W * 0.7, H * 0.05); g.lineTo(W * 0.7, H * 0.52); g.lineTo(W * 0.92, H * 0.52); g.closePath(); g.fill(); g.stroke();
+// 방향표(노란 화살표) — 캔버스 대체 그림. dir: 'down'|'up'|'left'|'right' (에셋 dir_down.png 등이 있으면 그걸 씀)
+function drawDirSprite(g, W, H, dir) {
+  g.save(); g.translate(W / 2, H / 2);
+  const rot = { down: 0, up: Math.PI, left: Math.PI / 2, right: -Math.PI / 2 }[dir] || 0; g.rotate(rot);
+  const w = (dir === 'left' || dir === 'right') ? H : W, h = (dir === 'left' || dir === 'right') ? W : H;   // 회전 후 세로 화살표 기준
+  g.translate(-w / 2, -h / 2);
+  g.fillStyle = '#ffc520'; g.strokeStyle = '#b8600e'; g.lineWidth = 4; g.lineJoin = 'round';
+  g.beginPath(); g.moveTo(w * 0.5, h * 0.95); g.lineTo(w * 0.06, h * 0.55); g.lineTo(w * 0.28, h * 0.55); g.lineTo(w * 0.28, h * 0.06); g.lineTo(w * 0.72, h * 0.06); g.lineTo(w * 0.72, h * 0.55); g.lineTo(w * 0.94, h * 0.55); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(255,240,170,0.7)'; g.beginPath(); g.moveTo(w * 0.34, h * 0.1); g.lineTo(w * 0.46, h * 0.1); g.lineTo(w * 0.46, h * 0.5); g.lineTo(w * 0.34, h * 0.5); g.closePath(); g.fill();
+  g.restore();
 }
 function drawSlashSprite(g, W, H) {   // 기본 공격 휘두름
   g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 9; g.lineCap = 'round';
@@ -1735,7 +1742,14 @@ const npcTex = {
   knight: spriteTex(96, 128, (g, W, H) => drawNpcSprite(g, W, H, 'knight'), 'npc_knight'),
 };
 const slimeTex = [0, 1].map(f => spriteTex(96, 80, (g, W, H) => drawSlimeSprite(g, W, H, f), 'slime_' + f));
-const arrowTex = spriteTex(64, 96, drawArrowSprite, 'arrow');
+// 방향표 4방향 — 아래(6시)·위(12시)는 64×96, 왼쪽(9시)·오른쪽(3시)은 96×64
+const dirTex = {
+  down: spriteTex(64, 96, (g, W, H) => drawDirSprite(g, W, H, 'down'), 'dir_down'),
+  up: spriteTex(64, 96, (g, W, H) => drawDirSprite(g, W, H, 'up'), 'dir_up'),
+  left: spriteTex(96, 64, (g, W, H) => drawDirSprite(g, W, H, 'left'), 'dir_left'),
+  right: spriteTex(96, 64, (g, W, H) => drawDirSprite(g, W, H, 'right'), 'dir_right'),
+};
+const arrowTex = dirTex.down;   // 튜토리얼 안내는 6시 방향표
 const slashTex = spriteTex(128, 96, drawSlashSprite, 'slash');
 const sparkleTex = spriteTex(96, 96, drawSparkleSprite, 'sparkle');
 
@@ -2200,7 +2214,7 @@ function updateQuestBeam() {
   questBeam.visible = !!n;
   if (n) { questBeam.position.copy(n.dir).multiplyScalar(R + terrainH(n.dir) + n.lift + 0.1); questBeam.quaternion.setFromUnitVectors(_y, n.dir); }
 }
-// 튜토리얼 파란 화살표 2개 — 첫 NPC 좌우에서 안쪽으로 통통
+// 튜토리얼 방향표(6시, 노란 화살표) 2개 — 첫 NPC 좌우에서 안쪽으로 통통
 const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35, { shadow: false }); m.userData.side = s; scene.add(m); return m; });
 function updateTutArrows(nowS) {
   const n = NPCS[0]; const show = !mq.accepted;
