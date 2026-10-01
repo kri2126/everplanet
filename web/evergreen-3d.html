@@ -1872,6 +1872,31 @@ function addProp(tex, w, h, lon, lat, opts = {}) {
 }
 // 로드맵 8 추기 #3 — 착륙 들판(남): 비행정(데크 북쪽 들판 위에 떠 있음, 시작 컷신에서 여기로 내려온다)·표지판·등불
 const airship = addProp(airshipTex, 6.4, 4.8, -5.6, -3.6, { lift: 0.35 }); airship.userData.base = airship.position.clone(); airship.userData.alt = 0;
+// 로드맵 9 (2026-10-02): 비행정(시작 컷신에서 타고 내려오는 배 = 착륙 들판에 떠 있는 배, 같은 물체)을 그림 판 → 3D 모델(assets/models/airship.glb, 사용자 제작)로.
+// 위치·내려오기·둥실거림은 그림 판(airship)이 계속 계산하고, 모델은 매 프레임 그 자리를 따라간다. 그림 판은 안 보이게(그림자도 끔). 못 읽으면 그림 판 유지.
+// 크기: 높이 4.8(그림 판과 같은 키). 뱃머리(+Z)는 동쪽에서 남쪽(카메라 쪽)으로 35° 돌려 옆모습이 3/4로 보이게. 양옆 프로펠러는 돈다.
+let airshipModel = null;
+new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl) => {
+  const m = gl.scene;
+  m.traverse((o) => { if (!o.isMesh) return;
+    const src = o.material, mat = new THREE.MeshLambertMaterial({ color: src.color, map: src.map || null, alphaTest: src.alphaTest || 0, side: src.side, fog: true });
+    if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+    o.material = mat; o.castShadow = true; o.receiveShadow = false; });
+  const bb = new THREE.Box3().setFromObject(m), k = 4.8 / (bb.max.y - bb.min.y);
+  m.scale.setScalar(k); m.position.y = -bb.min.y * k;   // 배 밑바닥이 그림 판 밑변 자리에
+  const g = new THREE.Group(); g.add(m);
+  const up = airship.userData.dir.clone(), east = dirFromLonLat(-5.5, -3.6).sub(up), south = dirFromLonLat(-5.6, -3.7).sub(up);
+  east.addScaledVector(up, -east.dot(up)).normalize(); south.addScaledVector(up, -south.dot(up)).normalize();
+  const fwd = east.multiplyScalar(Math.cos(35 * DEG)).addScaledVector(south, Math.sin(35 * DEG)).normalize();
+  const side = new THREE.Vector3().crossVectors(up, fwd).normalize();
+  g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side, up, fwd));
+  g.position.copy(airship.position);
+  g.userData.props = ['propeller_R', 'propeller_L'].map((n) => m.getObjectByName(n)).filter(Boolean);
+  scene.add(g);
+  airship.material.visible = false; airship.castShadow = false;
+  airshipModel = g;
+  if (DEBUG) console.log('airship GLB 적용, 프로펠러', g.userData.props.length);
+}).catch((e) => { if (DEBUG) console.warn('airship GLB 로드 실패 — 그림 판 유지', e); });
 addProp(signTex, 1.3, 1.75, -8.0, -4.4);        // 들판 길 초입(크레이터 방향 안내)
 addProp(lanternTex, 1.1, 1.5, -8.4, -7.9);       // 데크 경사로 입구
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
@@ -4130,6 +4155,7 @@ function step(dt) {
     const nowS = performance.now() * 0.001;
     const bd = _bn.copy(airship.userData.base).normalize();
     airship.position.copy(airship.userData.base).addScaledVector(bd, Math.sin(nowS * 0.9) * 0.08 + (airship.userData.alt || 0));
+    if (airshipModel) { airshipModel.position.copy(airship.position); for (const pr of airshipModel.userData.props) pr.rotation.z += dt * 14; }   // 3D 비행정이 그림 판 자리를 따라가고 프로펠러가 돈다
     waterfallTex.offset.y = -(nowS * 0.55) % 1;
     if (waterfallCode) waterfallCode.update(dt);
     for (const b of beams) b.material.uniforms.uT.value = nowS; pedestalBeam.material.uniforms.uT.value = nowS;
