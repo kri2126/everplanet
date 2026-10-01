@@ -223,6 +223,40 @@
   #chat b { font-size: 12px; color: #ffd166; white-space: nowrap; }
   #chat input { flex: 1; font: 13px 'Gowun Dodum', sans-serif; color: #fff; background: rgba(16,20,30,.8); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 5px 8px; outline: none; }
   #log .me { color: #fff; } #log .me b { color: #9ad2ff; font-weight: 700; margin-right: 4px; }
+  /* 로드맵 9 작업 S: 설정 화면(ESC) — 양피지 + 나무 테, 왼쪽 세로 탭 5개, 아래 줄 [기본값 복원] [닫기] */
+  #setBtn { position: fixed; right: 14px; top: 176px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #fdf4de; background: rgba(74,47,20,.78); border: 2px solid #c99354; cursor: pointer; z-index: 5; opacity: .85; user-select: none; }
+  #setBtn:hover { opacity: 1; }
+  @media (pointer: coarse) { #setBtn { width: 44px; height: 44px; font-size: 22px; } }
+  #settings { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,12,20,.5); z-index: 9; }
+  #settings.on { display: flex; }
+  #settings .box { width: min(780px, 94vw); height: min(500px, 90vh); display: flex; flex-direction: column; color: #4a3018;
+    background: radial-gradient(ellipse at 50% 40%, #f8ecd0 0%, #efdcb4 70%, #e2c793 100%); border: 6px solid #9a6a3a; outline: 3px solid #4a2f14;
+    border-radius: 12px; box-shadow: inset 0 0 30px rgba(120,80,30,.35), 0 14px 60px rgba(0,0,0,.6); overflow: hidden; }
+  #settings .ttl { padding: 10px 18px 8px; font: 700 18px 'Gowun Dodum', sans-serif; letter-spacing: .14em; color: #5c3a1a; border-bottom: 2px solid rgba(120,80,40,.35); display: flex; align-items: baseline; gap: 12px; }
+  #settings .ttl small { font: 400 11px 'Gowun Dodum', sans-serif; letter-spacing: 0; color: #8a6a44; }
+  #settings .mid { flex: 1; display: flex; min-height: 0; }
+  #settings .tabs { width: 118px; padding: 10px 0 10px 10px; display: flex; flex-direction: column; gap: 6px; border-right: 2px solid rgba(120,80,40,.3); }
+  #settings .tabs button { min-height: 44px; text-align: left; padding: 0 12px; font: 700 14px 'Gowun Dodum', sans-serif; color: #6b4a2b; background: rgba(255,250,235,.45);
+    border: 1px solid rgba(120,80,40,.35); border-right: none; border-radius: 8px 0 0 8px; cursor: pointer; }
+  #settings .tabs button b { display: inline-block; width: 16px; font: 700 10px monospace; color: #a07a50; }
+  #settings .tabs button.on { background: #fff8e6; color: #3a2410; box-shadow: inset 3px 0 0 #c9762a; margin-right: -2px; }
+  #settings .pane { flex: 1; overflow-y: auto; padding: 12px 18px; }
+  #settings .pane h4 { margin: 4px 0 8px; font: 700 13px 'Gowun Dodum', sans-serif; color: #7a4f24; letter-spacing: .06em; }
+  #settings .row { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 3px 0; border-bottom: 1px dashed rgba(120,80,40,.22); font-size: 13px; }
+  #settings .row > .lbl { flex: 1; }
+  #settings .row > .lbl small { display: block; font-size: 11px; color: #8a6a44; }
+  #settings .sbtn { min-height: 36px; min-width: 64px; padding: 0 12px; font: 700 13px 'Gowun Dodum', sans-serif; color: #fdf4de; background: #8a5f34; border: 2px solid #c99354; border-radius: 8px; cursor: pointer; }
+  #settings .sbtn:hover { background: #a3733f; }
+  #settings .sbtn.warn { background: #8a3a2e; border-color: #e08a6a; }
+  #settings .sbtn.ghost { color: #6b4a2b; background: rgba(255,250,235,.6); border-color: rgba(120,80,40,.45); }
+  #settings .note { font-size: 12px; color: #8a6a44; line-height: 1.6; padding: 6px 0; }
+  #settings .msg { min-height: 18px; font-size: 12px; color: #2f6b22; padding: 4px 0; }
+  #settings .msg.err { color: #9a2e1e; }
+  #settings .bot { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 2px solid rgba(120,80,40,.35); background: rgba(154,106,58,.12); }
+  #settings .bot .hint { flex: 1; text-align: center; font-size: 11px; color: #8a6a44; }
+  #settings a { color: #7a3f12; }
+  @media (max-width: 560px) { #settings .tabs { width: 84px; } #settings .tabs button { font-size: 12px; padding: 0 6px; } #settings .bot .hint { display: none; } }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
@@ -257,6 +291,9 @@
 <div id="portalMsg"><b></b><span></span></div>
 <div id="saveToast">저장됨</div>
 <div id="bgmBtn" title="B 키로도 켜고 끌 수 있어요">♪ BGM</div>
+<div id="setBtn" title="설정 (Esc)">⚙</div>
+<div id="settings"><div class="box"><div class="ttl">설정<small id="setSub"></small></div><div class="mid"><div class="tabs" id="setTabs"></div><div class="pane" id="setPane"></div></div>
+  <div class="bot"><button class="sbtn ghost" id="setReset">기본값 복원</button><span class="hint">Esc 닫기 · 1~5 또는 Q·E로 탭 넘기기</span><button class="sbtn" id="setClose">닫기</button></div></div></div>
 <div id="keyGuide"><h3>조작 안내</h3><div class="rows">
   <div class="r"><div class="wasd"><span></span><kbd>W</kbd><span></span><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span class="d">이동 (방향키도 됨)</span></div>
   <div class="r"><kbd class="w">Space</kbd><span class="d">점프 · 공중에서 한 번 더 = 2단 점프</span></div>
@@ -323,6 +360,54 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 // 소프트웨어 WebGL(GPU 없이 그리는 브라우저)로 판정되면 낮음에서 시작한다.
 // Q 키로 자동→최소→낮음→중간→높음 순환(localStorage에 기억), ?q=min|low|mid|high 또는 ?dpr=1 로 고정.
 const QP = new URLSearchParams(location.search);
+// ── 로드맵 9 작업 S: 설정 저장소 ep.settings.v1 — 저장 파일(ep.save.v1)과 따로 둬서 "새로 시작"해도 남고 브라우저마다 따로 간다(§12-5).
+// 읽을 때 모르는 항목·틀린 값은 기본값으로 메운다. 쓰기는 값이 바뀔 때마다(디바운스 300ms).
+// 동작표(§12-3) — 키는 물리 자리(e.code)로 기억한다. [주 키, 보조 키]
+const ACTIONS = [
+  { id: 'moveUp', name: '위로 이동', def: ['KeyW', 'ArrowUp'] }, { id: 'moveDown', name: '아래로 이동', def: ['KeyS', 'ArrowDown'] },
+  { id: 'moveLeft', name: '왼쪽 이동', def: ['KeyA', 'ArrowLeft'] }, { id: 'moveRight', name: '오른쪽 이동', def: ['KeyD', 'ArrowRight'] },
+  { id: 'jump', name: '점프(2단) · 컷신 건너뛰기 · 대화 넘기기', def: ['Space', null] },
+  { id: 'attack', name: '기본 공격', def: ['KeyZ', null] },
+  { id: 'skill1', name: '스킬 슬롯 1', def: ['KeyX', null] }, { id: 'skill2', name: '스킬 슬롯 2', def: ['KeyC', null] }, { id: 'skill3', name: '스킬 슬롯 3', def: ['KeyV', null] },
+  { id: 'interact', name: '대화·상호작용(길게: 채집)', def: ['KeyF', null] },
+  { id: 'target', name: '대상 바꾸기', def: ['Tab', null] },
+  { id: 'potionHp', name: 'HP 포션', def: ['Digit1', null] }, { id: 'potionMp', name: 'MP 포션', def: ['Digit2', null] }, { id: 'dew', name: '이슬 마시기', def: ['Digit3', null] },
+  { id: 'inventory', name: '가방', def: ['KeyI', null] }, { id: 'skills', name: '스킬 창', def: ['KeyK', null] },
+  { id: 'quests', name: '퀘스트 창', def: ['KeyJ', null] }, { id: 'character', name: '캐릭터·모험 기록', def: ['KeyP', null] },
+  { id: 'map', name: '지도(미니맵 → 지도 → 전경도)', def: ['KeyM', null] },
+  { id: 'chat', name: '채팅', def: ['Enter', null] },
+  { id: 'keyGuide', name: '키 안내(조작 탭 열기)', def: ['KeyH', null] },
+  { id: 'quality', name: '화질 순환', def: ['KeyQ', null] },
+  { id: 'mute', name: '음소거', def: ['KeyN', null] },
+  { id: 'bgm', name: '배경 음악 켜기/끄기', def: ['KeyB', null] },
+  { id: 'settings', name: '설정 열기/닫기', def: ['Escape', null], fixed: true },
+];
+const SETTINGS_KEY = 'ep.settings.v1';
+function settingsDefaults() {
+  const binds = {}; for (const a of ACTIONS) binds[a.id] = a.def.slice();
+  return { v: 1, binds,
+    audio: { master: 80, bgm: 60, sfx: 80, mute: false, bgmOn: true },
+    display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day' },
+    map: { mini: true, zoom: 1, fog: false, labels: true } };
+}
+function settingsMigrate(o) {
+  const d = settingsDefaults();
+  if (!o || typeof o !== 'object') return d;
+  const okCode = (c) => c === null || (typeof c === 'string' && /^[A-Za-z0-9]{1,24}$/.test(c));
+  if (o.binds && typeof o.binds === 'object') for (const a of ACTIONS) {
+    const b = o.binds[a.id]; if (a.fixed || !Array.isArray(b)) continue;
+    d.binds[a.id] = [okCode(b[0]) ? b[0] : a.def[0], okCode(b[1]) ? (b[1] === undefined ? null : b[1]) : a.def[1]];
+  }
+  const num = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, Math.round(v))) : def;
+  const bool = (v, def) => typeof v === 'boolean' ? v : def;
+  if (o.audio) { d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
+  if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; }
+  if (o.map) { d.map.mini = bool(o.map.mini, true); d.map.zoom = num(o.map.zoom, 0, 2, 1); d.map.fog = bool(o.map.fog, false); d.map.labels = bool(o.map.labels, true); }
+  return d;
+}
+let settings = (() => { let o = null; try { o = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch (e) {} return settingsMigrate(o); })();
+let settingsSaveT = 0;
+function saveSettings() { clearTimeout(settingsSaveT); settingsSaveT = setTimeout(() => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }, 300); }
 const QUALITY = {
   3: { name: '높음', dpr: Math.min(devicePixelRatio || 1, 1.5), shadow: 1536, mapEvery: 3, hull: true },
   2: { name: '중간', dpr: 1.0, shadow: 1024, mapEvery: 3, hull: true },
@@ -2811,7 +2896,8 @@ function updateSaveTimers(dt) {
   if (saveSoonT >= 0) { saveSoonT -= dt; if (saveSoonT < 0) saveGame(requestSave.reason || 'auto'); }
   autosaveT += dt; if (autosaveT >= AUTOSAVE_EVERY) { autosaveT = 0; saveGame('auto'); }
 }
-addEventListener('beforeunload', () => { if (!gate.on && !cut.on && !player.dead) saveGame('unload'); });
+let skipUnloadSave = false;   // 작업 S: 설정의 "새로 시작"은 저장을 지우고 다시 불러오므로 떠날 때 저장하지 않는다
+addEventListener('beforeunload', () => { if (!skipUnloadSave && !gate.on && !cut.on && !player.dead) saveGame('unload'); });
 
 // 시작 화면: 저장이 있으면 컷신 대신 "이어하기 / 새로 시작"을 먼저 묻는다. ?fresh 로 무시할 수 있다.
 const gate = { on: false, confirmNew: false };
@@ -3189,17 +3275,104 @@ function surfaceAt(d) {
 }
 document.addEventListener('visibilitychange', () => { if (!sfx.ctx) return; if (document.hidden) sfx.ctx.suspend(); else sfx.ctx.resume(); });
 
+// ── 로드맵 9 작업 S: 설정 화면(ESC) — 지도·창·대화가 열려 있으면 ESC는 그것만 닫고, 아무것도 없을 때 설정을 연다(§12-1).
+// 열려 있는 동안 게임은 멈추고(지도와 같음) 키는 설정 화면이 가져간다. 닫으면 눌린 키를 비운다.
+let settingsOpen = false, settingsTab = 'game', settingsResetArm = false;
+const SET_TABS = [['controls', '조작'], ['sound', '소리'], ['display', '화면'], ['map', '지도'], ['game', '게임']];
+const setEl = document.getElementById('settings'), setTabsEl = document.getElementById('setTabs'), setPaneEl = document.getElementById('setPane');
+const setSubEl = document.getElementById('setSub'), setResetBtn = document.getElementById('setReset'), setBtnEl = document.getElementById('setBtn');
+const setTabBtns = {};
+SET_TABS.forEach(([id, name], i) => {
+  const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b>${name}`;
+  b.addEventListener('click', () => showSettingsTab(id)); setTabsEl.appendChild(b); setTabBtns[id] = b;
+});
+const SET_PANES = {};   // 탭 id → (pane) => 내용을 그리는 함수. S2~S4에서 조작·소리·화면·지도 탭을 채운다
+function setRow(label, sub, ...controls) {
+  const r = document.createElement('div'); r.className = 'row';
+  const l = document.createElement('div'); l.className = 'lbl'; l.textContent = label;
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; l.appendChild(sm); }
+  r.appendChild(l); for (const c of controls) r.appendChild(c); return r;
+}
+function setButton(text, onClick, cls) { const b = document.createElement('button'); b.className = 'sbtn' + (cls ? ' ' + cls : ''); b.textContent = text; b.addEventListener('click', onClick); return b; }
+function setMsg(pane, text, err) { let m = pane.querySelector('.msg'); if (!m) { m = document.createElement('div'); m.className = 'msg'; pane.appendChild(m); } m.textContent = text; m.classList.toggle('err', !!err); }
+SET_PANES.game = (pane) => {
+  const h = document.createElement('h4'); h.textContent = '게임'; pane.appendChild(h);
+  const sv = loadSaveRaw();
+  const when = sv && sv.t ? `${fmtAgo(sv.t)} (${new Date(sv.t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })})` : '아직 없음';
+  pane.appendChild(setRow('지금 저장', `마지막 저장: ${when} · 30초마다·중요한 순간마다 자동 저장`, setButton('저장', () => { const ok = saveGame('설정에서'); renderSettings(); setMsg(setPaneEl, ok ? '저장했어요.' : '지금은 저장할 수 없어요(컷신·사망 중).', !ok); })));
+  let arm = false;
+  const nb = setButton('새로 시작', () => {
+    if (!arm) { arm = true; nb.textContent = '정말요? 저장이 지워져요'; nb.classList.add('warn'); return; }
+    clearSave(); skipUnloadSave = true; location.reload();
+  });
+  pane.appendChild(setRow('새로 시작', '저장한 모험을 지우고 처음(착륙 컷신)부터 — 설정은 그대로 남아요. 두 번 눌러 확인', nb));
+  const info = document.createElement('div'); info.className = 'note';
+  info.innerHTML = '에버그린 탐사 3D판 · 별내림 천문대 · 로드맵 9 진행 중<br>설정은 이 브라우저에만 저장돼요(<code>ep.settings.v1</code>) — 저장 파일과 따로라 새로 시작해도 남아요.<br>' +
+    '<a href="https://github.com/kri2126/everplanet/blob/main/roadmap/ROADMAP_9.md" target="_blank" rel="noopener">로드맵 9 보기 ↗</a> · <a href="https://github.com/kri2126/everplanet" target="_blank" rel="noopener">저장소 ↗</a>';
+  pane.appendChild(info);
+};
+function placeholderPane(title, text) { return (pane) => { const h = document.createElement('h4'); h.textContent = title; pane.appendChild(h); const n = document.createElement('div'); n.className = 'note'; n.textContent = text; pane.appendChild(n); }; }
+SET_PANES.controls = placeholderPane('조작', '키 다시 매기기는 다음 단계(S2)에서 들어갑니다.');
+SET_PANES.sound = placeholderPane('소리', '음량 슬라이더는 다음 단계(S3)에서 들어갑니다. 지금은 B 키로 배경 음악을 켜고 끌 수 있어요.');
+SET_PANES.display = placeholderPane('화면', '화질·피해 숫자·FPS 표시는 다음 단계(S4)에서 들어갑니다. 지금은 Q 키로 화질을 바꿀 수 있어요.');
+SET_PANES.map = placeholderPane('지도', '미니맵 표시·이름표는 다음 단계(S4)에서 들어갑니다.');
+function renderSettings() {
+  for (const [id] of SET_TABS) setTabBtns[id].classList.toggle('on', id === settingsTab);
+  setPaneEl.innerHTML = ''; (SET_PANES[settingsTab] || (() => {}))(setPaneEl);
+  setSubEl.textContent = '게임이 멈춰 있어요';
+  setResetBtn.textContent = settingsResetArm ? '정말 전부 되돌릴까요?' : '기본값 복원'; setResetBtn.classList.toggle('warn', settingsResetArm);
+}
+function showSettingsTab(id) { settingsTab = id; settingsResetArm = false; renderSettings(); setPaneEl.scrollTop = 0; }
+function canOpenSettings() { return !gate.on && !cut.on && !portalTransit.on && !chatOpen && !player.dead; }
+function openSettings(tab) {
+  if (!canOpenSettings()) return false;
+  hideKeyGuide(); mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false);
+  settingsOpen = true; settingsResetArm = false; keys.clear(); player.moving = false;
+  if (tab) settingsTab = tab;
+  setEl.classList.add('on'); renderSettings(); return true;
+}
+function closeSettings() { if (!settingsOpen) return; settingsOpen = false; setEl.classList.remove('on'); keys.clear(); }
+function applySettings() { /* S2~S4: 키 안내 글·음량·화질·미니맵을 설정값에 맞춘다 */ }
+function resetSettings() { settings = settingsDefaults(); saveSettings(); applySettings(); }
+setResetBtn.addEventListener('click', () => { if (!settingsResetArm) { settingsResetArm = true; renderSettings(); return; } settingsResetArm = false; resetSettings(); renderSettings(); setMsg(setPaneEl, '모든 설정을 기본값으로 되돌렸어요.'); });
+document.getElementById('setClose').addEventListener('click', closeSettings);
+setEl.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (e.target === setEl) closeSettings(); });   // 바깥(어두운 곳)을 누르면 닫힘
+setBtnEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+setBtnEl.addEventListener('click', (e) => { e.stopPropagation(); if (settingsOpen) closeSettings(); else openSettings(); });
+// 설정 화면이 열려 있을 때의 키: ESC 닫기, 1~5·Q·E 탭 넘기기(이 화면 안에서만)
+function settingsKey(e) {
+  const code = e.code;
+  if (code === 'Escape') { e.preventDefault(); closeSettings(); return; }
+  const m = /^(?:Digit|Numpad)([1-5])$/.exec(code);
+  if (m) { e.preventDefault(); showSettingsTab(SET_TABS[+m[1] - 1][0]); return; }
+  const i = SET_TABS.findIndex(([id]) => id === settingsTab);
+  if (code === 'KeyQ') { e.preventDefault(); showSettingsTab(SET_TABS[(i + SET_TABS.length - 1) % SET_TABS.length][0]); return; }
+  if (code === 'KeyE') { e.preventDefault(); showSettingsTab(SET_TABS[(i + 1) % SET_TABS.length][0]); return; }
+  if (code === 'Tab' || code === 'Space') e.preventDefault();
+}
+// ESC: 열린 것이 있으면 그것만 닫는다 — 지도·가방·스킬·퀘스트·기록 창·대화. 아무것도 없으면 설정을 연다.
+function escapePressed() {
+  if (settingsOpen) { closeSettings(); return; }
+  if (mapView || invOpen || skillWinOpen || questWinOpen || charWinOpen || dialog.open) {
+    mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false);
+    if (dialog.open) { dialog.open = false; dialog.choicesShown = false; dlgChoicesEl.classList.remove('on'); dlgEl.style.display = 'none'; }   // 대화는 끝까지 안 본 채 닫힘(onEnd 없음 — 다시 말 걸면 처음부터)
+    keys.clear(); return;
+  }
+  openSettings();
+}
+
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (gate.on) { if (k === '1' || k === 'enter') continueGame(); else if (k === '2') newGame(); return; }   // 작업 G: 시작 화면
   if (chatOpen) return;                                                                                    // 작업 H: 채팅 입력 중엔 입력칸이 키를 가져간다
+  if (settingsOpen) { settingsKey(e); return; }                                                            // 로드맵 9 작업 S: 설정 화면이 키를 가져간다
   if (portalTransit.on) return;                                                                            // 작업 G: 포탈 이동 중 조작 없음
   if (cut.on) { if (k === ' ') { e.preventDefault(); cut.t = cut.dur; } return; }   // 컷신: Space로 건너뛰기
-  if (keyGuideOn()) { hideKeyGuide(); if (k !== 'h') { /* 닫기만 하고 그 키는 그대로 처리 */ } else return; }   // 작업 H
+  if (keyGuideOn()) { hideKeyGuide(); if (k === 'h' || k === 'escape') return; }   // 작업 H: 팝업은 아무 키에나 닫히고 그 키는 그대로 처리(H·ESC는 닫기만)
   if (k === 'h') { showKeyGuide(false); return; }
   if (k === 'enter' && !dialog.open && !mapView && !invOpen && !skillWinOpen && !questWinOpen && !charWinOpen && !player.dead) { e.preventDefault(); openChat(); return; }
   if (k === 'm') { mapView = (mapView + 1) % 3; keys.clear(); toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); e.preventDefault(); return; }
-  if (k === 'escape') { mapView = 0; toggleInv(false); toggleSkillWin(false); toggleQuestWin(false); toggleCharWin(false); return; }
+  if (k === 'escape') { e.preventDefault(); escapePressed(); return; }   // 작업 S
   if (mapView) return;
   if (k === 'i') { toggleInv(); return; }
   if (k === 'k') { toggleSkillWin(); return; }
@@ -3684,7 +3857,7 @@ function adaptQuality(dtMs) {
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;   // 첫 rAF 시각이 모듈 실행 시각보다 앞설 수 있어 음수 방지
   const t0 = performance.now(); renderer.info.reset();
-  if (!mapView) step(dt); else { keys.clear(); }
+  if (!mapView && !settingsOpen) step(dt); else { keys.clear(); }   // 지도·설정 화면이 열려 있으면 멈춤
   renderer.shadowMap.needsUpdate = (frameNo++ % (quality <= 1 ? 4 : 2) === 0);   // 그림자 맵은 2프레임(낮음: 4)에 한 번 (태양이 플레이어를 따라가므로 한 프레임 늦어도 안 보임)
   renderer.render(scene, camera);
   if (mapView === 0) updateLabels();
@@ -4041,6 +4214,7 @@ if (DEBUG) {
       return { lon, lat, z: player.z };
     },
     press(k, on) { on ? keys.add(k) : keys.delete(k); },
+    get settings() { return settings; }, openSettings, closeSettings, settingsOpen() { return settingsOpen; }, settingsTab() { return settingsTab; }, showSettingsTab, escapePressed, resetSettings, SETTINGS_KEY,
     setMap(v) { mapView = v; },
     stepN(n, dt = 1 / 60) { for (let i = 0; i < n; i++) step(dt); },
     jump() { return tryJump(); },
