@@ -3958,6 +3958,82 @@ function openSettings(tab) {
   setEl.classList.add('on'); renderSettings(); return true;
 }
 function closeSettings() { if (!settingsOpen) return; settingsOpen = false; rebindWait = null; rebindMsg = ''; setEl.classList.remove('on'); keys.clear(); }
+// ── 창 열기·닫기 효과음 — 기본 창(소지품·스킬·퀘스트·캐릭터)은 양피지 '사락/삭', 지도(M: 지역 지도·전경도)는 두꺼운 지도 '푸석', 설정(Esc)은 '뽁/뿅'. 파일 없이 합성
+function uiRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function uiSvf() { let lo = 0, bd = 0; return (x, f, sr, d) => { const k = 2 * Math.sin(Math.PI * Math.min(f, sr / 6) / sr); const hi = x - lo - d * bd; bd += k * hi; lo += k * bd; return { lp: lo, bp: bd, hp: hi }; }; }
+function uiNorm(o, sr) { let pk = 0; const n = o.length; for (let i = 0; i < n; i++) { if (i > n - sr * 0.02) o[i] *= (n - i) / (sr * 0.02); pk = Math.max(pk, Math.abs(o[i])); } for (let i = 0; i < n; i++) o[i] *= 0.9 / (pk || 1); return o; }
+// 1. 종이: '사락'(열기) — 노이즈 소리 중심이 위로 쓸리며 두세 번 바스락 / '삭'(닫기) — 짧게 아래로
+function uiPaper(sr, open) {
+  const r = uiRng(open ? 11 : 12), len = open ? 0.32 : 0.2, n = Math.floor(sr * len), o = new Float32Array(n), F = uiSvf(), H = uiSvf();
+  const lumps = open ? [[0, 0.5], [0.06, 1], [0.15, 0.6]] : [[0, 1], [0.05, 0.45]];
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, u = t / len; let e = 0;
+    for (const [t0, a] of lumps) if (t > t0) { const v = t - t0; e += a * Math.min(1, v / 0.01) * Math.exp(-v / 0.045); }
+    const f = open ? 1300 + 2200 * u : 3000 - 1800 * u;
+    const x = r() * 2 - 1, crackle = r() < 0.006 ? (r() * 2 - 1) * 1.2 : 0;   // 종이 결의 잔 바스락(작게)
+    o[i] = F(x + crackle, f, sr, 1.1).bp * e;
+  }
+  let l1 = 0, l2 = 0; const k = 1 - Math.exp(-6.283 * 4500 / sr); for (let i = 0; i < n; i++) { l1 += k * (o[i] - l1); l2 += k * (l1 - l2); o[i] = l2; }   // 윗부분을 깎아 부드럽게
+  return uiNorm(o, sr);
+}
+// 4. 뽁: 열기 '뽁'(낮은 음이 빠르게 위로 튀어오름) / 닫기 '뿅'(위에서 아래로)
+function uiPop(sr, open) {
+  const len = open ? 0.12 : 0.16, n = Math.floor(sr * len), o = new Float32Array(n); let ph = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, u = t / len;
+    const f = open ? 320 * Math.pow(1150 / 320, Math.pow(u, 0.35)) : 1150 * Math.pow(380 / 1150, Math.pow(u, 0.6));
+    ph += 2 * Math.PI * f / sr;
+    const e = Math.min(1, t / 0.004) * Math.pow(1 - u, open ? 1.6 : 1.2);
+    o[i] = (Math.sin(ph) + 0.15 * Math.sin(2 * ph)) * e;
+  }
+  return uiNorm(o, sr);
+}
+// 공통: 노이즈를 움직이는 중심(f(t))의 넓은 띠로 거르고, 세기 윤곽 e(t)를 곱하고, 바스락(잔 알갱이)·탁(낮은 짧은 울림)을 더한 뒤 윗부분을 깎는다
+function uiPaperCore(sr, len, seed, fOf, eOf, P) {
+  const r = uiRng(seed), n = Math.floor(sr * len), o = new Float32Array(n), F = uiSvf(), G = uiSvf();
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, e = eOf(t), x = r() * 2 - 1;
+    const cr = r() < (P.crackRate || 0) / sr * 1 ? 1 : 0;
+    o[i] = F(x, fOf(t), sr, P.d || 1.1).bp * e;
+    if (P.crackRate && r() < P.crackRate / sr) { const len2 = Math.floor(sr * (0.001 + r() * 0.002)), a = (P.crackAmp || 0.6) * e * (0.5 + r()); for (let j = 0; j < len2 && i + j < n; j++) o[i + j] += G(r() * 2 - 1, P.crackF || 3000, sr, 1.2).bp * a * Math.sin(Math.PI * j / len2); }
+  }
+  if (P.tap) { const [t0, f0, a] = P.tap, st = Math.floor(t0 * sr); for (let i = 0; st + i < n; i++) { const t = i / sr; o[st + i] += (Math.sin(2 * Math.PI * f0 * t) * 0.6 + (r() * 2 - 1) * 0.5 * Math.exp(-t / 0.003)) * Math.exp(-t / 0.025) * a; } }
+  let l1 = 0, l2 = 0; const k = 1 - Math.exp(-6.283 * (P.lp || 4500) / sr); for (let i = 0; i < n; i++) { l1 += k * (o[i] - l1); l2 += k * (l1 - l2); o[i] = l2; }
+  return uiNorm(o, sr);
+}
+const lump = (t, t0, a, att, dec) => t < t0 ? 0 : a * Math.min(1, (t - t0) / att) * Math.exp(-(t - t0) / dec);
+// 5. 두꺼운 지도 '푸석' — 낮고 묵직한 바스락, 잔 알갱이 많음
+function uiMap(sr, open) {
+  const len = open ? 0.38 : 0.26;
+  return uiPaperCore(sr, len, open ? 91 : 92,
+    (t) => open ? 700 + 1100 * (t / len) : 1500 - 700 * (t / len),
+    (t) => lump(t, 0, 0.7, 0.012, 0.06) + lump(t, open ? 0.09 : 0.06, 1, 0.015, 0.07) + (open ? lump(t, 0.2, 0.5, 0.01, 0.05) : 0),
+    { crackRate: 380, crackAmp: 0.9, crackF: 1800, lp: 3200, d: 1.0 });
+}
+const uiSnd = { bufs: null, vol: 0.12, prev: null };
+function uiPlay(kind, open) {
+  if (!sfxReady()) return;
+  if (!uiSnd.bufs) { const sr = sfx.ctx.sampleRate, mk = (a) => { const b = sfx.ctx.createBuffer(1, a.length, sr); b.copyToChannel(a, 0); return b; };
+    uiSnd.bufs = {}; for (const [k, fn] of [['paper', uiPaper], ['map', uiMap], ['pop', uiPop]]) uiSnd.bufs[k] = [mk(fn(sr, false)), mk(fn(sr, true))]; }
+  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain();
+  src.buffer = uiSnd.bufs[kind][open ? 1 : 0]; src.playbackRate.value = 0.97 + Math.random() * 0.06; g.gain.value = uiSnd.vol;
+  src.connect(g); g.connect(sfx.master); src.start();
+}
+// 창 상태가 바뀌는 순간을 매 프레임 살펴 소리를 낸다(키·클릭·Esc 어느 경로로 열고 닫아도 같은 소리). 한 프레임에 여러 창이 바뀌면 한 번만
+function uiWatch() {
+  const cur = { inv: invOpen, skill: skillWinOpen, quest: questWinOpen, char: charWinOpen, map: mapView, set: settingsOpen };
+  const p = uiSnd.prev; uiSnd.prev = cur;
+  if (p) {
+    if (cur.set !== p.set) uiPlay('pop', cur.set);
+    else if (cur.map !== p.map) uiPlay('map', cur.map > 0);
+    else {
+      const opened = ['inv', 'skill', 'quest', 'char'].some((k) => cur[k] && !p[k]), closed = ['inv', 'skill', 'quest', 'char'].some((k) => !cur[k] && p[k]);
+      if (opened) uiPlay('paper', true); else if (closed) uiPlay('paper', false);
+    }
+  }
+  requestAnimationFrame(uiWatch);
+}
+requestAnimationFrame(uiWatch);
 // 설정값을 화면·게임에 반영 — S2: 키 안내 글(상단 줄·키 안내 팝업·스킬 슬롯 글자·대화/컷신 안내·창 아래 줄)
 const hintEl = document.getElementById('hint'), keyGuideRowsEl = document.querySelector('#keyGuide .rows'), keyGuideFootEl = document.querySelector('#keyGuide .foot');
 function updateKeyTexts() {
