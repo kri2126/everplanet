@@ -768,7 +768,7 @@ function bearingFrom(center, p) {
 }
 
 // 로드맵 8: 원작 지역 지도(§1-2 좌표표) 기준. 추기 #3: 진행은 남→북 — 남쪽 착륙 들판(데크) → 별 크레이터 → 샘물 비탈 → 호수 띠(다리) → 야영지(0) → 돌계단(올라감) → 북쪽 관측소 초원(MEADOW_H, 별 받침대) → 북동 출구.
-const LAND_HILL = 1.8;                 // 2026-10-02: 착륙 언덕 높이(남쪽 들판 1.2 위로)
+const LAND_R = 7.0;                    // 2026-10-02 착륙 언덕 2차: 관측소 초원과 같은 높이(MEADOW_H)의 넓은 평평한 언덕, 꼭대기 반지름(세계 °). 가장자리는 초원처럼 안팎 0.9° 완만한 비탈
 const MEADOW_H = 1.76;                 // 관측소 초원 높이 — 돌계단 4단 × 0.44 (STEP_UP 0.45 이내)
 const LAKE = { lon0: -13.2, lon1: 7.4, lat0: 17.1, lat1: 28.1 };   // 호수 띠(°)
 const T = {
@@ -783,9 +783,9 @@ const T = {
   // walls: 추기 #4부터 terrainH 안에서 설계 경위도(남 -11 · 북 48 · 동서 ±14.6)로 직접 판정 (makeSeg 대원은 확대된 지도에서 위선을 벗어난다)
   // 모래길 — 추기 #3: 간선(착륙 들판→크레이터 앞→비탈→샘물→다리→야영지→계단→관측소), 크레이터 지선, 출구 지선, 서쪽 지선
   paths: [
-    makeSeg(-3.6, -3.0, -4.7, 1.0),    // 0 착륙 데크 경사로 아래 → 북 (2026-10-02: 데크를 남쪽 들판 가운데 언덕 위로 옮기며 다시 냄)
-    makeSeg(-4.7, 1.0, -6.0, 4.6),     // 1 → 들판 북쪽 굽이
-    makeSeg(-6.0, 4.6, -0.5, 9.2),     // 2 → 비탈
+    makeSeg(-3.56, -2.5, -2.0, 0.7),   // 0 착륙 데크 경사로 아래 → 언덕 꼭대기를 지나 계단 위 (2026-10-02 2차: 착륙 언덕 계단이 12시 방향)
+    makeSeg(-2.0, 3.2, -1.4, 6.4),     // 1 계단 아래 → 북
+    makeSeg(-1.4, 6.4, -0.5, 9.2),     // 2 → 비탈
     makeSeg(-0.5, 9.2, -1.4, 16.0),    // 3 → 샘물 옆
     makeSeg(-1.4, 16.0, -3.9, 16.4),   // 4 → 다리 남단
     makeSeg(-3.9, 28.3, -4.5, 29.8),   // 5 다리 북단 → 야영지 갈림길
@@ -801,8 +801,9 @@ const T = {
     makeSeg(-9.2, 31.2, -9.9, 33.0),   // 15 → 크레이터 안
   ],
   // 걷기 판정용 구조물 (시각은 작업 C)
-  deck: dirFromLonLat(0.0, -3.0),      // 2026-10-02: 남쪽 들판 가운데(옛 -5.6, -6.4)로 — 착륙 언덕(LAND_HILL) 꼭대기. 반경 2.25°(세계), 언덕 위로 1.2 높음
-  ramp: makeSeg(-1.82, -3.0, -3.6, -3.0),  // 데크 → 언덕 꼭대기 경사로(서쪽). 세계 위도 -31°라 설계 경도 1°가 세계 1.24°: 가장자리(2.25°)에서 시작해 2.2° 길이
+  deck: dirFromLonLat(0.0, -2.5),      // 2026-10-02: 남쪽 들판 가운데(옛 -5.6, -6.4)로 — 착륙 언덕(LAND_R) 꼭대기 한가운데. 반경 2.25°(세계), 언덕 위로 1.2 높음
+  ramp: makeSeg(-1.8, -2.5, -3.56, -2.5),  // 데크 → 언덕 꼭대기 경사로(서쪽): 가장자리(2.25°)에서 시작해 2.2° 길이
+  landStairs: makeSeg(-2.0, 0.86, -2.0, 3.08),   // 착륙 언덕 북쪽(12시) 돌계단 4단 — 관측소 초원 계단과 같은 꼴(위 = 꼭대기 안 5.5°, 아래 = 바깥 8.5°)
 };
 const _o = { t: 0, inside: false };
 const CRATER_GAP_BEARING = 150;   // 추기 #5: 크레이터 트임 방위(남동) — 야영지 쪽에서 길이 들어온다
@@ -866,8 +867,9 @@ function undulate(p, lon, lat) {
   u *= ss(3.6 * MAP_S, 5.2 * MAP_S, angDeg(p, T.spring));
   u *= ss(3.4 * MAP_S, 4.6 * MAP_S, angDeg(p, T.starCrater));
   u *= ss(2.0, 4.0, T.stairs.dist(p, _ou));
+  u *= ss(2.0, 4.0, T.landStairs.dist(p, _ou));
   u *= ss(1.5, 3.5, T.bridge.dist(p, _ou));
-  u *= ss(6.5, 9.5, angDeg(p, T.deck));   // 2026-10-02: 착륙 언덕 전체는 굴곡 없이 매끈하게
+  u *= ss(LAND_R + 1.5, LAND_R + 4, angDeg(p, T.deck));   // 2026-10-02: 착륙 언덕 전체·둘레는 굴곡 없이 매끈하게
   u *= ss(1.5, 3.5, T.ramp.dist(p, _ou));
   return u;
 }
@@ -903,9 +905,16 @@ function terrainH(p) {
   // 남쪽 비탈: 다리 남단(위도 17)에서 크레이터(위도 9)까지 0 → 1.2 완만 오르막 (추기 #3: 착륙 들판도 이 높이 1.2 위에 있다)
   h += 1.2 * ss(17, 9, lat) * play;
 
-  // 착륙 언덕(2026-10-02): 착륙 데크는 다른 곳보다 높은 언덕 위 — 꼭대기(데크·경사로·비행정 자리, 세계 4.8° 안)는 평평하고
-  // 8.6°까지 완만하게(기울기 약 0.3) 내려온다. 높이 1.8. 데크 윗면(DECK_TOP)은 언덕 꼭대기 + 1.2.
-  h += LAND_HILL * ss(8.6, 4.8, angDeg(p, T.deck)) * play;
+  // 착륙 언덕(2026-10-02 2차): 관측소 초원과 같은 높이(MEADOW_H 1.76)의 넓고 평평한 언덕 — 꼭대기 반지름 LAND_R(세계 7°, 약 11유닛),
+  // 가장자리는 초원처럼 안팎 0.9°의 완만한 비탈(경사면 타일). 북쪽(12시)에 초원과 같은 4단 돌계단, 계단 둘레는 통로로 깎고 옆은 낮은 둔덕.
+  // 데크 윗면(DECK_TOP)은 언덕 꼭대기 + 1.2.
+  {
+    const dL = angDeg(p, T.deck), dLS = T.landStairs.dist(p, _o), tLS = _o.t, lsIn = _o.inside, h0 = h;
+    const lCorr = lsIn ? ss(1.5, 1.05, dLS) : 0;
+    h += MEADOW_H * ss(LAND_R + 0.9, LAND_R - 0.9, dL) * (1 - lCorr) * play;
+    if (dLS < 1.0 && tLS >= 0 && tLS < 1) h = Math.max(h, h0 + MEADOW_H - Math.floor(tLS * 4.001) / 4 * MEADOW_H);
+    else if (dLS < 1.5 && tLS >= 0 && tLS < 1) h = Math.max(h, h0 + Math.min(MEADOW_H, (1 - tLS) * MEADOW_H + 0.6) * ss(1.5, 1.05, dLS));
+  }
 
   // 관측소 초원(북쪽 높은 지대): 원반 3개의 합. 가장자리는 가파른 절벽(0.12°)이었으나 2026-10-02 "일반 경사면은 완만하게" 지적으로
   // 원래 가장자리를 가운데 두고 안팎 0.9°씩(폭 1.8° ≈ 2.8유닛) 완만한 언덕 비탈로 — 이제 계단 말고 비탈로도 걸어 오르내린다
@@ -1156,8 +1165,8 @@ function paintTerrain(geo, withPaths) {
       const m = pathMask(d);
       if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.sand : COL.sandEdge, m); bare = Math.max(bare, ss(0.05, 0.55, m)); }
       // 돌계단은 돌색
-      const dS = T.stairs.dist(d, _o);
-      if (dS < 1.0 && _o.inside) { tmp.copy(vnoise(d.x * 80, d.y * 80, d.z * 80) > 0.5 ? COL.stone : COL.stoneDark); rockK = 1; }
+      const dS = Math.min(T.stairs.dist(d, _o) + (_o.inside ? 0 : 9), T.landStairs.dist(d, _o) + (_o.inside ? 0 : 9));
+      if (dS < 1.0) { tmp.copy(vnoise(d.x * 80, d.y * 80, d.z * 80) > 0.5 ? COL.stone : COL.stoneDark); rockK = 1; }
     }
     // 가파른 곳 = 바위 (줄무늬 + 이끼)
     if (slope > 0.10) {
@@ -1172,7 +1181,7 @@ function paintTerrain(geo, withPaths) {
       if (mossy > 0.5 && slope < 0.3) tmp.lerp(COL.moss, k * 0.8);
     }
     // 절벽 타일(2026-10-02 2차): 가파른 곳(경사 약 40°→54°) → tile_cliff_steep, 완만한 경사면 → tile_cliff_gentle, 돌계단 → 옛 돌 무늬
-    const stW = ss(0.24, 0.42, slope), sW = (withPaths && T.stairs.dist(d, _o) < 1.0 && _o.inside) ? 1 : 0;
+    const stW = ss(0.24, 0.42, slope), sW = (withPaths && ((T.stairs.dist(d, _o) < 1.0 && _o.inside) || (T.landStairs.dist(d, _o) < 1.0 && _o.inside))) ? 1 : 0;
     col.setXYZ(i, tmp.r, tmp.g, tmp.b);
     rockA.setX(i, rockK); bareA.setX(i, bare); tuftA.setX(i, tuft); cliffA.setXYZ(i, stW, 0, sW);
   }
@@ -1607,7 +1616,7 @@ function placeSprite(mesh, lonDeg, latDeg, useWalk = false, lift = 0) {
 function mapDot(dir, radius, color) { return null; }   // 추기 #5: 지도가 그림 지도(캔버스)로 바뀌어 3D 지도 점은 안 만든다
 
 // ── 세계 채우기 ───────────────────────────────────────────────────────────────
-const START = [-4.2, -3.8];                     // 2026-10-02: 착륙 언덕 위 데크 경사로 아래(옛 -10.0, -7.2)
+const START = [-4.2, -3.2];                     // 2026-10-02: 착륙 언덕 위 데크 경사로 아래(옛 -10.0, -7.2)
 const player = {
   pos: dirFromLonLat(START[0], START[1]).multiplyScalar(R),
   fwd: new THREE.Vector3(0, 1, 0),             // 북쪽
@@ -1851,15 +1860,15 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 로드맵 8: 원작 지도의 나무 밀도대로 좌표 직접 배치 — 가장자리를 따라 빽빽하게, 초원·크레이터 안은 비움
   // 2026-10-02 재배치: 물에 걸쳐 떠 보이던 나무·길가에 몰린 나무를 없애고 자동으로 다시 심었다 — 잎 아래(반경 2) 전부 마른 평지, 다리·계단·데크·크레이터·별 받침대·소품 자리는 비움.
   // 같은 날 다시: 길가와 먼 곳 차이가 너무 크다는 지적으로 차이를 줄였다 — 모래길 중심에서 3.0유닛 안엔 안 심고(길은 막지 않게), 간격은 길가 약 8.7 → 먼 곳 약 5.5유닛, 숲 덩어리 잡음으로 군데군데 모이게.
-  // 2026-10-02: 착륙 데크를 남쪽 들판 가운데 언덕으로 옮기며 언덕 꼭대기·새 길·비행정·미르 자리에 걸린 나무 5·돌 2·꽃 1·덤불 2·버섯 1을 옛 착륙 들판 쪽 빈 땅으로 옮김
+  // 2026-10-02: 착륙 데크를 남쪽 들판 가운데 언덕으로 옮기며 언덕 꼭대기·새 길·비행정·미르 자리에 걸린 나무 5·돌 2·꽃 1·덤불 2·버섯 1을 옛 착륙 들판 쪽 빈 땅으로 옮김(2차: 언덕을 넓히며 나무 4·돌 2·꽃 1·덤불 1을 언덕 둘레 밖으로 한 번 더)
   const spots = [
-    [10.86, 31.19], [4.49, -6.37], [10.3, 0.48], [6.82, -3.96], [11.43, 17.99], [7.79, 39.16], [8.15, -7.33], [12.15, 3.72], [-10.41, 13.69], [-13.05, 2.58],
+    [10.86, 31.19], [5.76, -6.51], [10.3, 0.48], [6.82, -3.96], [11.43, 17.99], [7.79, 39.16], [8.15, -7.33], [12.15, 3.72], [-10.41, 13.69], [-13.05, 2.58],
     [12.37, -3.09], [-1.85, 45.73], [-12.36, 45.09], [-6.78, -3.97], [12.84, 20.03], [-9.25, 43.31], [10.61, 15.84], [6.2, 9.69], [9.24, 35.84], [1.87, -9.77],
     [-11.87, -1.05], [1.33, 31.12], [-8.11, -1.37], [9.22, 27.64], [9.23, 14], [2.32, 3.94], [12.89, 13.9], [-3.81, 9.22], [-4.84, 41.51], [7.51, 11.52],
     [8.41, 33.15], [7.46, -1.3], [-7.17, -10.02], [-4.82, -6.89], [7.94, 6.23], [-12.85, 36.61], [11.26, 10.09], [5.1, -9.25], [10.57, -9.53], [11.81, 27.58],
-    [-12.22, 29.47], [-10.05, 5.93], [4.34, 5.97], [12.47, 34.36], [-2.16, 4.94], [3.87, 0.29], [11.46, 45.61], [0.42, 43.42], [3.35, 34.08], [5.65, 43.32],
+    [-12.22, 29.47], [-10.05, 5.93], [4.34, 5.97], [12.47, 34.36], [-3.39, 3.84], [5.69, 0.56], [11.46, 45.61], [0.42, 43.42], [3.35, 34.08], [5.65, 43.32],
     [-3.01, -9.24], [-8.02, 45.97], [-9.04, 1.83], [-11.53, -9.58], [10.31, -4.84], [8.68, 21.7], [6.45, 2.66], [0.09, 16.4], [5.49, 15.87], [-7.91, 9.03],
-    [13.37, 7.7], [12.8, -6.61], [6.4, 31.01], [11.07, 22.83], [-13.63, 6.69], [6.04, 36], [9.03, 8.81], [-0.14, -7.64], [-4.12, 36.18], [13.12, 24.73],
+    [13.37, 7.7], [12.8, -6.61], [6.4, 31.01], [11.07, 22.83], [-13.63, 6.69], [6.04, 36], [9.03, 8.81], [-0.17, -8.55], [-4.12, 36.18], [13.12, 24.73],
     [-12.39, 42.1], [11.97, 38.56], [-5.93, 12.88], [7.84, 18.17], [-8.02, -7.65], [4.62, 28.99], [-9.94, 40.56], [9.27, 24.73], [12.79, 1.1], [-12.39, 39.14],
     [10.6, 6.41], [0.78, 37.88], [-12.2, -5.14], [0.83, 8.33], [-13.51, 11.25], [-9.85, -3.65], [9.14, 3.24], [-6.36, 33.36], [13.47, 30.56],
   ];
@@ -1947,7 +1956,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
   // 2026-10-02: 덤불은 풀 위에만 — 물(샘물 이동 후 물에 잠긴 1포기)·모래길·가파른 바위 위나 그 가장자리에 걸치던 6포기를
   // 가장 가까운 풀밭으로 옮겼다(포기 중심과 반경 0.8·1.6 둘레 24곳이 모두 풀, 나무·텐트 등 소품과 3.0, 덤불끼리 3.0 이상 떨어지게).
-  const bushes = [[-5.8, 43.2], [2.2, 43.6], [-7.0, 35.2], [4.4, 30.4], [-10.2, 30.2], [10.6, 24.2], [-8.4, 13.0], [1.7, 9.5], [-10.0, 11.7], [6.2, 6.8], [-9, -5.6], [-1.83, 2.43]];
+  const bushes = [[-5.8, 43.2], [2.2, 43.6], [-7.0, 35.2], [4.4, 30.4], [-10.2, 30.2], [10.6, 24.2], [-8.4, 13.0], [1.7, 9.5], [-10.0, 11.7], [6.2, 6.8], [-9, -5.6], [-3.88, 1.91]];
   const bushSprites = bushes.map(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); return b; });
   // 로드맵 9 (2026-10-02): 덤불을 그림 판 → 3D 모델(assets/models/bush.glb, 사용자 제작)로 교체. 못 읽으면 그림 판 유지.
   // 나무처럼 조각을 '줄기(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색) 12포기를 InstancedMesh 2개로 그린다.
@@ -1990,7 +1999,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     for (const im of ims) im.instanceMatrix.needsUpdate = true;
     if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
   }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); }));
-  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-11.4, -2.54, 'yellow'], [2.6, 22.8, 'white'],
+  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.66, 3.29, 'white'], [-11.4, -2.54, 'yellow'], [2.6, 22.8, 'white'],
     // 2026-10-02 추가 29송이: 빈도를 늘리고 2~4송이씩 붙어 핀 무리(0.6~1.0유닛 간격, 가끔 흰·노랑 섞임) + 홀로 핀 꽃. 길 중심 2.2유닛·물·비탈·나무·소품은 피함
     [4.53, 44.55, 'yellow'], [4.65, 44.28, 'yellow'], [4.83, 44.66, 'yellow'], [1.78, 16.08, 'yellow'], [0.18, 34, 'yellow'], [0.29, 34.26, 'yellow'], [0.42, 33.79, 'yellow'], [0.36, 33.41, 'yellow'],
     [-5.26, 10.22, 'yellow'], [5.26, 2.43, 'yellow'], [5.48, 2.13, 'white'], [5.43, 1.83, 'white'], [6.41, 38.55, 'yellow'], [6.5, 38.86, 'white'], [-7.19, 7.63, 'white'], [-6.99, 7.44, 'white'],
@@ -2112,7 +2121,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-6.64, -5.85], [10.2, 21.8],
     // 2026-10-02 추가 16개: 빈도를 늘리고 가끔은 2~3개가 맞닿은 무리로(세 번째 값 = 크기 배율, 곁돌은 0.6~0.85배). 길 중심 2.8유닛·물·비탈·나무·소품은 피함
-    [-6.28, 7.83], [2.75, 29.24], [2.45, 28.61, 0.73], [-11.27, -7.89], [-11.02, -7.29, 0.66], [-11.83, -8.28, 0.69], [2.11, 35.93], [-5.76, -8.62], [4.29, -4.27, 0.7], [12.15, -8.2], [12.42, -8.7, 0.64], [-3.03, 39.64], [12.64, 28.8], [12.93, 28.32, 0.82], [-0.38, 3.39], [6.89, 14.27]];
+    [-6.28, 7.83], [2.75, 29.24], [2.45, 28.61, 0.73], [-11.27, -7.89], [-11.02, -7.29, 0.66], [-11.83, -8.28, 0.69], [2.11, 35.93], [-5.76, -8.62], [3.31, 2.38, 0.7], [12.15, -8.2], [12.42, -8.7, 0.64], [-3.03, 39.64], [12.64, 28.8], [12.93, 28.32, 0.82], [0.46, 4.39], [6.89, 14.27]];
   const stoneSprites = [];
   stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); addClimb(st.userData.dir, 0.5, 0.7); st.userData.climb = climbProps[climbProps.length - 1]; stoneSprites.push(st); });
   // 로드맵 9 (2026-10-02): 돌을 그림 판 → 3D 모델(assets/models/rocks/rock_<모양 1~8>_<이끼 cap·clover·dots·rim·streak>.glb, 사용자 제작 40종)로.
@@ -2378,7 +2387,7 @@ function addProp(tex, w, h, lon, lat, opts = {}) {
   scene.add(m); props.push(m); return m;
 }
 // 로드맵 8 추기 #3 — 착륙 들판(남): 비행정(데크 북쪽 들판 위에 떠 있음, 시작 컷신에서 여기로 내려온다)·표지판·등불
-const airship = addProp(airshipTex, 6.4, 4.8, 0.0, -0.2, { lift: 0.35 });   // 2026-10-02: 데크와 함께 이동(옛 -5.6, -3.6)
+const airship = addProp(airshipTex, 6.4, 4.8, 1.6, 0.2, { lift: 0.35 });   // 2026-10-02: 데크와 함께 이동(옛 -5.6, -3.6), 계단 길을 비켜 북동쪽
  airship.userData.base = airship.position.clone(); airship.userData.alt = 0;
 // 로드맵 9 (2026-10-02): 비행정(시작 컷신에서 타고 내려오는 배 = 착륙 들판에 떠 있는 배, 같은 물체)을 그림 판 → 3D 모델(assets/models/airship.glb, 사용자 제작)로.
 // 위치·내려오기·둥실거림은 그림 판(airship)이 계속 계산하고, 모델은 매 프레임 그 자리를 따라간다. 그림 판은 안 보이게(그림자도 끔). 못 읽으면 그림 판 유지.
@@ -2393,7 +2402,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
   const bb = new THREE.Box3().setFromObject(m), k = 4.8 / (bb.max.y - bb.min.y);
   m.scale.setScalar(k); m.position.y = -bb.min.y * k;   // 배 밑바닥이 그림 판 밑변 자리에
   const g = new THREE.Group(); g.add(m);
-  const up = airship.userData.dir.clone(), east = dirFromLonLat(0.1, -0.2).sub(up), south = dirFromLonLat(0.0, -0.3).sub(up);
+  const up = airship.userData.dir.clone(), east = dirFromLonLat(1.7, 0.2).sub(up), south = dirFromLonLat(1.6, 0.1).sub(up);
   east.addScaledVector(up, -east.dot(up)).normalize(); south.addScaledVector(up, -south.dot(up)).normalize();
   const fwd = east.multiplyScalar(Math.cos(35 * DEG)).addScaledVector(south, Math.sin(35 * DEG)).normalize();
   const side = new THREE.Vector3().crossVectors(up, fwd).normalize();
@@ -2412,7 +2421,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
 // 발판은 나무 단과 같은 "한쪽 방향"(PAD_SNAP). 몸통은 캐릭터 키(SHIP_CHAR_H)만큼 겹치면 안쪽으로 못 들어간다 — 땅에서는 막히고, 2단 점프로 뱃전(땅 위 약 2.0)에 올라선다.
 // 배가 내려오거나(컷신) 둥실거려도 airship.position 높이를 그대로 따라간다.
 {
-  const up = airship.userData.dir.clone(), east = dirFromLonLat(0.1, -0.2).sub(up), south = dirFromLonLat(0.0, -0.3).sub(up);   // 모델 방향과 같은 계산
+  const up = airship.userData.dir.clone(), east = dirFromLonLat(1.7, 0.2).sub(up), south = dirFromLonLat(1.6, 0.1).sub(up);   // 모델 방향과 같은 계산
   east.addScaledVector(up, -east.dot(up)).normalize(); south.addScaledVector(up, -south.dot(up)).normalize();
   const fwd = east.multiplyScalar(Math.cos(35 * DEG)).addScaledVector(south, Math.sin(35 * DEG)).normalize();
   const side = new THREE.Vector3().crossVectors(up, fwd).normalize();
@@ -2442,8 +2451,8 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
   const d = shipCol.spot(), z0 = walkH(d);
   player.pos.copy(d).multiplyScalar(R + z0); player.z = z0; player.safe.copy(d); player.safeNext.copy(d);
 }
-addProp(signTex, 1.3, 1.75, -5.6, -0.2);        // 들판 길 초입(크레이터 방향 안내) — 2026-10-02 데크와 함께 이동
-addProp(lanternTex, 1.1, 1.5, -3.2, -4.4);       // 데크 경사로 입구 — 2026-10-02 데크와 함께 이동
+addProp(signTex, 1.3, 1.75, -0.7, 3.7);         // 들판 길 초입(크레이터 방향 안내) — 2026-10-02 착륙 언덕 계단 아래
+addProp(lanternTex, 1.1, 1.5, -3.3, -3.4);       // 데크 경사로 입구 — 2026-10-02 데크와 함께 이동
 addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
 // 관측소 둥근 터: 선돌 3기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6). 추기 #3: 고리 한가운데가 별 받침대
 const standingStones = [addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)];
@@ -2599,6 +2608,7 @@ const deck = (() => {
       up.copy(dir); fwd.copy(seg.B).sub(seg.A); tangentize(fwd, up); right.crossVectors(fwd, up).normalize();
       // 계단·다리 구간엔 말뚝을 안 세운다
       if (T.stairs.dist(dir, _o) < 1.6 && _o.inside) continue;
+      if (T.landStairs.dist(dir, _o) < 1.6 && _o.inside) continue;
       const sh = pathShape(dir), sgn = Math.sign(right.dot(seg.n)) || 1;   // 2026-10-02: 길 폭·굽이(pathShape)를 따라 가장자리에
       for (const side of [-1, 1]) {
         const p = dir.clone().addScaledVector(right, (side * (0.72 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();
@@ -2771,7 +2781,7 @@ function log(text, cls = '') {
 
 // NPC 3 — 좌표 직접 배치 (§8). 대사는 buildDialog()가 행성/일반 퀘스트 상태에 따라 고른다(작업 E)
 const NPCS = [
-  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -3.0, lat: -1.4, lift: 0.78,   // 2026-10-02: 데크와 함께 언덕 꼭대기(평평한 곳)로 이동(옛 -10.6, -5.4)
+  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -3.4, lat: -0.9, lift: 0.78,   // 2026-10-02: 데크와 함께 언덕 꼭대기(평평한 곳)로 이동(옛 -10.6, -5.4)
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
   { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -4.5, lat: 29.8, lift: 0,
     idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
@@ -4268,6 +4278,7 @@ function surfaceAt(d) {
   if (h < waterAt(d) + 0.3) return 'water';
   if (pathMask(d) > 0.5) return 'sand';
   if (T.stairs.dist(d, _o) < 1.0 && _o.inside) return 'stone';
+  if (T.landStairs.dist(d, _o) < 1.0 && _o.inside) return 'stone';
   _sfA.set(0, 0, 1); if (Math.abs(d.z) > 0.9) _sfA.set(1, 0, 0);
   _sfA.cross(d).normalize(); _sfB.crossVectors(d, _sfA);
   const e = 0.003, gx = terrainH(_sfC.copy(d).addScaledVector(_sfA, e).normalize()) - h, gy = terrainH(_sfC.copy(d).addScaledVector(_sfB, e).normalize()) - h;
@@ -5073,7 +5084,7 @@ const zoneCap = document.getElementById('zoneCap'), zoneTitle = document.getElem
 const ui2d = document.getElementById('ui2d'), ctx = ui2d.getContext('2d');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const ZONE_LABELS = [
-  ['착륙 언덕', -1.6, -6.4], ['서쪽 샛길', -10.6, 10.0], ['샘물', 3.0, 13.1], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
+  ['착륙 언덕', -1.6, -6.0], ['서쪽 샛길', -10.6, 10.0], ['샘물', 3.0, 13.1], ['나무다리', -3.9, 24.0], ['섬', 2.4, 23.6],
   ['야영지', -4.4, 30.8], ['별 크레이터', -10.5, 36.6], ['돌계단', -1.5, 34.4], ['관측소 초원', -0.9, 41.6], ['겸손한 사원 →', 10.6, 44.6],
 ];
 const zoneLabelEls = ZONE_LABELS.map(([name]) => { const d = document.createElement('div'); d.className = 'lbl'; d.textContent = name; zoneLabels.appendChild(d); return d; });
@@ -5147,6 +5158,7 @@ function buildAtlas() {
     g.strokeStyle = '#d9a45a'; g.lineWidth = ATLAS.ppd * 0.5; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     g.strokeStyle = 'rgba(110,70,30,.5)'; g.lineWidth = 1; const n = 18; for (let i = 1; i < n; i++) { const t = i / n, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.beginPath(); g.moveTo(x - ATLAS.ppd * 0.4, y); g.lineTo(x + ATLAS.ppd * 0.4, y); g.stroke(); } }
   { const [a, b] = seg2px(T.stairs); for (let i = 0; i < 4; i++) { const t = (i + 0.5) / 4, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.fillStyle = i % 2 ? '#c9c0ae' : '#b5ab98'; g.fillRect(x - ATLAS.ppd * 0.55, y - ATLAS.ppd * 0.3, ATLAS.ppd * 1.1, ATLAS.ppd * 0.6); } }
+  { const [a, b] = seg2px(T.landStairs); for (let i = 0; i < 4; i++) { const t = (i + 0.5) / 4, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.fillStyle = i % 2 ? '#c9c0ae' : '#b5ab98'; g.fillRect(x - ATLAS.ppd * 0.55, y - ATLAS.ppd * 0.3, ATLAS.ppd * 1.1, ATLAS.ppd * 0.6); } }
   { const [dl, dla] = designLonLat(T.deck); const [x, y] = atlasPx(dl, dla); const r = ATLAS.ppd * 1.7;
     g.fillStyle = '#d9a45a'; g.strokeStyle = '#7a5230'; g.lineWidth = 1.5; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke(); }
   // 놀이 구역 테두리: 손으로 그은 듯 흔들리는 겹선 + 바깥 능선은 작은 산 표시(추기 #6)
