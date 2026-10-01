@@ -8,14 +8,13 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: #3f9df2; }
   body { font-family: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: #fff; }
   #c { display: block; width: 100%; height: 100%; }
-  /* 조작 힌트 (왼쪽 위) */
-  #hint {
-    position: fixed; left: 14px; right: 180px; top: 12px; font-size: 13px; line-height: 1.6;
-    text-shadow: 0 1px 2px rgba(0,0,0,.45); opacity: .9; pointer-events: none; user-select: none;
-  }
-  #hint b { display: inline-block; padding: 0 6px; margin-right: 4px; border-radius: 4px;
-    background: rgba(0,0,0,.35); font-weight: 600; }
-  #fps { position: fixed; left: 14px; top: 36px; font: 12px/1.4 monospace; color: #fff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 4px;
+  /* 키 요약 — 로드맵 9 작업 S 뒤: 게임 화면 왼쪽 위에서 빼고 설정 화면 맨 위(제목 줄 아래)에 둔다 */
+  #hint { padding: 6px 18px 7px; font-size: 12px; line-height: 2; color: #4a3018; background: rgba(154,106,58,.10);
+    border-bottom: 2px solid rgba(120,80,40,.25); user-select: none; }
+  #hint b { display: inline-block; padding: 0 6px; margin: 0 3px 0 6px; border-radius: 4px; line-height: 1.5;
+    font: 700 11px 'JetBrains Mono', monospace; color: #3a2410; background: linear-gradient(#fffaf0, #eadbbd); border: 1px solid #9a7a50; border-bottom-width: 2px; }
+  #hint b:first-child { margin-left: 0; }
+  #fps { position: fixed; left: 14px; top: 12px; font: 12px/1.4 monospace; color: #fff; background: rgba(0,0,0,.45); padding: 2px 8px; border-radius: 4px;
     text-shadow: 0 1px 2px rgba(0,0,0,.5); display: none; pointer-events: none; white-space: nowrap; }
   #zoneName {
     position: fixed; left: 50%; top: 14%; transform: translateX(-50%);
@@ -289,7 +288,6 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용(길게: 채집) <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>P</b>기록 <b>M</b>지도 <b>M M</b>전경도 <b>Enter</b>채팅 <b>H</b>키 안내 <b>Q</b>화질 <b>B</b>브금</div>
 <div id="objBar"></div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
@@ -317,7 +315,7 @@
 <div id="saveToast">저장됨</div>
 <div id="bgmBtn" title="B 키로도 켜고 끌 수 있어요">♪ BGM</div>
 <div id="setBtn" title="설정 (Esc)">⚙</div>
-<div id="settings"><div class="box"><div class="ttl">설정<small id="setSub"></small></div><div class="mid"><div class="tabs" id="setTabs"></div><div class="pane" id="setPane"></div></div>
+<div id="settings"><div class="box"><div class="ttl">설정<small id="setSub"></small></div><div id="hint"></div><div class="mid"><div class="tabs" id="setTabs"></div><div class="pane" id="setPane"></div></div>
   <div class="bot"><button class="sbtn ghost" id="setReset">기본값 복원</button><span class="hint">Esc 닫기 · 1~5 또는 Q·E로 탭 넘기기</span><button class="sbtn" id="setClose">닫기</button></div></div></div>
 <div id="keyGuide"><h3>조작 안내</h3><div class="rows">
   <div class="r"><div class="wasd"><span></span><kbd>W</kbd><span></span><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span class="d">이동 (방향키도 됨)</span></div>
@@ -4165,7 +4163,7 @@ function drawMaps(t) {
   const W = innerWidth, H = innerHeight;
   const miniOn = mapView === 0 && !cut.on && settings.map.mini;   // 작업 S4: 설정에서 미니맵 끄기
   miniEl.style.display = miniOn ? 'block' : 'none';
-  for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'hint', 'objBar']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';   // 추기 #5: 목표 줄도
+  for (const id of ['hud', 'exp', 'quest', 'log', 'labels', 'objBar']) document.getElementById(id).style.visibility = mapView === 0 && !cut.on ? 'visible' : 'hidden';   // 추기 #5: 목표 줄도
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
