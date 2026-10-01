@@ -2459,6 +2459,20 @@ function updateQuestBeam() {
 }
 // 튜토리얼 방향표(6시, 노란 화살표) 2개 — 첫 NPC 좌우에서 안쪽으로 통통
 const tutArrows = [-1, 1].map(s => { const m = makeBillboard(arrowTex, 0.9, 1.35, { shadow: false }); m.userData.side = s; scene.add(m); return m; });
+// 로드맵 9 (2026-10-01): 방향표(6시)를 그림 판 → 3D 모델(assets/models/arrow.glb, 사용자 제작)로 교체. 못 읽으면 위의 그림 판(dir_down)이 그대로 남는다.
+// 자리·통통 움직임·좌우 반전은 updateTutArrows가 그룹에 그대로 적용(position/orientBillboard/scale.x/visible 전부 Group에서도 동작).
+(async () => {
+  let g; try { g = await new GLTFLoader().loadAsync(ASSET_DIR + 'models/arrow.glb'); } catch (e) { if (DEBUG) console.warn('arrow GLB 로드 실패 — 그림 판 유지', e); return; }
+  const box = new THREE.Box3().setFromObject(g.scene), size = new THREE.Vector3(); box.getSize(size);
+  const k = 1.35 / size.y;   // 그림 판과 같은 키(1.35)
+  g.scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.material.fog = true; } });   // 재질은 모델의 무광(unlit)·정점 색 그대로
+  tutArrows.forEach((a, i) => {
+    const grp = new THREE.Group(); const m = g.scene.clone(); m.scale.setScalar(k); m.position.y = -box.min.y * k; grp.add(m);   // 밑동이 판의 밑변 자리(y=0)에, 앞면(+Z)이 카메라 쪽
+    grp.userData.side = a.userData.side; grp.userData.model = true; grp.visible = a.visible;
+    scene.remove(a); a.geometry.dispose(); scene.add(grp); tutArrows[i] = grp;
+  });
+  if (DEBUG) console.log('arrow GLB 적용');
+})();
 function updateTutArrows(nowS) {
   const n = NPCS[0]; const show = !mq.accepted;
   for (const a of tutArrows) {
