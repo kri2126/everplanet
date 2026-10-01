@@ -732,8 +732,63 @@ function hills(p) {
 }
 
 // 호수 안쪽 깊이(°): 양수면 호수 안, 가장자리에서의 거리
+// 자연 지형(2026-10-02): 지도가 직각형이라 자연스럽지 않다는 지적 — 바깥 바위벽·호수·모래길을 원작 지도처럼 울퉁불퉁하게.
+// smin = 부드러운 최솟값(모서리를 둥글게), wob1 = 0~1 1차원 잡음(두 겹, 대비를 키움)
+const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+const wob1 = (x, seed) => Math.max(0, Math.min(1, 0.5 + 1.7 * (0.6 * vnoise(x * 0.32, seed * 7.1, 0.5) + 0.4 * vnoise(x * 0.95, seed * 3.3, 2.5) - 0.5)));
+// 지킬 자리: 벽·호숫가 가까이 놓인 나무·덤불·소품·시작점·데크(설계 경위도). 벽이 안으로 굽이치거나 호수가 넓어져도 이 자리는 묻히거나 잠기지 않게
+// 그 자리에서 거리에 비례해 굽이 폭을 깎는다(가까울수록 강하게).
+const KEEP_PTS = [[-12.9,16.0],[8.6,44.7],[12.0,-0.2],[12.8,32.5],[12.6,18.6],[0.1,28.6],[-7.1,16],[4.5,33.0],[-9.3,38.8],[-13.9,-5.2],[-2.4,42.8],[1.4,42.2],[-6.8,30.4],[-2.2,29.2],[9.2,20.4],[-3.6,13.2],[-11,10],[2.6,22.8],[-11.2,37.6],[-10.4,38.4],[-13.4,31.6],[-11.6,11.6],[-12.6,9.4],[-9.8,3.2],[10.4,-3.4],[-4.2,43.8],[1,44.6],[7.8,44],[-11,28.9],[-7.6,28.7],[-1.4,28.8],[2.2,28.9],[5.8,28.6],[-11.4,16.4],[-7.8,16.3],[-1.6,16.5],[1.8,16.6],[5.4,16.8],[8,19],[8.2,26],[0.8,23],[3.5,24.2],[3.3,22],[-11.9,16.8],[4,43],[-2.6,32.6],[3,23.6],[10.2,21.8],[-8.4,-7.9],[-5.8,31.4],[-4,30.7],[-6.9,30.8],[-7.5,30.1],[-2.4,31.5],[-3,28.7],[-1,30.8],[0.8,29.6],[-3.9,16],[-8.2,28.9],[-12.2,10.2],[-11.2,32.4],[-8.2,36.4],[2.4,23.2],[0.9,15.5],[1.4,22.6],[-10.6,-5.4],[-4.5,29.8],[5.2,14.7],[-12.8,34.5],[-11.6,35.8],[-9.4,35.6],[-8.7,33.9],[-12.5,32.3],[-10.9,31.4],[-8.6,31.8],[-11.9,33.0],[-9.8,34.6],[-10.3,34.5],[-11.3,33.1],[-9.7,32.9],[-6.5,44.6],[-3.2,45.4],[0.5,45.8],[3.6,45.2],[-7.6,41.8],[5.6,43.9],[8.6,45.5],[12.3,45.6],[12.6,41.9],[9,39.6],[-9.2,42],[-13,30.6],[-12.2,28.9],[5.8,32.8],[2.6,31.2],[-9.3,29.2],[-12.8,37.4],[7.4,30.2],[10,27.6],[12,25],[9.6,22.3],[11.8,19.6],[8.6,17.4],[-12.4,15.8],[-9,16.2],[-6.6,15.9],[1.2,15.4],[4.2,15.8],[6.6,14.6],[1.6,24.4],[-12,12.6],[-10.2,8.4],[-12.4,5.6],[10.8,11.6],[12.2,8],[9.4,5.6],[-10.2,4.6],[-9.6,0.6],[-11.8,-2.4],[-2,-4.8],[0.2,-5.6],[2.4,-4.6],[11.6,-4.8],[12.4,1.2],[8.2,1.8],[-12.6,-9],[-6,-9.2],[-1.5,-8.9],[2.6,-9.3],[12.4,-8.6],[-5.8,43.2],[2.2,43.6],[4.4,30.4],[-10.2,30.2],[10.6,24.2],[-8.4,13],[-10,11.7],[-10,-7.2],[-5.6,-6.4],[10.6,43.9],[-3.9,16.6],[-3.9,28.6]];
+const KEEP_EDGE = [   // [벽까지 거리, 벽을 따라가는 좌표] — 남·북·동·서
+  KEEP_PTS.map(([lo, la]) => [la + 11, lo]).filter((v) => v[0] < 6.5),
+  KEEP_PTS.map(([lo, la]) => [48 - la, lo]).filter((v) => v[0] < 6.5),
+  KEEP_PTS.map(([lo, la]) => [14.6 - lo, la]).filter((v) => v[0] < 6.5),
+  KEEP_PTS.map(([lo, la]) => [lo + 14.6, la]).filter((v) => v[0] < 6.5),
+];
+// 벽선이 안팎으로 굽이치는 양(설계 °, 양수 = 안으로 들어온 곶). 바깥으로는 북쪽 0.2°·나머지 0.8°까지(그림 지도 테두리 안), 안으로는 2.6°까지.
+function edgeOff(x, side) {
+  let o = -(side === 1 ? 0.2 : 0.8) + ((side === 1 ? 0.2 : 0.8) + 2.6) * wob1(x, side + 1);
+  for (const [dp, xp] of KEEP_EDGE[side]) o = Math.min(o, dp - 2.1 + 0.8 * Math.abs(x - xp));
+  return o;
+}
+// 놀이 구역 바깥 벽선까지의 안쪽 거리(세계 °, 양수 = 안). 서쪽 벽은 폭포 자리(위도 17~28)에선 굽이를 0으로 — 폭포 둑이 벽에 기대 있다.
+function edgeIn(lon, lat) {
+  const cosLat = Math.cos((lat - MAP_LAT0) * MAP_S * DEG);
+  const wfKeep = ss(15.0, 18.0, lat) * ss(30.0, 27.0, lat);
+  const s = (lat + 11 - edgeOff(lon, 0)) * MAP_S, n = (48 - edgeOff(lon, 1) - lat) * MAP_S;
+  const e = (14.6 - edgeOff(lat, 2) - lon) * MAP_S * cosLat, w = (lon + 14.6 - edgeOff(lat, 3) * (1 - wfKeep)) * MAP_S * cosLat;
+  return smin(smin(s, n, 4.0), smin(e, w, 4.0), 4.0);
+}
+const KEEP_LAKE = KEEP_PTS.map(([lo, la]) => [lo, la, Math.min(lo - LAKE.lon0, LAKE.lon1 - lo, la - LAKE.lat0, LAKE.lat1 - la)]).filter((v) => v[2] > -5 && v[2] < 0);
 function lakeInside(lon, lat) {
-  return Math.min(lon - LAKE.lon0, LAKE.lon1 - lon, lat - LAKE.lat0, LAKE.lat1 - lat);
+  const box = smin(smin(lon - LAKE.lon0, LAKE.lon1 - lon, 4.0), smin(lat - LAKE.lat0, LAKE.lat1 - lat, 4.0), 4.0);
+  // 물가 굴곡(2차, 2026-10-02 "물을 더 크게, 자연스럽게"): 낮은 주파수 잡음 하나로 완만하게 — 물이 2.6°까지 넓어지거나(만) 땅이 1.2°까지 파고든다(곶).
+  // 평균은 +0.7°(호수 전체가 조금 커짐). 다리 양끝·폭포 아래(서쪽 끝)는 굴곡 없이.
+  const n = 0.85 * vnoise(lon * 0.2 + 4, lat * 0.2, 11) + 0.15 * vnoise(lon * 0.55, lat * 0.55 + 3, 12);
+  let wob = -1.2 + 3.8 * n;
+  const keep = Math.max(ss(1.8, 1.0, Math.abs(lon + 3.9)), ss(-10.4, -11.8, lon));
+  wob *= 1 - keep;
+  for (const [lo, la, bp] of KEEP_LAKE) { const d = Math.hypot(lon - lo, lat - la); if (d < 7) wob = Math.min(wob, -0.6 - bp + 0.55 * d); }
+  return box + wob;
+}
+// 샘물 둘레 굴곡: 방위에 따라 반지름 ±0.3°(설계)를 완만하게 — terrainH·waterAt가 같은 값을 쓴다
+function springWob(lon, lat) {
+  const a = Math.atan2(lat - 13.5, lon - 3.0);
+  return 0.3 * MAP_S * (2 * vnoise(Math.cos(a) * 1.2 + 7, Math.sin(a) * 1.2, 21) - 1);
+}
+// 일반 지형 굴곡(2026-10-02): 놀이 구역 땅에 완만한 언덕·골(0~0.95, 파장 약 10유닛). 다리 양끝·계단·착륙 데크·경사로·샘물·크레이터·호숫가는
+// 높이가 맞물려야 해서 그 둘레에선 0으로 잦아든다(계단 한 칸 0.45를 넘는 턱이 생기지 않게).
+const _ou = { t: 0, inside: false };
+function undulate(p, lon, lat) {
+  let u = 0.8 * vnoise(p.x * 9 + 2, p.y * 9, p.z * 9 + 5) + 0.15 * vnoise(p.x * 21, p.y * 21 + 4, p.z * 21);
+  u *= ss(-1.0, -3.0, lakeInside(lon, lat));
+  u *= ss(3.6 * MAP_S, 5.2 * MAP_S, angDeg(p, T.spring));
+  u *= ss(3.4 * MAP_S, 4.6 * MAP_S, angDeg(p, T.starCrater));
+  u *= ss(2.0, 4.0, T.stairs.dist(p, _ou));
+  u *= ss(1.5, 3.5, T.bridge.dist(p, _ou));
+  u *= ss(3.2, 5.5, angDeg(p, T.deck));
+  u *= ss(1.5, 3.5, T.ramp.dist(p, _ou));
+  return u;
 }
 // 자리별 수면 높이(추기 #12). 호수·샘물 수면에서 기본 수면(-2.5)으로 내려가는 전환대는 늘 땅 밑(마른 물가)에 있어 안 보인다.
 function waterAt(p) {
@@ -742,7 +797,7 @@ function waterAt(p) {
   let w = WATER;
   const li = lakeInside(lon, lat);
   if (li > -1.6) w = Math.max(w, lerp(WATER, LAKE_WATER, ss(-1.6, -0.8, li)));
-  const dSp = angDeg(p, T.spring);
+  const dSp = angDeg(p, T.spring) - springWob(lon, lat);   // 2026-10-02: 샘물 둘레 굴곡
   if (dSp < 3.3 * MAP_S) w = Math.max(w, lerp(WATER, SPRING_WATER, ss(3.3 * MAP_S, 2.6 * MAP_S, dSp)));
   return w;
 }
@@ -757,8 +812,12 @@ function terrainH(p) {
   let h = hills(p);
 
   // 놀이 구역(경도 ±14, 위도 -11~48)은 평평하게 (잔 얼룩만)
-  const play = ss(15.5, 14, Math.abs(lon)) * ss(-12.5, -11, lat) * ss(49.5, 48, lat);
+  // 2026-10-02: 직선 경계 대신 굽이치는 벽선(edgeIn) 기준 — 벽이 바깥으로 물러난 만(灣)도 평평한 들판이 된다
+  const ein = edgeIn(lon, lat);
+  const play = ss(-2.2, -0.9, ein);
   h = lerp(h, 0.08 * vnoise(p.x * 40, p.y * 40, p.z * 40), play);
+  const und = play > 0 ? undulate(p, lon, lat) : 0;   // 2026-10-02: 일반 지형 굴곡
+  h += und * play;
 
   // 남쪽 비탈: 다리 남단(위도 17)에서 크레이터(위도 9)까지 0 → 1.2 완만 오르막 (추기 #3: 착륙 들판도 이 높이 1.2 위에 있다)
   h += 1.2 * ss(17, 9, lat) * play;
@@ -769,7 +828,7 @@ function terrainH(p) {
   const dS = T.stairs.dist(p, _o), tS = _o.t;
   const dCut = T.stairCut.dist(p, _o), cutInside = _o.inside;
   const stairCorridor = cutInside ? ss(1.5, 1.05, dCut) : 0;
-  h = Math.max(h, MEADOW_H * mk * (1 - stairCorridor));
+  h = Math.max(h, (MEADOW_H + 0.6 * und) * mk * (1 - stairCorridor));   // 관측소 초원 윗면도 완만하게(계단 둘레는 und = 0)
 
   // 돌계단: 4단(0.44씩), 폭 ±1.0°, 초원(1.76)에서 야영지(0)로 내려간다
   if (dS < 1.0 && tS >= 0 && tS < 1) {
@@ -799,7 +858,7 @@ function terrainH(p) {
   // 물 차는 반경을 1.6→2.0×MAP_S까지 바짝 끌어올려 전환대를 0.5→0.15×MAP_S로 한 번 더 좁혔다 (2026-10-01 #4)
   // 추기 #12: 수위를 올리면서 둘레(남쪽 비탈 0.3~0.8)를 평평한 턱(SPRING_RIM)으로 고르고, 바닥은 수면보다 0.75 아래
   // (얕은 물 — 걸어서 드나듦). 둘레 턱(0.45)과 수면(0.3) 차이가 0.15뿐이라 옆 비탈이 거의 안 보인다.
-  const dSp = angDeg(p, T.spring);
+  const dSp = angDeg(p, T.spring) - springWob(lon, lat);   // 2026-10-02: 샘물 둘레 굴곡(waterAt와 같은 값)
   if (dSp < 3.6 * MAP_S) {
     h = lerp(h, SPRING_RIM + 0.04 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.6 * MAP_S, 2.9 * MAP_S, dSp));
     h = lerp(h, SPRING_WATER - 0.75, ss(2.15 * MAP_S, 2.0 * MAP_S, dSp));
@@ -818,8 +877,8 @@ function terrainH(p) {
 
   // 바위벽(능선): 높이 5, 가파른 옆면. 추기 #4: 설계 위선·경선(남 -11 · 북 48 · 동서 ±14.6)까지의 거리(세계 °)로
   {
-    const cosLat = Math.cos((lat - MAP_LAT0) * MAP_S * DEG);
-    const d = Math.abs(Math.min((lat + 11) * MAP_S, (48 - lat) * MAP_S, (14.6 - Math.abs(lon)) * MAP_S * cosLat));
+    // 2026-10-02: 직사각 벽선 → 굽이치는 벽선(edgeIn, 모서리 둥글게). 벽은 그 선 양쪽 0.9° 안에서 최고, 1.4°에서 땅
+    const d = Math.abs(ein);
     if (d < 1.5) {
       const wh = 5 * ss(1.4, 0.9, d) * (0.85 + 0.3 * vnoise(p.x * 50, p.y * 50, p.z * 50));
       h = Math.max(h, wh);
@@ -844,10 +903,20 @@ function terrainH(p) {
   return h;
 }
 
-// 모래길 마스크 0~1 (폭 ±0.55°)
+// 모래길 마스크 0~1 — 2026-10-02: 폭이 일정한 직선 길이 부자연스럽다는 지적으로 폭 배율 0.6~1.45배(좁았다 넓었다),
+// 중심선도 좌우로 ±0.3° 굽이치게. 같은 값(pathShape)을 말뚝·셰브론 배치에도 써서 길 가장자리를 따라간다.
+function pathShape(p) {
+  return { w: 0.6 + 0.85 * vnoise(p.x * 22 + 5, p.y * 22, p.z * 22), wig: 0.6 * (vnoise(p.x * 13, p.y * 13 + 9, p.z * 13) - 0.5) };
+}
 function pathMask(p) {
   let m = 0;
-  for (const s of T.paths) { const d = s.dist(p, _o); if (d < 0.9) m = Math.max(m, ss(0.9, 0.5, d)); }
+  const sh = pathShape(p);
+  for (const s of T.paths) {
+    let d = s.dist(p, _o); if (d > 2.0) continue;
+    if (_o.inside) d = Math.abs(Math.asin(Math.max(-1, Math.min(1, p.dot(s.n)))) / DEG + sh.wig);
+    const o = 0.9 * sh.w, i0 = 0.5 * sh.w;
+    if (d < o) m = Math.max(m, ss(o, i0, d));
+  }
   return m;
 }
 
@@ -1930,14 +1999,16 @@ const deck = (() => {
       up.copy(dir); fwd.copy(seg.B).sub(seg.A); tangentize(fwd, up); right.crossVectors(fwd, up).normalize();
       // 계단·다리 구간엔 말뚝을 안 세운다
       if (T.stairs.dist(dir, _o) < 1.6 && _o.inside) continue;
+      const sh = pathShape(dir), sgn = Math.sign(right.dot(seg.n)) || 1;   // 2026-10-02: 길 폭·굽이(pathShape)를 따라 가장자리에
       for (const side of [-1, 1]) {
-        const p = dir.clone().addScaledVector(right, side * 1.15 / R).normalize();
+        const p = dir.clone().addScaledVector(right, (side * (0.72 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
         slots.push({ p, h });
       }
       if (i % 3 === 0) {
-        const h = terrainH(dir);
-        tmpP.copy(dir).multiplyScalar(R + h + 0.06);
+        const cdir = dir.clone().addScaledVector(right, -sh.wig * sgn * DEG).normalize();   // 굽이친 중심선 위에
+        const h = terrainH(cdir);
+        tmpP.copy(cdir).multiplyScalar(R + h + 0.06);
         basis.makeBasis(right, fwd, up); tmpQ.setFromRotationMatrix(basis);
         chevs.push({ p: tmpP.clone(), q: tmpQ.clone() });
       }
@@ -4087,11 +4158,12 @@ function buildAtlas() {
   // 지형 색: 0.2° 격자로 훑어 저해상 이미지에 칠하고 부드럽게 키워 얹는다
   const step = 0.2, nx = Math.round((ATLAS.lon1 - ATLAS.lon0) / step) + 1, ny = Math.round((ATLAS.lat1 - ATLAS.lat0) / step) + 1;
   // 추기 #12: 물 판정용 WD = 자리별 수면이 옛 수면(WATER)보다 얼마나 높은지 — 물·얕은 물 판정은 H − WD로 한다
-  const H = new Float32Array(nx * ny), WD = new Float32Array(nx * ny), inPlay = new Uint8Array(nx * ny);
+  const H = new Float32Array(nx * ny), WD = new Float32Array(nx * ny), inPlay = new Uint8Array(nx * ny), PM = new Float32Array(nx * ny);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const lon = ATLAS.lon0 + i * step, lat = ATLAS.lat1 - j * step;
-    inPlay[j * nx + i] = (Math.abs(lon) <= 14.6 && lat >= -11 && lat <= 48) ? 1 : 0;
+    inPlay[j * nx + i] = edgeIn(lon, lat) > -0.25 ? 1 : 0;   // 2026-10-02: 굽이치는 벽선 바깥 끝까지
     const q = dirFromLonLat(lon, lat);
+    PM[j * nx + i] = inPlay[j * nx + i] ? pathMask(q) : 0;
     H[j * nx + i] = inPlay[j * nx + i] ? terrainH(q) : 99;
     WD[j * nx + i] = inPlay[j * nx + i] ? waterAt(q) - WATER : 0;
   }
@@ -4108,11 +4180,14 @@ function buildAtlas() {
     else if (h - WD[k] <= WATER + 0.5) c = PASTEL.shallow;
     else if (h >= 3.4 || (slope > 0.6 && (Math.abs(lon) > 13.0 || lat < -9.4 || lat > 46.4))) c = vnoise(lon * 3, lat * 3, 1) > 0.5 ? PASTEL.rock : PASTEL.rockDark;   // 추기 #6: 바위벽 옆면도 바위색
     else if (slope > 0.6) c = PASTEL.cliff;
+    else if (PM[k] > 0.45) c = PM[k] > 0.8 ? [235, 214, 170] : [217, 184, 132];   // 2026-10-02: 모래길(폭이 들쭉날쭉한 실제 모양)
     else if (angDeg(dirFromLonLat(lon, lat), T.starCrater) < 1.5 * MAP_S) c = PASTEL.dish;
     else if (h >= MEADOW_H - 0.05 && lat > 30) c = PASTEL.meadow;
     else if (lat < 17 && lat > 8) c = PASTEL.slope;
     else c = vnoise(lon * 1.7, lat * 1.7, 2) > 0.55 ? PASTEL.grass2 : PASTEL.grass;
-    put(k, [c[0] + wob, c[1] + wob, c[2] + wob]);
+    // 2026-10-02: 땅의 높낮이(완만한 언덕·골)가 지도에서도 보이게 — 북서쪽 이웃보다 높으면 밝게, 낮으면 어둡게(물·벽 제외)
+    let hs = 0; if (h - WD[k] > WATER + 0.5 && h < 3.4 && i > 0 && j > 0 && inPlay[k - nx - 1]) hs = Math.max(-16, Math.min(16, (h - H[k - nx - 1]) * 70));
+    put(k, [c[0] + wob + hs, c[1] + wob + hs, c[2] + wob + hs]);
   }
   lg.putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
@@ -4127,8 +4202,7 @@ function buildAtlas() {
   // 모래길·다리·계단·데크
   const seg2px = (seg) => { const A = designLonLat(seg.A), B = designLonLat(seg.B); return [atlasPx(A[0], A[1]), atlasPx(B[0], B[1])]; };
   g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const seg of T.paths) { const [a, b] = seg2px(seg); g.strokeStyle = '#d9b884'; g.lineWidth = ATLAS.ppd * 0.75; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
-  for (const seg of T.paths) { const [a, b] = seg2px(seg); g.strokeStyle = 'rgba(255,240,205,.55)'; g.lineWidth = ATLAS.ppd * 0.35; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+  // 2026-10-02: 모래길은 위 지형 색칠에서 실제 마스크대로 그린다(직선 띠를 덧칠하지 않음)
   { const [a, b] = seg2px(T.bridge); g.strokeStyle = '#a8763f'; g.lineWidth = ATLAS.ppd * 0.8; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     g.strokeStyle = '#d9a45a'; g.lineWidth = ATLAS.ppd * 0.5; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     g.strokeStyle = 'rgba(110,70,30,.5)'; g.lineWidth = 1; const n = 18; for (let i = 1; i < n; i++) { const t = i / n, x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t; g.beginPath(); g.moveTo(x - ATLAS.ppd * 0.4, y); g.lineTo(x + ATLAS.ppd * 0.4, y); g.stroke(); } }
@@ -4136,7 +4210,7 @@ function buildAtlas() {
   { const [dl, dla] = designLonLat(T.deck); const [x, y] = atlasPx(dl, dla); const r = ATLAS.ppd * 1.7;
     g.fillStyle = '#d9a45a'; g.strokeStyle = '#7a5230'; g.lineWidth = 1.5; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke(); }
   // 놀이 구역 테두리: 손으로 그은 듯 흔들리는 겹선 + 바깥 능선은 작은 산 표시(추기 #6)
-  { const [x0, y0] = atlasPx(-14.6, 48), [x1, y1] = atlasPx(14.6, -11);
+  { const [x0, y0] = atlasPx(-15.5, 48.4), [x1, y1] = atlasPx(15.5, -11.9);   // 2026-10-02: 벽이 바깥으로 물러난 만(최대 북 0.2°·나머지 0.8°)까지 테두리 안에
     const wobblyRect = (inset, amp, width, color) => { g.strokeStyle = color; g.lineWidth = width; g.beginPath(); const pts = [];
       const n = 46; const push = (ax, ay, bx, by, k0) => { for (let i = 0; i < n; i++) { const t = i / n, jx = (wob(k0 + i) - 0.5) * amp, jy = (wob(k0 + i + 300) - 0.5) * amp; pts.push([ax + (bx - ax) * t + jx, ay + (by - ay) * t + jy]); } };
       push(x0 + inset, y0 + inset, x1 - inset, y0 + inset, 10); push(x1 - inset, y0 + inset, x1 - inset, y1 - inset, 110); push(x1 - inset, y1 - inset, x0 + inset, y1 - inset, 210); push(x0 + inset, y1 - inset, x0 + inset, y0 + inset, 310);
