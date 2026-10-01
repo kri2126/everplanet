@@ -635,7 +635,7 @@ const rockTex = makeTex(256, (g, S) => {
   }
 }, 1, 'tile_rock');
 
-// 2026-10-02 절벽 타일 2차(사용자 참고 사진 기준): 불규칙한 돌판(보로노이) + 부드러운 황토색 틈 + 돌판마다 볼록한 음영.
+// 2026-10-02 절벽 타일 2차(사용자 참고 사진 기준, 3차: 가파른 절벽은 세로 기둥·세로 틈·세로 결을 강조): 불규칙한 돌판(보로노이) + 부드러운 황토색 틈 + 돌판마다 볼록한 음영.
 //   tile_cliff_steep  가파른 절벽: 세로로 길쭉한 큰 돌판, 밝은 모래빛
 //   tile_cliff_gentle 완만한 경사면: 넓적한 판석(디딤돌) 모양, 연한 노란 모래빛
 // 바탕색을 그림이 직접 갖는다(정점의 바위색은 거의 흰색). 이음매 없이 반복되게 씨앗을 격자로 뿌리고 가장자리를 감싸 계산한다.
@@ -647,7 +647,7 @@ function stoneTile(g, S, o) {
     seeds.push([(i + 0.15 + 0.7 * rn()) * cw, (j + 0.15 + 0.7 * rn()) * chh]);
     const t = rn(); cols.push(o.base0.map((v, k) => v + (o.base1[k] - v) * t));
   }
-  const img = g.createImageData(S, S), D = img.data, L = [-0.55, -0.83];
+  const img = g.createImageData(S, S), D = img.data, L = o.light || [-0.55, -0.83];
   const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
   for (let y = 0; y < S; y++) {
     const gj = Math.floor(y / chh);
@@ -661,25 +661,29 @@ function stoneTile(g, S, o) {
         if (dd < d1) { d2 = d1; s2x = s1x; s2y = s1y; d1 = dd; i1 = jj * GX + ii; v1x = dx; v1y = dy; s1x = sxp; s1y = syp * sy; }
         else if (dd < d2) { d2 = dd; s2x = sxp; s2y = syp * sy; }
       }
-      const sep = Math.hypot(s2x - s1x, s2y - s1y) || 1, e = (d2 - d1) / (2 * sep);   // 경계까지 거리(px)
+      const sep = Math.hypot(s2x - s1x, s2y - s1y) || 1, e0 = (d2 - d1) / (2 * sep);   // 경계까지 거리(px)
+      const vs = Math.abs(s2x - s1x) / sep;                                              // 1 = 세로로 선 틈(좌우 돌판 사이), 0 = 가로 틈
+      const e = e0, wv = 1 + (o.vSeam || 0) * vs * vs;                                   // 세로 틈은 더 굵고 진하게(가파른 느낌)
       const r1 = Math.sqrt(d1);
-      const dl = r1 > 1e-3 ? (v1x * L[0] + v1y * L[1]) / r1 : 0;
       let c = cols[i1].slice();
-      const bev = dl * o.bevel * Math.pow(1 - Math.min(1, e / o.bevW), 1.5) * Math.min(1, r1 / 12);   // 가장자리 띠만 빛 쪽은 밝게·반대쪽은 어둡게(볼록) — 가운데는 평평
+      const dl = o.edgeBevel ? ((s2x - s1x) * L[0] + (s2y - s1y) * L[1]) / sep               // 가파른 타일: 가장 가까운 틈이 빛 쪽이면 +
+        : (r1 > 1e-3 ? (v1x * L[0] + v1y * L[1]) / r1 : 0);                                   // 완만한 타일: 돌판 가운데에서 바깥 방향
+      const bev = dl * o.bevel * Math.pow(1 - Math.min(1, e / o.bevW), 1.5) * (o.edgeBevel ? 1 : Math.min(1, r1 / 12));   // 가장자리 띠만 빛 쪽은 밝게·반대쪽은 어둡게(볼록) — 가운데는 평평
       for (let k = 0; k < 3; k++) c[k] += bev > 0 ? (o.hi[k] - c[k]) * bev : (c[k] - o.lo[k]) * bev;
-      const nz = (hash(x >> 2, y >> 2) - 0.5) * o.grain;                               // 잔 알갱이
+      let nz = (hash(x >> 2, y >> 2) - 0.5) * o.grain;                                   // 잔 알갱이
+      if (o.streak) { const sx = x + 9 * Math.sin(y * 0.021 + i1); nz -= o.streak * Math.pow(Math.max(0, Math.sin(sx * 0.11 + i1 * 1.7)), 6) * (0.6 + 0.4 * hash(x >> 3, 7)); }   // 세로 결(가는 세로 줄무늬)
       const ao = 1 - o.ao * (1 - Math.min(1, e / o.aoW));                              // 틈 가까이 살짝 어둡게
-      const seam = Math.min(1, Math.max(0, (e - o.seam0) / (o.seam1 - o.seam0)));      // 틈(부드럽게 번진 황토 선)
+      const seam = Math.min(1, Math.max(0, (e - o.seam0) / (o.seam1 * wv - o.seam0)));   // 틈(부드럽게 번진 황토 선)
       const p = (y * S + x) * 4;
-      for (let k = 0; k < 3; k++) { const v = (c[k] * ao + nz) * seam + o.seamC[k] * (1 - seam); D[p + k] = Math.max(0, Math.min(255, v)); }
+      for (let k = 0; k < 3; k++) { const v = (c[k] * ao + nz) * seam + o.seamC[k] * (1.06 - 0.06 * wv) * (1 - seam); D[p + k] = Math.max(0, Math.min(255, v)); }
       D[p + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
 }
 const cliffSteepTex = makeTex(512, (g, S) => stoneTile(g, S, {
-  seed: 707, gx: 5, gy: 3, stretch: 0.5, base0: [236, 214, 162], base1: [246, 230, 186], hi: [255, 247, 220], lo: [200, 166, 104],
-  bevel: 0.8, bevW: 26, grain: 6, ao: 0.12, aoW: 12, seam0: 0.4, seam1: 3.6, seamC: [178, 146, 80] }), 1, 'tile_cliff_steep');
+  seed: 707, gx: 7, gy: 2, stretch: 0.3, base0: [232, 208, 154], base1: [246, 230, 186], hi: [255, 248, 224], lo: [186, 148, 86],
+  bevel: 0.55, bevW: 9, edgeBevel: true, light: [-0.95, -0.3], vSeam: 1.8, streak: 26, grain: 6, ao: 0.2, aoW: 16, seam0: 0.4, seam1: 3.8, seamC: [160, 124, 60] }), 1, 'tile_cliff_steep');   // 2026-10-02 3차: 세로 기둥 강조
 const cliffGentleTex = makeTex(512, (g, S) => stoneTile(g, S, {
   seed: 909, gx: 5, gy: 5, stretch: 0.9, base0: [232, 214, 142], base1: [243, 229, 166], hi: [252, 244, 200], lo: [204, 182, 106],
   bevel: 0.6, bevW: 22, grain: 5, ao: 0.18, aoW: 14, seam0: 0.8, seam1: 6, seamC: [176, 156, 80] }), 1, 'tile_cliff_gentle');
