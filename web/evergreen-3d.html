@@ -192,7 +192,11 @@
   #portalMsg.on { display: block; }
   #portalMsg b { display: block; font: 700 24px 'Gowun Dodum', sans-serif; color: #2b4a6b; letter-spacing: .1em; }
   #portalMsg span { display: block; margin-top: 8px; font-size: 13px; color: #2b4a6b; opacity: .85; }
-  #saveToast { position: fixed; right: 14px; bottom: 44px; font: 600 11px 'JetBrains Mono', monospace; color: #fdf4de; background: rgba(16,20,30,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 8px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
+  /* 브금: 오른쪽 아래 작은 켜기/끄기 단추(B 키와 같음) */
+  #bgmBtn { position: fixed; right: 14px; bottom: 40px; font: 600 11px 'JetBrains Mono', monospace; color: #fdf4de; background: rgba(16,20,30,.6); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 8px; cursor: pointer; z-index: 5; opacity: .75; }
+  #bgmBtn:hover { opacity: 1; }
+  #bgmBtn.off { color: #9aa; text-decoration: line-through; }
+  #saveToast { position: fixed; right: 14px; bottom: 68px; font: 600 11px 'JetBrains Mono', monospace; color: #fdf4de; background: rgba(16,20,30,.7); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 8px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
   #saveToast.on { opacity: .9; }
   /* 작업 H: 상단 목표 한 줄 · 키 안내 팝업 · 채팅 입력 */
   #objBar { position: fixed; left: 50%; top: 40px; transform: translateX(-50%); max-width: min(760px, 80vw); padding: 5px 14px; border-radius: 8px;
@@ -226,7 +230,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용(길게: 채집) <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>P</b>기록 <b>M</b>지도 <b>M M</b>전경도 <b>Enter</b>채팅 <b>H</b>키 안내 <b>Q</b>화질</div>
+<div id="hint"><b>W A S D</b>이동 <b>Space</b>점프(2단) <b>Z</b>공격 <b>X C V</b>스킬 <b>F</b>대화·상호작용(길게: 채집) <b>Tab</b>대상 <b>I</b>가방 <b>K</b>스킬창 <b>J</b>퀘스트 <b>P</b>기록 <b>M</b>지도 <b>M M</b>전경도 <b>Enter</b>채팅 <b>H</b>키 안내 <b>Q</b>화질 <b>B</b>브금</div>
 <div id="objBar"></div>
 <div id="fps"></div>
 <div id="mini"><canvas id="miniCv"></canvas><div class="ring"></div><div class="n">N</div><div class="pmark" id="miniMark"></div><div class="cap">별내림 천문대</div></div>
@@ -252,6 +256,7 @@
 <div id="portalFade"></div>
 <div id="portalMsg"><b></b><span></span></div>
 <div id="saveToast">저장됨</div>
+<div id="bgmBtn" title="B 키로도 켜고 끌 수 있어요">♪ BGM</div>
 <div id="keyGuide"><h3>조작 안내</h3><div class="rows">
   <div class="r"><div class="wasd"><span></span><kbd>W</kbd><span></span><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span class="d">이동 (방향키도 됨)</span></div>
   <div class="r"><kbd class="w">Space</kbd><span class="d">점프 · 공중에서 한 번 더 = 2단 점프</span></div>
@@ -263,6 +268,7 @@
   <div class="r"><kbd>M</kbd><span class="d">지도 → 한 번 더 전경도 · <kbd>Esc</kbd> 닫기</span></div>
   <div class="r"><kbd class="w">Enter</kbd><span class="d">채팅 입력</span></div>
   <div class="r"><kbd>Q</kbd><span class="d">화질 단계</span></div>
+  <div class="r"><kbd>B</kbd><span class="d">배경 음악 켜기/끄기</span></div>
 </div><div class="foot">H 키로 언제든 다시 볼 수 있어요 · 아무 키나 누르면 닫힘</div></div>
 <div id="chat"><b>탐사자:</b><input id="chatIn" maxlength="80" placeholder="메시지 입력 후 Enter · Esc 취소" autocomplete="off"></div>
 <div id="startScreen"><div class="box"><small>✦ EVERGREEN ✦</small><h2>별내림 천문대</h2><div class="sv" id="startInfo"></div>
@@ -2990,6 +2996,36 @@ function updateLabels() {
 const keys = new Set();
 // 0 = 닫힘, 1 = 구역 지도, 2 = 에버그린 전경도 (옛 판과 같은 조작)
 let mapView = 0;
+// ── 브금(BGM) — web/audio/bgm_main.mp3 을 반복 재생. 브라우저 자동재생 규칙 때문에 첫 키 입력/클릭 때 시작한다.
+// B 키(또는 오른쪽 아래 ♪ 단추)로 켜고 끄며 localStorage('ep_bgm')에 기억. 탭을 내리면 멈췄다가 돌아오면 이어서. ?nobgm 으로 끔.
+const bgm = { el: null, on: true, started: false, vol: 0.45, fadeT: 0 };
+try { if (localStorage.getItem('ep_bgm') === '0') bgm.on = false; } catch (e) {}
+if (QP.has('nobgm')) bgm.on = false;
+const bgmBtn = document.getElementById('bgmBtn');
+function bgmEl() {
+  if (!bgm.el) { bgm.el = new Audio('audio/bgm_main.mp3'); bgm.el.loop = true; bgm.el.preload = 'auto'; bgm.el.volume = 0; }
+  return bgm.el;
+}
+function bgmFadeTo(target, sec) {
+  const a = bgmEl(), from = a.volume, t0 = performance.now(), id = ++bgm.fadeT;
+  const step = () => { if (id !== bgm.fadeT) return; const k = Math.min(1, (performance.now() - t0) / (sec * 1000)); a.volume = from + (target - from) * k; if (k < 1) requestAnimationFrame(step); else if (target === 0) a.pause(); };
+  step();
+}
+function bgmPlay() { if (!bgm.on || document.hidden) return; const a = bgmEl(); const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); bgm.started = true; bgmFadeTo(bgm.vol, 1.5); }
+function bgmUpdateBtn() { bgmBtn.classList.toggle('off', !bgm.on); }
+function toggleBgm() {
+  bgm.on = !bgm.on; try { localStorage.setItem('ep_bgm', bgm.on ? '1' : '0'); } catch (e) {}
+  if (bgm.on) bgmPlay(); else if (bgm.el) bgmFadeTo(0, 0.4);
+  bgmUpdateBtn(); log(bgm.on ? '배경 음악을 켰다. (B)' : '배경 음악을 껐다. (B)', 'sys');
+}
+function bgmFirstGesture(e) { if (bgm.started || (e && e.key && e.key.toLowerCase() === 'b')) return; bgmPlay(); }   // 첫 입력이 B면 끄기로만 처리
+addEventListener('keydown', bgmFirstGesture, true);
+addEventListener('pointerdown', bgmFirstGesture, true);
+document.addEventListener('visibilitychange', () => { if (!bgm.el || !bgm.started) return; if (document.hidden) bgm.el.pause(); else if (bgm.on) bgmPlay(); });
+bgmBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+bgmBtn.addEventListener('click', (e) => { e.stopPropagation(); if (!bgm.started && bgm.on) { bgmPlay(); bgmUpdateBtn(); return; } toggleBgm(); });
+bgmUpdateBtn();
+
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (gate.on) { if (k === '1' || k === 'enter') continueGame(); else if (k === '2') newGame(); return; }   // 작업 G: 시작 화면
@@ -3007,6 +3043,7 @@ addEventListener('keydown', (e) => {
   if (k === 'j') { toggleQuestWin(); return; }
   if (k === 'p') { toggleCharWin(); return; }   // 작업 F: 캐릭터·모험 기록 창
   if (k === 'q') { cycleQuality(); return; }
+  if (k === 'b') { toggleBgm(); return; }   // 브금 켜기/끄기
   if (dialog.open) {
     if (dialog.choicesShown) { const idx = parseInt(k, 10) - 1; if (!isNaN(idx)) pickChoice(idx); return; }
     if (k === ' ') { e.preventDefault(); advanceDialog(); }
