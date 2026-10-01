@@ -4675,10 +4675,9 @@ function buildAtlas() {
     const sp = ATLAS.ppd * 1.05;
     for (let x = x0 + sp; x < x1; x += sp) { mtn(x, y0 - ATLAS.ppd * 0.75, sp * 0.5, ATLAS.ppd * 0.9 + wob(x) * 5); mtn(x + sp * 0.4, y1 + ATLAS.ppd * 0.8, sp * 0.5, ATLAS.ppd * 0.9 + wob(x + 7) * 5); }
     for (let y = y0 + sp; y < y1; y += sp) { mtn(x0 - ATLAS.ppd * 0.75, y, sp * 0.45, ATLAS.ppd * 0.9 + wob(y) * 5); mtn(x1 + ATLAS.ppd * 0.75, y + sp * 0.3, sp * 0.45, ATLAS.ppd * 0.9 + wob(y + 3) * 5); } }
-  // 나무·버섯·꽃·갈대(장식은 작게)
+  // 나무(장식은 작게). 2026-10-02: 꽃·버섯 같은 채집물·장식 점은 돌처럼 지도에서 뺀다 — 지도의 빨간 점은 몬스터만
   const treeIcon = (x, y, r) => { g.fillStyle = '#6a4a26'; g.fillRect(x - r * 0.18, y, r * 0.36, r * 0.9); g.fillStyle = '#3f9a2a'; g.beginPath(); g.arc(x, y - r * 0.15, r, 0, Math.PI * 2); g.fill(); g.fillStyle = '#7fd15a'; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.4, r * 0.5, 0, Math.PI * 2); g.fill(); };
   for (const t of trees) { const [lo2, la2] = designLonLat(t.userData.dir); const [x, y] = atlasPx(lo2, la2); treeIcon(x, y, ATLAS.ppd * 0.55); }
-  for (const n of forageNodes) { const [lo2, la2] = designLonLat(n.dir); const [x, y] = atlasPx(lo2, la2); g.fillStyle = n.kind === 'mush' ? '#e2453a' : '#fff6e0'; g.beginPath(); g.arc(x, y, ATLAS.ppd * 0.18, 0, Math.PI * 2); g.fill(); }
   // 소품 아이콘: 텐트·비행정·선돌 고리(받침대)·샘물 표시·포탈 화살표
   { const [lo2, la2] = designLonLat(tentProp.userData.dir); const [x, y] = atlasPx(lo2, la2); const r = ATLAS.ppd * 0.7; g.fillStyle = '#3aa0b8'; g.strokeStyle = '#1c5f70'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r, y + r * 0.6); g.lineTo(x - r, y + r * 0.6); g.closePath(); g.fill(); g.stroke(); }
   { const [lo2, la2] = designLonLat(airship.userData.dir); const [x, y] = atlasPx(lo2, la2); g.fillStyle = '#eef3f8'; g.strokeStyle = '#2f6fb8'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y, ATLAS.ppd * 1.0, ATLAS.ppd * 0.55, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.fillStyle = '#e8891c'; g.beginPath(); g.arc(x, y - ATLAS.ppd * 0.55, ATLAS.ppd * 0.18, 0, Math.PI * 2); g.fill(); }
@@ -4718,10 +4717,10 @@ function agePaper(g) {
   // 제목 두루마리(북쪽 여백): 지역 이름
   { g.fillStyle = 'rgba(92,62,32,.85)'; g.font = `700 ${Math.round(ATLAS.ppd * 0.95)}px 'Gowun Dodum', serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('✦ 별내림 천문대 ✦', W / 2, ATLAS.ppd * 2.7); }
 }
-// 동적 아이콘: 몬스터(주황 점)·NPC(파란 마름모)·별 조각(흰 반짝)·포탈(열리면 초록 점)
+// 동적 아이콘: 몬스터(빨간 점 — 2026-10-02: 슬라임·가시 슬라임 모두 빨강으로 통일)·NPC(파란 마름모)·별 조각(흰 반짝)·포탈(열리면 초록 점)
 function drawMapIcons(g, toXY, scale) {
   const r = 3.2 * scale;
-  for (const s of [...slimes, ...spikeSlimes]) { if (!s.alive) continue; const [lo, la] = designLonLat(s.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = s.kind === 'spike' ? '#a25be0' : '#ff8a2a'; g.strokeStyle = 'rgba(80,30,0,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  for (const s of [...slimes, ...spikeSlimes]) { if (!s.alive) continue; const [lo, la] = designLonLat(s.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = '#e8302a'; g.strokeStyle = 'rgba(90,10,0,.75)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); }
   for (const st of STARS) { if (st.found) continue; const [lo, la] = designLonLat(st.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = '#fff8d8'; g.strokeStyle = '#d8a930'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, rr = i % 2 ? r * 0.7 : r * 1.9; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }
   for (const n of NPCS) { const [x, y] = toXY(n.lon, n.lat); if (x == null) continue; const mk = npcMarker(n.id); g.fillStyle = mk === 'give' ? '#ffd166' : '#4aa3ff'; g.strokeStyle = '#1b3e78'; g.lineWidth = 1.2; const d = r * 1.9; g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill(); g.stroke(); }
   if (portalOpen) { const P = PORTALS[0]; const [x, y] = toXY(P.lon, P.lat); if (x != null) { g.fillStyle = 'rgba(90,240,140,.9)'; g.beginPath(); g.arc(x, y, r * 1.6, 0, Math.PI * 2); g.fill(); } }
