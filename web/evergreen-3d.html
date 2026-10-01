@@ -675,15 +675,15 @@ function stoneTile(g, S, o) {
       const ao = 1 - o.ao * (1 - Math.min(1, e / o.aoW));                              // 틈 가까이 살짝 어둡게
       const seam = Math.min(1, Math.max(0, (e - o.seam0) / (o.seam1 * wv - o.seam0)));   // 틈(부드럽게 번진 황토 선)
       const p = (y * S + x) * 4;
-      for (let k = 0; k < 3; k++) { const v = (c[k] * ao + nz) * seam + o.seamC[k] * (1.06 - 0.06 * wv) * (1 - seam); D[p + k] = Math.max(0, Math.min(255, v)); }
+      for (let k = 0; k < 3; k++) { const v = (c[k] * ao + nz) * seam + o.seamC[k] * (1 - (o.vSeamDark == null ? 0.06 : o.vSeamDark) * (wv - 1)) * (1 - seam); D[p + k] = Math.max(0, Math.min(255, v)); }
       D[p + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
 }
 const cliffSteepTex = makeTex(512, (g, S) => stoneTile(g, S, {
-  seed: 707, gx: 7, gy: 2, stretch: 0.3, base0: [232, 208, 154], base1: [246, 230, 186], hi: [255, 248, 224], lo: [186, 148, 86],
-  bevel: 0.55, bevW: 9, edgeBevel: true, light: [-0.95, -0.3], vSeam: 1.8, streak: 26, grain: 6, ao: 0.2, aoW: 16, seam0: 0.4, seam1: 3.8, seamC: [160, 124, 60] }), 1, 'tile_cliff_steep');   // 2026-10-02 3차: 세로 기둥 강조
+  seed: 707, gx: 7, gy: 2, stretch: 0.3, base0: [238, 216, 164], base1: [249, 234, 194], hi: [255, 250, 230], lo: [200, 166, 104],
+  bevel: 0.5, bevW: 9, edgeBevel: true, light: [-0.95, -0.3], vSeam: 1.8, vSeamDark: 0.03, streak: 15, grain: 5, ao: 0.13, aoW: 14, seam0: 0.4, seam1: 3.6, seamC: [172, 138, 72] }), 1, 'tile_cliff_steep');   // 2026-10-02 3차: 세로 기둥 강조 · 4차: 덜 칙칙하게(틈은 완만한 타일보다 진하고 3차보다 연하게)
 const cliffGentleTex = makeTex(512, (g, S) => stoneTile(g, S, {
   seed: 909, gx: 5, gy: 5, stretch: 0.9, base0: [232, 214, 142], base1: [243, 229, 166], hi: [252, 244, 200], lo: [204, 182, 106],
   bevel: 0.6, bevW: 22, grain: 5, ao: 0.18, aoW: 14, seam0: 0.8, seam1: 6, seamC: [176, 156, 80] }), 1, 'tile_cliff_gentle');
