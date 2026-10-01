@@ -1665,8 +1665,56 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
   }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); });
   const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [0.8, 2.6, 'white'], [-6.2, 2.2, 'yellow'], [2.6, 22.8, 'white']];
-  flowers.forEach(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
-    if (c === 'white') forageNodes.push({ mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 }); });   // 흰 꽃은 채집 대상
+  const flowerNodes = flowers.map(([lon, lat, c]) => { const f = placeSprite(makeBillboard(flowerTex[c], 0.7, 0.9, { shadow: false }), lon, lat); scene.add(f); decor.push(f);
+    const node = { mesh: f, dir: f.userData.dir, kind: 'flower', avail: true, cd: 0 };
+    if (c === 'white') forageNodes.push(node);   // 흰 꽃은 채집 대상
+    return { f, c, node }; });
+  // 로드맵 9 (2026-10-02): 꽃을 그림 판 → 3D 모델(assets/models/flower_white.glb·flower_yellow.glb, 사용자 제작)로. 못 읽으면 그림 판 유지.
+  // 모델마다 조각을 '줄기·꽃잎(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색), 꽃 한 송이 = 두 메시 묶음(Group, 형태 공유).
+  // 흰 꽃은 채집 대상이라 채집 노드의 mesh를 이 묶음으로 바꿔 끼운다(채집하면 숨고 120초 뒤 다시 보임). 키 1.0~1.25, 방향은 자리마다 다르게.
+  {
+    const loader = new GLTFLoader();
+    const build = (gl) => {
+      const m = gl.scene; m.updateMatrixWorld(true);
+      const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5;
+      m.traverse((o) => { if (!o.isMesh) return;
+        const src = o.material, g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+        if (!g.getAttribute('normal')) g.computeVertexNormals();
+        const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = src.color || new THREE.Color(1, 1, 1);
+        for (let j = 0; j < n; j++) { col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        if (src.map) { leafMap = src.map; if (src.alphaTest) leafCut = src.alphaTest; if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); groups.leaf.push(g); }
+        else { g.deleteAttribute('uv'); groups.solid.push(g); }
+      });
+      const parts = [], bb = new THREE.Box3();
+      for (const key of ['solid', 'leaf']) {
+        const arr = groups[key]; if (!arr.length) continue;
+        const list = arr.every((g) => g.index) ? arr : arr.map((g) => (g.index ? g.toNonIndexed() : g));
+        const geo = mergeGeometries(list, false); if (!geo) continue;
+        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: key === 'leaf' ? leafMap : null, alphaTest: key === 'leaf' ? leafCut : 0, side: THREE.DoubleSide, fog: true });
+        if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+        geo.computeBoundingBox(); bb.union(geo.boundingBox); parts.push({ geo, mat });
+      }
+      return { parts, bb };
+    };
+    Promise.all(['flower_white', 'flower_yellow'].map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
+      const types = { white: build(gls[0]), yellow: build(gls[1]) }, _y = new THREE.Vector3(0, 1, 0);
+      flowerNodes.forEach(({ f, c, node }, i) => {
+        const tp = types[c]; if (!tp.parts.length) return;
+        const H = tp.bb.max.y - tp.bb.min.y, cx = (tp.bb.min.x + tp.bb.max.x) / 2, cz = (tp.bb.min.z + tp.bb.max.z) / 2;
+        const k = (1.0 + ((i * 7) % 6) * 0.05) / H;
+        const inner = new THREE.Group(); inner.scale.setScalar(k); inner.position.set(-cx * k, -tp.bb.min.y * k, -cz * k);   // 밑동 가운데가 지면에
+        for (const { geo, mat } of tp.parts) { const me = new THREE.Mesh(geo, mat); me.castShadow = false; me.receiveShadow = false; inner.add(me); }
+        const grp = new THREE.Group(); grp.add(inner); grp.position.copy(f.position);
+        grp.quaternion.setFromUnitVectors(_y, f.userData.dir).multiply(new THREE.Quaternion().setFromAxisAngle(_y, (i * 2.399) % (Math.PI * 2)));
+        grp.userData.dir = f.userData.dir; grp.visible = f.visible; scene.add(grp);
+        node.mesh = grp;   // 채집 노드가 이제 3D 꽃을 숨기고/보인다
+        scene.remove(f); const di = decor.indexOf(f); if (di >= 0) decor.splice(di, 1);
+      });
+      if (DEBUG) console.log('flower GLB 적용:', flowerNodes.length);
+    }).catch((e) => { if (DEBUG) console.warn('flower GLB 로드 실패 — 그림 판 유지', e); });
+  }
   const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-2.8, -3.6, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
