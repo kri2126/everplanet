@@ -1501,6 +1501,8 @@ function respawn() {
 }
 
 const trees = [];
+// 2026-10-02: 나무가 전체적으로 너무 크다는 지적 — 원래 크기(0.9~1.14배, 높이 6.1 기준)를 최대로 두고 그루마다 60~100% 사이에서 무작위(고정 씨앗)로 줄인다.
+function treeScale(i) { const r = 0.6 + 0.4 * ((Math.sin(i * 12.9898 + 4.1) * 43758.5453) % 1 + 1) % 1; return (0.9 + ((i * 7) % 5) * 0.06) * r; }
 let treeSway = null, treeInstMeshes = [];   // 나무 GLB 인스턴싱(최적화) — 바람 갱신 함수, 인스턴스 메시 목록
 const decor = [];
 const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길게 눌러 채집)
@@ -1523,9 +1525,9 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     [-12.6, -9.0], [-6.0, -9.2], [-1.5, -8.9], [2.6, -9.3], [12.4, -8.6],
   ];
   spots.forEach(([lon, lat], i) => {
-    const sc = 0.9 + ((i * 7) % 5) * 0.06;
+    const sc = treeScale(i);
     const t = placeSprite(makeBillboard(treeTex[i % 3], 4.6 * sc, 6.1 * sc), lon, lat);
-    t.userData.radius = 0.55;
+    t.userData.radius = 0.55 * Math.max(0.75, sc / 1.14);
     t.userData.sway = i * 1.7;
     scene.add(t); trees.push(t);
     mapDot(t.userData.dir, 1.6, 0x3f9a2a);
@@ -1577,7 +1579,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     const slot = [0, 0, 0], entries = [], _m = new THREE.Matrix4(), _rz = new THREE.Matrix4();
     trees.forEach((t, i) => {
       if (!t.userData.isBillboard) return;
-      const ti = i % 3, p = parts[ti], sc = 0.9 + ((i * 7) % 5) * 0.06, k = (6.1 * sc) / p.h;
+      const ti = i % 3, p = parts[ti], sc = treeScale(i), k = (6.1 * sc) / p.h;
       const g = new THREE.Group();   // 장면엔 안 넣고 자리·충돌·미니맵용으로만 유지(그리는 건 InstancedMesh)
       g.position.copy(t.position); g.quaternion.setFromUnitVectors(_y, t.userData.dir); g.rotateY((i * 2.399) % (Math.PI * 2)); g.updateMatrix();   // 저마다 다른 방향
       Object.assign(g.userData, t.userData); g.userData.isBillboard = false; g.userData.model = true;
@@ -1647,7 +1649,46 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
-  stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); addClimb(st.userData.dir, 0.5, 0.7); });
+  const stoneSprites = [];
+  stones.forEach(([lon, lat], i) => { const st = placeSprite(makeBillboard(stoneTex, 1.4 + (i % 2) * 0.5, 1.05 + (i % 2) * 0.35), lon, lat); scene.add(st); decor.push(st); addClimb(st.userData.dir, 0.5, 0.7); st.userData.climb = climbProps[climbProps.length - 1]; stoneSprites.push(st); });
+  // 로드맵 9 (2026-10-02): 돌을 그림 판 → 3D 모델(assets/models/rocks/rock_<모양 1~8>_<이끼 cap·clover·dots·rim·streak>.glb, 사용자 제작 40종)로.
+  // 돌마다 40종 중 하나를 무작위(고정 씨앗, 서로 겹치지 않게)로 골라 그 10개 파일만 읽는다. 조각이 많은 모델(최대 97조각)은 재질 색을 정점 색으로 구워
+  // 한 덩어리로 합쳐 돌 하나 = 그리기 1번. 크기: 바닥 폭(가로·세로 중 큰 쪽)을 1.5~2.1로 맞추되 높이는 1.6을 넘지 않게, 방향은 돌마다 다르게. 오르기 높이·반경도 실제 모델에 맞춘다.
+  // 못 읽은 돌은 그 자리 그림 판을 그대로 둔다.
+  {
+    const PAT = ['cap', 'clover', 'dots', 'rim', 'streak'], pool = [];
+    for (let n = 1; n <= 8; n++) for (const pt of PAT) pool.push(`rock_${n}_${pt}`);
+    let seed = 20261002; const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const loader = new GLTFLoader(), _y = new THREE.Vector3(0, 1, 0);
+    stoneSprites.forEach((st, i) => {
+      const name = pool[i % pool.length], width = 1.5 + 0.6 * rnd(), spin = rnd() * Math.PI * 2;
+      loader.loadAsync(ASSET_DIR + 'models/rocks/' + name + '.glb').then((gl) => {
+        const m = gl.scene; m.updateMatrixWorld(true); const geos = [];
+        m.traverse((o) => { if (!o.isMesh) return;
+          const g = o.geometry.clone().applyMatrix4(o.matrixWorld), vc = g.getAttribute('color');   // 돌 몸통은 정점 색(COLOR_0) × 재질 색, 이끼는 재질 색
+          const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = o.material.color || new THREE.Color(1, 1, 1);
+          for (let j = 0; j < n; j++) { col[j * 3] = c.r * (vc ? vc.getX(j) : 1); col[j * 3 + 1] = c.g * (vc ? vc.getY(j) : 1); col[j * 3 + 2] = c.b * (vc ? vc.getZ(j) : 1); }
+          for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+          if (!g.getAttribute('normal')) g.computeVertexNormals();
+          g.setAttribute('color', new THREE.BufferAttribute(col, 3)); geos.push(g); });
+        const list = geos.every((g) => g.index) ? geos : geos.map((g) => (g.index ? g.toNonIndexed() : g));
+        const geo = mergeGeometries(list, false); if (!geo) return;
+        geo.computeBoundingBox(); const bb = geo.boundingBox, sz = new THREE.Vector3(); bb.getSize(sz);
+        const k = Math.min(width / Math.max(sz.x, sz.z), 1.6 / sz.y);   // 키가 큰 돌(선 바위)은 높이 1.6까지만
+        const ctr = bb.getCenter(new THREE.Vector3());
+        geo.translate(-ctr.x, -bb.min.y, -ctr.z); geo.scale(k, k, k);   // 바닥 가운데가 원점, 밑면이 지면
+        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true }));
+        mesh.castShadow = true; mesh.receiveShadow = true;
+        mesh.position.copy(st.userData.dir).multiplyScalar(R + terrainH(st.userData.dir) - 0.04);   // 살짝 묻혀 떠 보이지 않게
+        mesh.quaternion.setFromUnitVectors(_y, st.userData.dir); mesh.rotateY(spin);
+        scene.add(mesh);
+        scene.remove(st); const di = decor.indexOf(st); if (di >= 0) decor.splice(di, 1);
+        if (st.userData.climb) { st.userData.climb.top = terrainH(st.userData.dir) + sz.y * k * 0.92; st.userData.climb.radius = Math.max(0.5, width * 0.38); }
+        if (DEBUG) console.log('rock GLB', name, (sz.y * k).toFixed(2));
+      }).catch((e) => { if (DEBUG) console.warn('rock GLB 로드 실패 — 그림 판 유지', name, e); });
+    });
+  }
 }
 
 
