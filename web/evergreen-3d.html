@@ -371,7 +371,7 @@ const SUN_DIR = new THREE.Vector3(0.35, 0.25, 0.9).normalize();
 
 // 원작에서 뽑은 색 (§1-2)
 const C = {
-  grass: 0x7ccf3a, grassLight: 0xa8e05a, grassShade: 0x4f9e2c,
+  grass: 0x9ce655, grassLight: 0xbcf27a, grassShade: 0x86d84a,   // 2026-10-02 풀바닥 스타일(사용자 수정): 밝은 바닥(테스트장 톤) + 새 tile_grass.png
   skyTop: 0x3f9df2, skyHorizon: 0xbfe7ff,
   leaf: 0x5cc23a, leafLine: 0x2f7a22, trunk: 0x8a5a2b,
 };
@@ -1702,13 +1702,14 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     if (c === 'white') forageNodes.push(node);   // 흰 꽃은 채집 대상
     return { f, c, node }; });
   // 로드맵 9 (2026-10-02): 꽃을 그림 판 → 3D 모델(assets/models/flower_white.glb·flower_yellow.glb, 사용자 제작)로. 못 읽으면 그림 판 유지.
-  // 모델마다 조각을 '줄기·꽃잎(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색), 꽃 한 송이 = 두 메시 묶음(Group, 형태 공유).
+  // 모델마다 조각을 재질 텍스처별로 합치고(텍스처 없음 1덩어리 + 텍스처마다 1덩어리, 재질 색 → 정점 색), 꽃 한 송이 = 그 메시 묶음(Group, 형태 공유).
+  // 2026-10-02 꽃 모델 2차(사용자 수정): 꽃잎·꽃술·잎이 각자 다른 텍스처라 텍스처별로 나눠 합친다.
   // 흰 꽃은 채집 대상이라 채집 노드의 mesh를 이 묶음으로 바꿔 끼운다(채집하면 숨고 120초 뒤 다시 보임). 키 1.0~1.25, 방향은 자리마다 다르게.
   {
     const loader = new GLTFLoader();
     const build = (gl) => {
       const m = gl.scene; m.updateMatrixWorld(true);
-      const groups = { solid: [], leaf: [] }; let leafMap = null, leafCut = 0.5;
+      const groups = new Map();   // 키: 텍스처(없으면 null) → { geos, map, cut }
       m.traverse((o) => { if (!o.isMesh) return;
         const src = o.material, g = o.geometry.clone().applyMatrix4(o.matrixWorld);
         for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
@@ -1716,16 +1717,18 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
         const n = g.getAttribute('position').count, col = new Float32Array(n * 3), c = src.color || new THREE.Color(1, 1, 1);
         for (let j = 0; j < n; j++) { col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b; }
         g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-        if (src.map) { leafMap = src.map; if (src.alphaTest) leafCut = src.alphaTest; if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); groups.leaf.push(g); }
-        else { g.deleteAttribute('uv'); groups.solid.push(g); }
+        const key = src.map || null;
+        if (key) { if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2)); } else g.deleteAttribute('uv');
+        if (!groups.has(key)) groups.set(key, { geos: [], map: key, cut: key ? (src.alphaTest || 0.5) : 0, bright: !!key && c.r > 0.99 && c.g > 0.99 && c.b > 0.99 });
+        groups.get(key).geos.push(g);
       });
       const parts = [], bb = new THREE.Box3();
-      for (const key of ['solid', 'leaf']) {
-        const arr = groups[key]; if (!arr.length) continue;
+      for (const { geos: arr, map, cut, bright } of groups.values()) {
         const list = arr.every((g) => g.index) ? arr : arr.map((g) => (g.index ? g.toNonIndexed() : g));
         const geo = mergeGeometries(list, false); if (!geo) continue;
-        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map: key === 'leaf' ? leafMap : null, alphaTest: key === 'leaf' ? leafCut : 0, side: THREE.DoubleSide, fog: true });
+        const mat = new THREE.MeshLambertMaterial({ vertexColors: true, map, alphaTest: cut, side: THREE.DoubleSide, fog: true });
         if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+        if (bright) { mat.emissive.setScalar(0.35); mat.emissiveMap = map; }   // 꽃잎·꽃술(흰 재질 + 그림): 그늘·초록 반사광에 탁해지지 않게 그림 색으로 살짝 밝힌다
         geo.computeBoundingBox(); bb.union(geo.boundingBox); parts.push({ geo, mat });
       }
       return { parts, bb };
