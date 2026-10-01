@@ -4091,13 +4091,13 @@ function uiMap(sr, open) {
     (t) => lump(t, 0, 0.7, 0.012, 0.06) + lump(t, open ? 0.09 : 0.06, 1, 0.015, 0.07) + (open ? lump(t, 0.2, 0.5, 0.01, 0.05) : 0),
     { crackRate: 380, crackAmp: 0.9, crackF: 1800, lp: 3200, d: 1.0 });
 }
-const uiSnd = { bufs: null, vol: 0.12, prev: null };
+const uiSnd = { bufs: null, vol: { paper: 0.48, map: 0.4, pop: 0.16 }, prev: null };   // 종류마다 크기 — 배경음악(설정 기본값)보다 6~8dB쯤 작게 들리도록
 function uiPlay(kind, open) {
   if (!sfxReady()) return;
   if (!uiSnd.bufs) { const sr = sfx.ctx.sampleRate, mk = (a) => { const b = sfx.ctx.createBuffer(1, a.length, sr); b.copyToChannel(a, 0); return b; };
     uiSnd.bufs = {}; for (const [k, fn] of [['paper', uiPaper], ['map', uiMap], ['pop', uiPop]]) uiSnd.bufs[k] = [mk(fn(sr, false)), mk(fn(sr, true))]; }
   const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain();
-  src.buffer = uiSnd.bufs[kind][open ? 1 : 0]; src.playbackRate.value = 0.97 + Math.random() * 0.06; g.gain.value = uiSnd.vol;
+  src.buffer = uiSnd.bufs[kind][open ? 1 : 0]; src.playbackRate.value = 0.97 + Math.random() * 0.06; g.gain.value = uiSnd.vol[kind];
   src.connect(g); g.connect(sfx.master); src.start();
 }
 // 창 상태가 바뀌는 순간을 매 프레임 살펴 소리를 낸다(키·클릭·Esc 어느 경로로 열고 닫아도 같은 소리). 한 프레임에 여러 창이 바뀌면 한 번만
