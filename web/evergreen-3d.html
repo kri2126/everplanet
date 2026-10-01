@@ -1002,6 +1002,7 @@ function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setAttribute('rock', new THREE.BufferAttribute(new Float32Array(verts), 1));
+  geo.setAttribute('bare', new THREE.BufferAttribute(new Float32Array(verts), 1));   // 2026-10-02: 0=풀 무늬, 1=맨땅(길) — 풀 그림을 지운다
   geo.setIndex(idx);
   geo.computeVertexNormals();
   geo.userData.dirs = dirs;
@@ -1010,13 +1011,24 @@ function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
 
 const COL = {
   grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
+  grassDeep: new THREE.Color(0x6fc23e), grassPale: new THREE.Color(0xd4f0a2),   // 2026-10-02: 진한 풀 덩어리 · 길가의 연한 풀
   sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
   rock: new THREE.Color(0xd9b26f), rockDark: new THREE.Color(0xa9803f), rockLight: new THREE.Color(0xecd39a), moss: new THREE.Color(0x6fbf46),
   bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
   stone: new THREE.Color(0xd6cbb4), stoneDark: new THREE.Color(0xbfb39b),
 };
+// 2026-10-02 길가 정도: 0(길에서 멂) ~ 1(길 가장자리·길 위). 길 가장자리 바깥 약 2.6°(≈4유닛)까지 서서히. pathMask와 같은 길 모양(폭·굽이)을 쓴다.
+function pathNear(p) {
+  let e = 1e9; const sh = pathShape(p);
+  for (const s of T.paths) {
+    let d = s.dist(p, _o); if (d > 4.5) continue;
+    if (_o.inside) d = Math.abs(Math.asin(Math.max(-1, Math.min(1, p.dot(s.n)))) / DEG + sh.wig);
+    e = Math.min(e, d - 0.9 * sh.w);
+  }
+  return ss(2.6, 0, e);
+}
 function paintTerrain(geo, withPaths) {
-  const pos = geo.attributes.position, nrm = geo.attributes.normal, col = geo.attributes.color, rockA = geo.attributes.rock;
+  const pos = geo.attributes.position, nrm = geo.attributes.normal, col = geo.attributes.color, rockA = geo.attributes.rock, bareA = geo.attributes.bare;
   const dirs = geo.userData.dirs;
   const tmp = new THREE.Color(), n = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
@@ -1026,11 +1038,18 @@ function paintTerrain(geo, withPaths) {
     const h = r - R;
     const slope = 1 - Math.max(0, n.dot(d));   // 0=평지, 0.16≈33°, 0.36≈50°
     let rockK = 0;
-    // 풀 + 밝은 얼룩
+    // 풀 — 2026-10-02: 새 풀 그림이 한 가지 무늬라 색으로 변화를 준다. 기본색(C.grass) 위에
+    //   ① 큰 덩어리 잡음으로 진한 풀·연한 풀 군락(길에서 멀수록 뚜렷), ② 잔 얼룩, ③ 길에 가까워질수록 연한 풀색 + 풀 무늬가 옅어지고 길 위는 맨땅(bare=1).
+    const near = withPaths ? pathNear(d) : 0, vary = 1 - 0.8 * near;
+    const big = 0.5 + 1.6 * (vnoise(d.x * 12 + 11, d.y * 12, d.z * 12 + 3) * 0.7 + vnoise(d.x * 27 + 2, d.y * 27 + 5, d.z * 27) * 0.3 - 0.5);   // 군락 크기 약 5~8유닛
     const a = vnoise(d.x * 9 + 3, d.y * 9, d.z * 9) * 0.65 + vnoise(d.x * 31, d.y * 31 + 7, d.z * 31) * 0.35;
     tmp.copy(COL.grass);
-    if (a > 0.58) tmp.lerp(COL.grassLight, Math.min(1, (a - 0.58) * 4));
-    else if (a < 0.4) tmp.lerp(COL.grassShade, Math.min(1, (0.4 - a) * 2.5));
+    if (big > 0.56) tmp.lerp(COL.grassLight, Math.min(0.85, (big - 0.56) * 3.5) * vary);
+    else if (big < 0.44) tmp.lerp(COL.grassDeep, Math.min(0.75, (0.44 - big) * 3.5) * vary);
+    if (a > 0.6) tmp.lerp(COL.grassLight, Math.min(0.5, (a - 0.6) * 3) * vary);
+    else if (a < 0.38) tmp.lerp(COL.grassShade, Math.min(0.5, (0.38 - a) * 2.5) * vary);
+    tmp.lerp(COL.grassPale, 0.7 * near * near);
+    let bare = 0.5 * near * near;
     // 물 바닥
     const wl = waterAt(d);
     if (h < wl + 0.9) {
@@ -1041,7 +1060,7 @@ function paintTerrain(geo, withPaths) {
     // 모래길
     if (withPaths) {
       const m = pathMask(d);
-      if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.sand : COL.sandEdge, m); }
+      if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.sand : COL.sandEdge, m); bare = Math.max(bare, ss(0.05, 0.55, m)); }
       // 돌계단은 돌색
       const dS = T.stairs.dist(d, _o);
       if (dS < 1.0 && _o.inside) { tmp.copy(vnoise(d.x * 80, d.y * 80, d.z * 80) > 0.5 ? COL.stone : COL.stoneDark); rockK = 1; }
@@ -1059,9 +1078,9 @@ function paintTerrain(geo, withPaths) {
       if (mossy > 0.5 && slope < 0.3) tmp.lerp(COL.moss, k * 0.8);
     }
     col.setXYZ(i, tmp.r, tmp.g, tmp.b);
-    rockA.setX(i, rockK);
+    rockA.setX(i, rockK); bareA.setX(i, bare);
   }
-  col.needsUpdate = true; rockA.needsUpdate = true;
+  col.needsUpdate = true; rockA.needsUpdate = true; bareA.needsUpdate = true;
 }
 
 const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true, map: grassTex });
@@ -1069,13 +1088,14 @@ const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors
 terrainMat.onBeforeCompile = (sh) => {
   sh.uniforms.rockMap = { value: rockTex };
   sh.vertexShader = sh.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute float rock; varying float vRock;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = rock;');
+    .replace('#include <common>', '#include <common>\nattribute float rock; varying float vRock; attribute float bare; varying float vBare;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = rock; vBare = bare;');
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; varying float vRock;')
+    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; varying float vRock; varying float vBare;')
     .replace('#include <map_fragment>', `
       vec4 grassC = texture2D( map, vMapUv );
       vec4 rockC = texture2D( rockMap, vMapUv * vec2(1.4, 2.6) );
+      grassC = mix( grassC, vec4( 1.0 ), vBare );   // 길 위·길가: 풀 그림을 지워 맨땅처럼 (2026-10-02)
       diffuseColor *= mix( grassC, rockC, vRock );
     `);
 };
@@ -1101,7 +1121,7 @@ const planet = (() => {
     const idx = [];
     for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) { const a = j * (nLon + 1) + i, b = a + 1, c = a + nLon + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
     const tg = new THREE.BufferGeometry();
-    for (const name of ['position', 'normal', 'color', 'uv', 'rock']) tg.setAttribute(name, patch.attributes[name]);
+    for (const name of ['position', 'normal', 'color', 'uv', 'rock', 'bare']) tg.setAttribute(name, patch.attributes[name]);
     tg.setIndex(idx);
     // 경계 구는 이 타일의 정점만으로 (공유 버퍼 전체로 계산하면 컬링이 안 된다)
     const c = new THREE.Vector3(); let n = 0;
