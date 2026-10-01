@@ -502,7 +502,13 @@ function tangentize(v, up) {
 // 모든 도형은 구 위의 각거리(°)로 정의한다. R=90이면 1° ≈ 1.57 유닛.
 // §3 표: 착륙 초원(0,0) → 돌계단(0,7.6~10.9) → 단구 위 야영지(0,15.5 r8) → 나무다리(0,23.3~29.2)
 //        → 슬라임 초원(위도 29~46, 경도 ±15.5) → 별 받침대(10,40). 물 수면 -2.5.
-const WATER = -2.5;
+// 추기 #12(2026-10-01): "물을 채워달라"는 건 수위를 올려달라는 뜻이었다 — 수면을 한 장의 높이(WATER)가 아니라
+// 자리마다 정하는 waterAt(p)로 바꿔, 호수는 나무다리 상판(0) 바로 밑(-0.45), 샘물은 둘레 땅(0.45) 바로 밑(0.3)까지
+// 올렸다. 그 밖(크레이터 접시 -0.4 등)은 옛 수면 -2.5 그대로라 새로 잠기는 곳이 없다.
+const WATER = -2.5;            // 기본 수면(호수·샘물 밖)
+const LAKE_WATER = -0.45;      // 호수 수면 — 다리 상판 밑면(-0.09)보다 살짝 아래
+const SPRING_RIM = 0.45;       // 샘물 둘레 턱 높이(비탈을 평평하게 골라 어느 쪽에서 봐도 같은 높이)
+const SPRING_WATER = 0.3;      // 샘물 수면 — 둘레 턱 바로 밑
 const STEP_UP = 0.45;
 const ss = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -584,6 +590,17 @@ function hills(p) {
 function lakeInside(lon, lat) {
   return Math.min(lon - LAKE.lon0, LAKE.lon1 - lon, lat - LAKE.lat0, LAKE.lat1 - lat);
 }
+// 자리별 수면 높이(추기 #12). 호수·샘물 수면에서 기본 수면(-2.5)으로 내려가는 전환대는 늘 땅 밑(마른 물가)에 있어 안 보인다.
+function waterAt(p) {
+  const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG / MAP_S + MAP_LAT0;
+  const lon = Math.atan2(p.x, p.z) / DEG / MAP_S;
+  let w = WATER;
+  const li = lakeInside(lon, lat);
+  if (li > -1.6) w = Math.max(w, lerp(WATER, LAKE_WATER, ss(-1.6, -0.8, li)));
+  const dSp = angDeg(p, T.spring);
+  if (dSp < 3.3 * MAP_S) w = Math.max(w, lerp(WATER, SPRING_WATER, ss(3.3 * MAP_S, 2.6 * MAP_S, dSp)));
+  return w;
+}
 function terrainH(p) {
   const lat = Math.asin(Math.max(-1, Math.min(1, p.y))) / DEG / MAP_S + MAP_LAT0;   // 설계 좌표(추기 #4)
   const lon = Math.atan2(p.x, p.z) / DEG / MAP_S;
@@ -630,8 +647,13 @@ function terrainH(p) {
   // 샘물 웅덩이: 길(간선 3·4번)과 너무 가까워 통행을 막는다는 지적으로 길 오른쪽(동쪽)의 빈 터로 옮겼다(원작 좌표와는
   // 다름). 마른 둘레(물~풀 전환대)를 2.2→2.1×MAP_S로 좁혔었는데 그래도 보인다는 재지적 — 2.1→2.15×MAP_S(소멸)에
   // 물 차는 반경을 1.6→2.0×MAP_S까지 바짝 끌어올려 전환대를 0.5→0.15×MAP_S로 한 번 더 좁혔다 (2026-10-01 #4)
+  // 추기 #12: 수위를 올리면서 둘레(남쪽 비탈 0.3~0.8)를 평평한 턱(SPRING_RIM)으로 고르고, 바닥은 수면보다 0.75 아래
+  // (얕은 물 — 걸어서 드나듦). 둘레 턱(0.45)과 수면(0.3) 차이가 0.15뿐이라 옆 비탈이 거의 안 보인다.
   const dSp = angDeg(p, T.spring);
-  if (dSp < 2.4 * MAP_S) h = lerp(h, -2.8, ss(2.15 * MAP_S, 2.0 * MAP_S, dSp));
+  if (dSp < 3.6 * MAP_S) {
+    h = lerp(h, SPRING_RIM + 0.04 * vnoise(p.x * 40, p.y * 40, p.z * 40), ss(3.6 * MAP_S, 2.9 * MAP_S, dSp));
+    h = lerp(h, SPRING_WATER - 0.75, ss(2.15 * MAP_S, 2.0 * MAP_S, dSp));
+  }
 
   // 별 크레이터: 접시(안쪽 -0.4) + 둘레 턱(1.0, 가파름 — 걸어선 못 넘고 점프로) + 북동쪽 길 트임
   const dC = angDeg(p, T.starCrater);
@@ -758,10 +780,11 @@ function paintTerrain(geo, withPaths) {
     if (a > 0.58) tmp.lerp(COL.grassLight, Math.min(1, (a - 0.58) * 4));
     else if (a < 0.4) tmp.lerp(COL.grassShade, Math.min(1, (0.4 - a) * 2.5));
     // 물 바닥
-    if (h < WATER + 0.9) {
-      const k = ss(WATER + 0.9, WATER - 0.6, h);
+    const wl = waterAt(d);
+    if (h < wl + 0.9) {
+      const k = ss(wl + 0.9, wl - 0.6, h);
       tmp.lerp(COL.bed, k);
-      tmp.lerp(COL.bedDeep, ss(WATER - 0.3, WATER - 1.4, h) * 0.8);
+      tmp.lerp(COL.bedDeep, ss(wl - 0.3, wl - 1.4, h) * 0.8);
     }
     // 모래길
     if (withPaths) {
@@ -848,12 +871,13 @@ const water = (() => {
   const step = 0.3;
   const nLon = Math.round((PATCH.lon1 - PATCH.lon0) / step), nLat = Math.round((PATCH.lat1 - PATCH.lat0) / step);
   // 지형이 수면보다 1.2 이상 높은 칸은 어차피 땅에 가려지므로 만들지 않는다 (정점·오버드로 절약)
-  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, () => R + WATER, (lon, lat) => terrainH(dirFromLonLatW(lon, lat)) > WATER + 1.2);
+  // 추기 #12: 정점 높이를 자리별 수면(waterAt)으로 — 호수·샘물은 높고 나머지는 옛 수면
+  const geo = buildGrid(PATCH.lon0, PATCH.lon1, PATCH.lat0, PATCH.lat1, nLon, nLat, (p) => R + waterAt(p), (lon, lat) => { const q = dirFromLonLatW(lon, lat); return terrainH(q) > waterAt(q) + 1.2; });
   const dirs = geo.userData.dirs;
   const shore = new Float32Array(dirs.length);
   for (let i = 0; i < dirs.length; i++) {
-    const h = terrainH(dirs[i]);
-    shore[i] = ss(WATER - 1.6, WATER + 0.25, h);   // 0 깊음 → 1 물가
+    const h = terrainH(dirs[i]), wl = waterAt(dirs[i]);
+    shore[i] = ss(wl - 1.6, wl + 0.25, h);   // 0 깊음 → 1 물가
   }
   geo.setAttribute('shore', new THREE.BufferAttribute(shore, 1));
   const mat = new THREE.ShaderMaterial({
@@ -1277,7 +1301,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
-  const reeds = [[-11.0, 28.9], [-7.6, 28.7], [-1.4, 28.8], [2.2, 28.9], [5.8, 28.6], [-11.4, 16.4], [-7.8, 16.3], [-1.6, 16.5], [1.8, 16.6], [5.4, 16.8], [8.0, 19.0], [8.2, 26.0], [2.0, 14.3], [3.8, 14.9], [2.2, 12.5], [4.0, 12.1], [0.8, 23.0], [4.0, 24.6], [3.6, 21.6]];   // 샘물 둘레 4곳은 추기 #3로 이동
+  const reeds = [[-11.0, 28.9], [-7.6, 28.7], [-1.4, 28.8], [2.2, 28.9], [5.8, 28.6], [-11.4, 16.4], [-7.8, 16.3], [-1.6, 16.5], [1.8, 16.6], [5.4, 16.8], [8.0, 19.0], [8.2, 26.0], [2.0, 14.3], [3.8, 14.9], [2.2, 12.5], [4.0, 12.1], [0.8, 23.0], [3.55, 24.2], [3.3, 22.0]];   // 샘물 둘레 4곳은 추기 #3로 이동, 섬 물가 2곳은 추기 #12로 섬 턱 위로(비탈이 물에 잠겨서)
   reeds.forEach(([lon, lat], i) => { const r = placeSprite(makeBillboard(reedTex, 2.0 + (i % 3) * 0.3, 2.0 + (i % 3) * 0.3, { shadow: false }), lon, lat); scene.add(r); decor.push(r); });
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
   const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-0.6, -3.4], [10.2, 21.8]];
@@ -1545,11 +1569,12 @@ for (const wfLat of waterfallLats) {
   wf.material.alphaTest = 0.1; wf.material.opacity = 0.95;
   scene.add(wf); props.push(wf);
 }
-const waterfallFoam = placeSprite(makeBillboard(foamTex, 8.6, 1.2, { shadow: false }), -13.0, 22.5);
+// 추기 #12: 물보라 판은 호수 바닥이 아니라 수면에 걸치게(밑단이 수면 0.4 아래) — 수위를 올리면서 같이 맞췄다
+const waterfallFoam = placeSprite(makeBillboard(foamTex, 8.6, 1.2, { shadow: false }), -13.0, 22.5, false, LAKE_WATER - 0.4 - terrainH(dirFromLonLat(-13.0, 22.5)));
 waterfallFoam.material.alphaTest = 0.1;
 scene.add(waterfallFoam); props.push(waterfallFoam);
-// 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳 (추기 #3: 앞 2개는 샘물과 함께 이동)
-const dewNodes = [[1.9, 14.2], [3.7, 12.4], [1.4, 22.6]].map(([lon, lat]) => {
+// 이슬 수집 지점은 샘물 둘레 2곳 + 섬 물가 1곳 (추기 #3: 앞 2개는 샘물과 함께 이동, 추기 #12: 수위가 올라 잠기지 않게 둘레 턱 위로)
+const dewNodes = [[0.95, 15.5], [4.3, 11.45], [1.4, 22.6]].map(([lon, lat]) => {
   const m = placeSprite(makeBillboard(dewTex, 0.55, 0.75, { shadow: false }), lon, lat);
   scene.add(m);
   return { mesh: m, dir: m.userData.dir, avail: true, cd: 0 };
@@ -1615,7 +1640,7 @@ const deck = (() => {
       if (T.stairs.dist(dir, _o) < 1.6 && _o.inside) continue;
       for (const side of [-1, 1]) {
         const p = dir.clone().addScaledVector(right, side * 1.15 / R).normalize();
-        const h = terrainH(p); if (h < WATER + 0.5) continue;
+        const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
         slots.push({ p, h });
       }
       if (i % 3 === 0) {
@@ -1787,7 +1812,7 @@ const NPCS = [
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
   { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -4.5, lat: 29.8, lift: 0,
     idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
-  { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 4.9, lat: 14.5, lift: 0,   // 샘물과 함께 이동(추기 #3)
+  { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 5.2, lat: 14.65, lift: 0,   // 샘물과 함께 이동(추기 #3), 물가에서 한 발 물러섬(추기 #12)
     idle: '이 근방 슬라임들, 방심하면 안 돼.' },
 ];
 for (const n of NPCS) {
@@ -2278,7 +2303,7 @@ function updateSlimes(dt) {
         _sd.normalize();
         _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.3 : 0.9) * dt / R).normalize();
         const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
-        if (th > WATER + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3.2)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
+        if (th > waterAt(_sn) + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3.2)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
         _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
         const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
       }
@@ -2337,7 +2362,7 @@ function updateSpikes(dt) {
           _sd.normalize();
           _sn.copy(s.dir).addScaledVector(_sd, (target === pdir ? 1.1 : 0.8) * dt / R).normalize();
           const th = terrainH(_sn), fromHome = angDeg(_sn, s.home) * DEG * R;
-          if (th > WATER + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
+          if (th > waterAt(_sn) + 0.4 && inZone(s.zone, _sn) && (target === pdir || fromHome < 3)) s.dir.copy(_sn);   // 추기 #2: 구역 밖으론 못 나감
           _bn.set(0, 1, 0); tangentize(_bn, s.dir); _be.crossVectors(_bn, s.dir).normalize();
           const ex = _sd.dot(_be); if (Math.abs(ex) > 0.3) s.flip = ex > 0 ? 1 : -1;
         }
@@ -2739,7 +2764,7 @@ function applySave(o) {
   // 자리: 저장된 위치의 바닥에 세운다(물속·공중이었으면 안전 지점으로). 로드맵 7 지도의 저장(map 없음)은 위치만 시작 지점으로
   const oldMap = !o.map || o.map < 5;
   let d = o.pos && !oldMap ? dirFromLonLat(o.pos[0], o.pos[1]) : dirFromLonLat(START[0], START[1]);
-  if (!oldMap && terrainH(d) <= WATER - 1.2 && o.safe) d = dirFromLonLat(o.safe[0], o.safe[1]);
+  if (!oldMap && terrainH(d) <= waterAt(d) - 1.2 && o.safe) d = dirFromLonLat(o.safe[0], o.safe[1]);
   if (oldMap) {
     o = { ...o, safe: null }; log('지도가 바뀌어 착륙 들판 시작 지점으로 옮겨졌다.', 'sys');
     // 추기 #3: 행성 퀘스트 단계 순서가 바뀌어(사냥이 2단계) 진행 중이던 행성 퀘스트는 처음부터. 완료한 것·별 조각·나머지는 그대로 (map 3 저장은 순서가 같지만 시작점만 옮긴다)
@@ -3146,21 +3171,21 @@ function step(dt) {
   cam.fwd.set(0, 1, 0); tangentize(cam.fwd, _up);
 
   // 물: 얕으면 느리게, 깊으면(수면보다 1.2 아래 바닥) 헤엄친다 — 작업 B, 로드맵 5 B의 즉시 복귀를 대체
-  const th = terrainH(_up);
+  const th = terrainH(_up), wl = waterAt(_up);   // 추기 #12: 자리별 수면
   const onStructure = ground > th + 0.3;
   const wasSwimming = player.swimming;
-  player.swimming = !onStructure && th <= WATER - 1.2;
-  player.inShallow = !onStructure && !player.swimming && player.grounded && th < WATER + 0.25 && th > WATER - 1.2;
+  player.swimming = !onStructure && th <= wl - 1.2;
+  player.inShallow = !onStructure && !player.swimming && player.grounded && th < wl + 0.25 && th > wl - 1.2;
   if (player.swimming) {
     if (!wasSwimming) { player.swimT = 0; swimRipple(); player.mesh.material.clippingPlanes = [swimClipPlane]; }
     player.swimT += dt;
-    player.z = WATER - 0.35; player.vz = 0; player.grounded = false; player.jumps = 2;   // 머리만 수면 위 — 점프 불가(jumps 소진 처리)
+    player.z = wl - 0.35; player.vz = 0; player.grounded = false; player.jumps = 2;   // 머리만 수면 위 — 점프 불가(jumps 소진 처리)
     player.pos.copy(_up).multiplyScalar(R + player.z);
-    swimClipPlane.setFromNormalAndCoplanarPoint(_up, _up.clone().multiplyScalar(R + WATER + 0.12));   // 캐릭터 판을 수면에서 자른다(머리만 보이게)
+    swimClipPlane.setFromNormalAndCoplanarPoint(_up, _up.clone().multiplyScalar(R + wl + 0.12));   // 캐릭터 판을 수면에서 자른다(머리만 보이게)
     if (player.swimT > 8) { respawn(); player.swimming = false; }   // 나갈 곳 없는 물(절벽 아래 웅덩이 등) — 마지막 물가로
   } else {
     if (wasSwimming) player.mesh.material.clippingPlanes = [];
-    if (player.grounded && th > WATER + 0.3) {
+    if (player.grounded && th > wl + 0.3) {
       // 안전 지점은 0.8초마다 갱신 — 절벽 끝이 아니라 그 조금 전 자리로 돌아오게
       player.safeT += dt;
       if (player.safeT > 0.8) { player.safeT = 0; player.safe.copy(player.safeNext); player.safeFwd.copy(player.safeNextFwd); player.safeNext.copy(_up); player.safeNextFwd.copy(player.fwd); }
@@ -3220,7 +3245,7 @@ function step(dt) {
   _camPos.copy(player.pos).addScaledVector(_up, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
   // 카메라가 지면 아래로 들어가지 않게 (작업 B에서 지형 충돌로 확장)
   const camDir = _camPos.clone().normalize();
-  const camMin = R + Math.max(terrainH(camDir), WATER) + 0.9;
+  const camMin = R + Math.max(terrainH(camDir), waterAt(camDir)) + 0.9;
   if (_camPos.length() < camMin) _camPos.copy(camDir).multiplyScalar(camMin);
   camera.position.lerp(_camPos, 1 - Math.pow(0.0005, dt));
   camera.up.copy(_up);
@@ -3320,11 +3345,14 @@ function buildAtlas() {
   g.fillStyle = PASTEL.paper; g.fillRect(0, 0, ATLAS.w, ATLAS.h);
   // 지형 색: 0.2° 격자로 훑어 저해상 이미지에 칠하고 부드럽게 키워 얹는다
   const step = 0.2, nx = Math.round((ATLAS.lon1 - ATLAS.lon0) / step) + 1, ny = Math.round((ATLAS.lat1 - ATLAS.lat0) / step) + 1;
-  const H = new Float32Array(nx * ny), inPlay = new Uint8Array(nx * ny);
+  // 추기 #12: 물 판정용 WD = 자리별 수면이 옛 수면(WATER)보다 얼마나 높은지 — 물·얕은 물 판정은 H − WD로 한다
+  const H = new Float32Array(nx * ny), WD = new Float32Array(nx * ny), inPlay = new Uint8Array(nx * ny);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const lon = ATLAS.lon0 + i * step, lat = ATLAS.lat1 - j * step;
     inPlay[j * nx + i] = (Math.abs(lon) <= 14.6 && lat >= -11 && lat <= 48) ? 1 : 0;
-    H[j * nx + i] = inPlay[j * nx + i] ? terrainH(dirFromLonLat(lon, lat)) : 99;
+    const q = dirFromLonLat(lon, lat);
+    H[j * nx + i] = inPlay[j * nx + i] ? terrainH(q) : 99;
+    WD[j * nx + i] = inPlay[j * nx + i] ? waterAt(q) - WATER : 0;
   }
   const lo = document.createElement('canvas'); lo.width = nx; lo.height = ny;
   const lg = lo.getContext('2d'), img = lg.createImageData(nx, ny), d = img.data;
@@ -3332,11 +3360,11 @@ function buildAtlas() {
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const k = j * nx + i; if (!inPlay[k]) { put(k, [0, 0, 0], 0); continue; }
     const h = H[k], lat = ATLAS.lat1 - j * step, lon = ATLAS.lon0 + i * step;
-    let slope = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2] && H[k2] > WATER + 0.5) slope = Math.max(slope, Math.abs(H[k2] - h)); }   // 추기 #6: 호숫가는 절벽으로 안 친다
+    let slope = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2] && H[k2] - WD[k2] > WATER + 0.5) slope = Math.max(slope, Math.abs(H[k2] - h)); }   // 추기 #6: 호숫가는 절벽으로 안 친다
     const wob = (vnoise(lon * 0.9 + 3, lat * 0.9, 7) - 0.5) * 14;
     let c;
-    if (h <= WATER - 1.2) c = PASTEL.water;
-    else if (h <= WATER + 0.5) c = PASTEL.shallow;
+    if (h - WD[k] <= WATER - 1.2) c = PASTEL.water;
+    else if (h - WD[k] <= WATER + 0.5) c = PASTEL.shallow;
     else if (h >= 3.4 || (slope > 0.6 && (Math.abs(lon) > 13.0 || lat < -9.4 || lat > 46.4))) c = vnoise(lon * 3, lat * 3, 1) > 0.5 ? PASTEL.rock : PASTEL.rockDark;   // 추기 #6: 바위벽 옆면도 바위색
     else if (slope > 0.6) c = PASTEL.cliff;
     else if (angDeg(dirFromLonLat(lon, lat), T.starCrater) < 1.5 * MAP_S) c = PASTEL.dish;
@@ -3350,11 +3378,11 @@ function buildAtlas() {
   g.drawImage(lo, 0, 0, nx, ny, 0, 0, ATLAS.w + ATLAS.ppd * step, ATLAS.h + ATLAS.ppd * step);
   // 추기 #6: 물엔 물결 자국, 절벽엔 빗금 — 옛 지도의 손그림 표시
   g.strokeStyle = 'rgba(70,120,170,.45)'; g.lineWidth = 1;
-  for (let j = 0; j < ny; j += 4) for (let i = 0; i < nx; i += 5) { const k = j * nx + i; if (!inPlay[k] || H[k] > WATER - 1.2) continue; if (wob(i * 31 + j) > 0.55) continue;
+  for (let j = 0; j < ny; j += 4) for (let i = 0; i < nx; i += 5) { const k = j * nx + i; if (!inPlay[k] || H[k] - WD[k] > WATER - 1.2) continue; if (wob(i * 31 + j) > 0.55) continue;
     const x = (i + (wob(i + j) - 0.5)) * step * ATLAS.ppd, y = (j + 0.5) * step * ATLAS.ppd; g.beginPath(); g.moveTo(x - 5, y); g.quadraticCurveTo(x - 2.5, y - 2.2, x, y); g.quadraticCurveTo(x + 2.5, y + 2.2, x + 5, y); g.stroke(); }
   g.strokeStyle = 'rgba(80,55,30,.35)';
   for (let j = 1; j < ny; j += 2) for (let i = 1; i < nx; i += 2) { const k = j * nx + i; if (!inPlay[k]) continue; let sl = 0; for (const [di, dj] of [[1, 0], [0, 1]]) { const k2 = (j + dj) * nx + (i + di); if (k2 < nx * ny && inPlay[k2]) sl = Math.max(sl, Math.abs(H[k2] - H[k])); }
-    if (sl < 0.6 || H[k] >= 3.4 || H[k] < WATER + 0.5) continue; const x = i * step * ATLAS.ppd, y = j * step * ATLAS.ppd; g.beginPath(); g.moveTo(x - 2, y + 2); g.lineTo(x + 2, y - 2); g.stroke(); }
+    if (sl < 0.6 || H[k] >= 3.4 || H[k] - WD[k] < WATER + 0.5) continue; const x = i * step * ATLAS.ppd, y = j * step * ATLAS.ppd; g.beginPath(); g.moveTo(x - 2, y + 2); g.lineTo(x + 2, y - 2); g.stroke(); }
   // 모래길·다리·계단·데크
   const seg2px = (seg) => { const A = designLonLat(seg.A), B = designLonLat(seg.B); return [atlasPx(A[0], A[1]), atlasPx(B[0], B[1])]; };
   g.lineCap = 'round'; g.lineJoin = 'round';
@@ -3861,7 +3889,7 @@ function drawWorldMap(viewW, viewH, t) {
 // ── 디버그 훅 (?debug 에서만) — Playwright 검증용 ─────────────────────────────
 if (DEBUG) {
   window.__dbg = {
-    THREE, scene, camera, renderer, player, cam, trees, R, WATER,
+    THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt,
     terrainH, walkH, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
