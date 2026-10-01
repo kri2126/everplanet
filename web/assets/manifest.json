@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "files": {
     "tile_grass": "tile_grass.png",
     "tile_rock": "tile_rock.png",
@@ -32,9 +32,12 @@
     "npc_knight": "npc_knight.png",
     "slime_0": "slime_0.png",
     "slime_1": "slime_1.png",
-    "arrow": "arrow.png",
     "slash": "slash.png",
     "sparkle": "sparkle.png",
-    "puff": "puff.png"
+    "puff": "puff.png",
+    "dir_down": "dir_down.png",
+    "dir_up": "dir_up.png",
+    "dir_left": "dir_left.png",
+    "dir_right": "dir_right.png"
   }
 }
