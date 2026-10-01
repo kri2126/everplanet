@@ -1484,7 +1484,9 @@ function tryMove(dir, dist) {
 }
 // 점프: 땅(또는 코요테 시간 안)에서 1단, 공중에서 2단. 착지 직전 입력은 잠시 저장했다가 닿는 순간 뛴다.
 function tryJump() {
-  if (player.swimming || player.dead) return false;   // 작업 B/C: 헤엄칠 땐 점프 불가, 사망 중엔 조작 없음
+  if (player.dead) return false;   // 사망 중엔 조작 없음
+  // (2026-10-01) 물에서도 점프 — 수면에서 땅과 같은 힘으로 뛰어오르고, 공중에서 2단 점프도 된다. 다시 수면에 닿으면 헤엄으로 돌아간다
+  if (player.swimming) { player.vz = JUMP_V; player.swimming = false; player.grounded = false; player.coyoteT = 0; player.jumps = 1; swimRipple(); return true; }
   if (player.grounded || player.coyoteT > 0) { player.vz = JUMP_V; player.grounded = false; player.coyoteT = 0; player.jumps = 1; return true; }
   if (player.jumps < 2) { player.vz = JUMP2_V; player.jumps = 2; puff(); return true; }
   player.jumpBufT = JUMP_BUF;
@@ -1495,7 +1497,7 @@ function respawn() {
   player.swimming = false; player.mesh.material.clippingPlanes = [];   // 물속에서 불려도 캐릭터가 잘린 채로 남지 않게
   player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true; player.jumps = 0;
   player.fwd.copy(player.safeFwd); tangentize(player.fwd, d); tangentize(cam.fwd, d);
-  camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+  camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK); camZ = player.z;
 }
 
 const trees = [];
@@ -4037,6 +4039,7 @@ addEventListener('keyup', (e) => keys.delete(evCode(e)));
 addEventListener('blur', () => keys.clear());
 
 const cam = { fwd: new THREE.Vector3(0, 1, 0) };   // 항상 그 자리의 북쪽
+let camZ = 0; const _camBase = new THREE.Vector3();   // 카메라가 따라가는 발 디딘 높이(점프 높이는 무시)
 canvas.addEventListener('pointerdown', (e) => {
   if (mapView === 1) { mapView = insideZoneDisc(e.clientX, e.clientY) ? 2 : 0; return; }
   if (mapView === 2) { mapView = worldMapHit && insideRect(worldMapHit, e.clientX, e.clientY) ? 2 : 0; return; }
@@ -4108,12 +4111,15 @@ function step(dt) {
   const th = terrainH(_up), wl = waterAt(_up);   // 추기 #12: 자리별 수면
   const onStructure = ground > th + 0.3;
   const wasSwimming = player.swimming;
-  player.swimming = !onStructure && th <= wl - 1.2;
+  // (2026-10-01 버그 수정) 깊은 물 위라도 아직 공중에 떠 있으면(올라가는 중이거나 수면보다 높으면) 헤엄으로 바꾸지 않는다 —
+  // 예전엔 물가에서 물 쪽으로 점프하면 물 위로 넘어가는 순간 수면에 붙들려 점프가 끊겼다. 수면 높이까지 내려와야 헤엄 시작
+  const swimZ = wl - 0.35, deepWater = !onStructure && th <= wl - 1.2;
+  player.swimming = deepWater && player.vz <= 0 && player.z <= swimZ + 0.05;
   player.inShallow = !onStructure && !player.swimming && player.grounded && th < wl + 0.25 && th > wl - 1.2;
   if (player.swimming) {
     if (!wasSwimming) { player.swimT = 0; swimRipple(); player.mesh.material.clippingPlanes = [swimClipPlane]; }
     player.swimT += dt;
-    player.z = wl - 0.35; player.vz = 0; player.grounded = false; player.jumps = 2;   // 머리만 수면 위 — 점프 불가(jumps 소진 처리)
+    player.z = swimZ; player.vz = 0; player.grounded = false; player.jumps = 0;   // 머리만 수면 위 — 점프는 tryJump가 물에서 따로 처리
     player.pos.copy(_up).multiplyScalar(R + player.z);
     swimClipPlane.setFromNormalAndCoplanarPoint(_up, _up.clone().multiplyScalar(R + wl + 0.12));   // 캐릭터 판을 수면에서 자른다(머리만 보이게)
     // (2026-10-01 버그 수정) 예전엔 8초 넘게 헤엄치면 "나갈 곳 없는 물"로 보고 마지막 물가로 순간이동시켰다. 수위를 올려 호수가
@@ -4188,14 +4194,19 @@ function step(dt) {
 
   // 카메라
   _right.crossVectors(cam.fwd, _up).normalize();
-  _camPos.copy(player.pos).addScaledVector(_up, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+  // (2026-10-01) 점프해도 시점은 그대로 — 카메라는 캐릭터의 "발 디딘 높이"(camZ)를 따라간다. 공중에선 뛰기 전 높이를 지키다가
+  // 그보다 낮게 떨어질 때만 따라 내려가고, 더 높은 곳에 올라서면 부드럽게 따라 올라간다
+  { const target = (player.grounded || player.swimming || player.dead) ? player.z : Math.min(camZ, player.z);
+    camZ = target < camZ ? target : camZ + (target - camZ) * (1 - Math.pow(0.002, dt)); }
+  _camBase.copy(_up).multiplyScalar(R + camZ);
+  _camPos.copy(_camBase).addScaledVector(_up, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
   // 카메라가 지면 아래로 들어가지 않게 (작업 B에서 지형 충돌로 확장)
   const camDir = _camPos.clone().normalize();
   const camMin = R + Math.max(terrainH(camDir), waterAt(camDir)) + 0.9;
   if (_camPos.length() < camMin) _camPos.copy(camDir).multiplyScalar(camMin);
   camera.position.lerp(_camPos, 1 - Math.pow(0.0005, dt));
   camera.up.copy(_up);
-  _look.copy(player.pos).addScaledVector(_up, CAM_LOOK_UP);
+  _look.copy(_camBase).addScaledVector(_up, CAM_LOOK_UP);
   camera.lookAt(_look);
   if (cut.on) updateCutscene(dt);   // 컷신 중엔 카메라를 덮어쓴다
 
@@ -4510,7 +4521,7 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
-camera.position.copy(player.pos).addScaledVector(player.pos.clone().normalize(), CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+camera.position.copy(player.pos).addScaledVector(player.pos.clone().normalize(), CAM_UP).addScaledVector(cam.fwd, -CAM_BACK); camZ = player.z;
 requestAnimationFrame(frame);
 
 // ── 전경도 (옛 판 evergreen-exploration.html에서 그대로 이식) ─────────────────
@@ -4848,7 +4859,7 @@ if (DEBUG) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
       tangentize(player.fwd, d); tangentize(cam.fwd, d);
-      camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK);
+      camera.position.copy(player.pos).addScaledVector(d, CAM_UP).addScaledVector(cam.fwd, -CAM_BACK); camZ = player.z;
     },
     lonLat() {
       const [lon, lat] = designLonLat(player.pos.clone().normalize());
