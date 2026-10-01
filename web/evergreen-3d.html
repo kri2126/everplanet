@@ -1634,6 +1634,44 @@ const trees = [];
 function treeScale(i) { const r = 0.4 + 0.6 * (((Math.sin(i * 12.9898 + 4.1) * 43758.5453) % 1 + 1) % 1); return (0.9 + ((i * 7) % 5) * 0.06) * r; }   // 2026-10-02: 40~100%로
 let treeSway = null, treeInstMeshes = [];   // 나무 GLB 인스턴싱(최적화) — 바람 갱신 함수, 인스턴스 메시 목록
 const decor = [];
+// 2026-10-02 풀·꽃·갈대·덤불 흔들림: 나무처럼 바람에 아주 조금씩 흔들리다가(idle), 캐릭터가 닿으면 지나가는 방향으로 크게 흔들렸다가 잦아든다(hit).
+// 3D 모델로 바뀐 것만(그림 판은 그대로). 항목: { dir, pos, q, loc(인스턴스용), ims+idx 또는 obj(Group), r 닿는 반경, top 키, idle·hitAmp 각도(rad), speed, phase }
+const plantSway = [];
+const _psQ = new THREE.Quaternion(), _psQ2 = new THREE.Quaternion(), _psM = new THREE.Matrix4(), _psA = new THREE.Vector3(), _psF = new THREE.Vector3(), _psOne = new THREE.Vector3(1, 1, 1);
+const PLANT_KIND = {   // 종류별 흔들림 — idle: 바람, hit: 닿았을 때(좌우로 2번쯤 크게 흔들리다 1초 남짓에 잦아듦)
+  bush: { r: 1.25, idle: 0.022, speed: 1.3, hitAmp: 0.26 },
+  flower: { r: 0.5, idle: 0.05, speed: 2.1, hitAmp: 0.5 },
+  reed: { r: 0.6, idle: 0.04, speed: 1.6, hitAmp: 0.38 },
+};
+function addPlantSway(kind, dir, extra) {
+  const K = PLANT_KIND[kind], g = terrainH(dir), wind = new THREE.Vector3(0, 1, 0).cross(dir);
+  if (wind.lengthSq() < 1e-8) wind.set(1, 0, 0); wind.normalize();
+  const e = Object.assign({ kind, dir, ground: g, r: K.r, idle: K.idle, speed: K.speed, hitAmp: K.hitAmp, phase: (dir.x * 37 + dir.z * 53) % (Math.PI * 2), wind, hitAxis: new THREE.Vector3(1, 0, 0), t: 99, inside: false }, extra);
+  plantSway.push(e); return e;
+}
+function updatePlants(dt, nowS) {
+  if (!plantSway.length) return;
+  const pd = _up, touchable = !player.dead && !cut.on;
+  const dirty = new Set();
+  for (const e of plantSway) {
+    // 닿기: 반경 안 + 발이 그 풀 키보다 낮을 때(위로 뛰어넘으면 안 닿음). 새로 들어오거나, 안에서 움직이며 흔들림이 잦아들었으면 다시 흔든다
+    const near = touchable && pd.dot(e.dir) > e.cosR && player.z < e.ground + e.top && player.z > e.ground - 0.6;
+    if (near && (!e.inside || (player.moving && e.t > 0.7))) {
+      if (player.moving) _psF.copy(player.fwd); else _psF.subVectors(e.dir, pd);   // 지나가는 방향(서 있으면 캐릭터 → 풀 방향)으로 눕는다
+      _psF.addScaledVector(e.dir, -_psF.dot(e.dir));
+      if (_psF.lengthSq() > 1e-10) { e.hitAxis.crossVectors(e.dir, _psF.normalize()).normalize(); e.t = 0; }
+    }
+    e.inside = near;
+    e.t += dt;
+    const idle = e.idle * Math.sin(nowS * e.speed + e.phase) + e.idle * 0.4 * Math.sin(nowS * e.speed * 2.3 + e.phase * 1.7);
+    const hit = e.t < 2.5 ? e.hitAmp * Math.exp(-e.t / 0.5) * Math.sin(e.t * 13) : 0;
+    _psQ.setFromAxisAngle(e.wind, idle); if (hit) _psQ.multiply(_psQ2.setFromAxisAngle(e.hitAxis, hit));
+    _psQ.multiply(e.q);
+    if (e.obj) e.obj.quaternion.copy(_psQ);
+    else { _psM.compose(e.pos, _psQ, _psOne).multiply(e.loc); for (const im of e.ims) { im.setMatrixAt(e.idx, _psM); dirty.add(im); } }
+  }
+  for (const im of dirty) im.instanceMatrix.needsUpdate = true;
+}
 const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길게 눌러 채집)
 {
   // 로드맵 8: 원작 지도의 나무 밀도대로 좌표 직접 배치 — 가장자리를 따라 빽빽하게, 초원·크레이터 안은 비움
@@ -1771,6 +1809,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
       loc.makeScale(k, k, k).setPosition(0, -bb.min.y * k, 0);   // 밑동이 지면에
       mtx.compose(b.position, q, new THREE.Vector3(1, 1, 1)).multiply(loc);
       for (const im of ims) im.setMatrixAt(i, mtx);
+      { const kk = 0.85 + ((i * 5) % 7) * 0.05; addPlantSway('bush', b.userData.dir, { pos: b.position.clone(), q: q.clone(), loc: loc.clone(), ims, idx: i, top: 1.4 * kk, r: 1.25 * kk, cosR: Math.cos(1.25 * kk / R) }); }   // 흔들림
       scene.remove(b); const di = decor.indexOf(b); if (di >= 0) decor.splice(di, 1);
     });
     for (const im of ims) im.instanceMatrix.needsUpdate = true;
@@ -1830,6 +1869,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
         const grp = new THREE.Group(); grp.add(inner); grp.position.copy(f.position);
         grp.quaternion.setFromUnitVectors(_y, f.userData.dir).multiply(new THREE.Quaternion().setFromAxisAngle(_y, (i * 2.399) % (Math.PI * 2)));
         grp.userData.dir = f.userData.dir; grp.visible = f.visible; scene.add(grp);
+        addPlantSway('flower', f.userData.dir, { obj: grp, q: grp.quaternion.clone(), top: k * H, cosR: Math.cos(PLANT_KIND.flower.r / R) });   // 흔들림
         node.mesh = grp;   // 채집 노드가 이제 3D 꽃을 숨기고/보인다
         scene.remove(f); const di = decor.indexOf(f); if (di >= 0) decor.splice(di, 1);
       });
@@ -1886,6 +1926,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
           loc.makeScale(k, k, k).setPosition(-cx * k, -tp.bb.min.y * k, -cz * k);   // 밑동 가운데가 지면에
           mtx.compose(b.position, q, one).multiply(loc);
           for (const im of ims) im.setMatrixAt(s, mtx);
+          addPlantSway('reed', b.userData.dir, { pos: b.position.clone(), q: q.clone(), loc: loc.clone(), ims, idx: s, top: hs[i], cosR: Math.cos(PLANT_KIND.reed.r / R) });   // 흔들림
         });
         for (const im of ims) im.instanceMatrix.needsUpdate = true;
       });
@@ -4645,6 +4686,7 @@ function step(dt) {
   // 나무는 바람에 살짝
   const tw = performance.now() * 0.0012;
   if (treeSway) treeSway(tw); else for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
+  updatePlants(dt, performance.now() * 0.001);   // 2026-10-02: 덤불·꽃·갈대 — 바람에 살짝, 캐릭터가 닿으면 크게
   // 비행정은 살짝 떠다니고, 폭포는 흐르고, 별 빛기둥은 일렁인다
   {
     const nowS = performance.now() * 0.001;
@@ -5344,7 +5386,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt,
-    terrainH, walkH, padTopAt, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
