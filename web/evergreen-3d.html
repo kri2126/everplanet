@@ -225,7 +225,7 @@
   #log .me { color: #fff; } #log .me b { color: #9ad2ff; font-weight: 700; margin-right: 4px; }
 </style>
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
 </script>
 </head>
 <body>
@@ -277,6 +277,7 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';   // 로드맵 9: 나무 3D 모델(GLB)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 로드맵 6 — 작업 A(3D 뼈대) + B(지형)
@@ -1291,6 +1292,34 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     scene.add(t); trees.push(t);
     mapDot(t.userData.dir, 1.6, 0x3f9a2a);
   });
+  // 로드맵 9 (2026-10-01): 나무를 그림 판 → 3D 모델(assets/models/tree_A/B/C.glb, 사용자 제작)로 교체.
+  // GLB를 못 읽으면(파일 없음·CDN 차단) 위의 그림 판이 그대로 남는다. 충돌·미니맵·바람은 userData를 그대로 물려받아 그대로 동작.
+  (async () => {
+    const loader = new GLTFLoader(); const names = ['tree_A', 'tree_B', 'tree_C']; const models = [];
+    try {
+      for (const n of names) { const g = await loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'); models.push(g.scene); }
+    } catch (e) { if (DEBUG) console.warn('tree GLB 로드 실패 — 그림 판 유지', e); return; }
+    const _y = new THREE.Vector3(0, 1, 0), box = new THREE.Box3(), size = new THREE.Vector3();
+    models.forEach(m => {
+      m.traverse(o => { if (!o.isMesh) return;
+        const src = o.material;   // PBR → 램버트(게임 전체가 평평하고 밝은 셀 톤이라 금속·거칠기 반사는 끈다)
+        const mat = new THREE.MeshLambertMaterial({ color: src.color, map: src.map || null, alphaTest: src.alphaTest || 0, side: src.map ? THREE.DoubleSide : THREE.FrontSide, fog: true });
+        if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+        o.material = mat; o.castShadow = true; o.receiveShadow = false; });
+      box.setFromObject(m); box.getSize(size); m.userData.h = size.y; m.userData.minY = box.min.y;
+    });
+    trees.forEach((t, i) => {
+      if (!t.userData.isBillboard) return;
+      const src = models[i % 3]; const sc = 0.9 + ((i * 7) % 5) * 0.06; const targetH = 6.1 * sc;
+      const k = targetH / src.userData.h;
+      const model = src.clone(); model.scale.setScalar(k); model.position.y = -src.userData.minY * k;   // 뿌리 밑동이 지면에
+      const g = new THREE.Group(); g.add(model);
+      g.position.copy(t.position); g.quaternion.setFromUnitVectors(_y, t.userData.dir); g.rotateY((i * 2.399) % (Math.PI * 2));   // 저마다 다른 방향
+      Object.assign(g.userData, t.userData); g.userData.isBillboard = false; g.userData.model = model;
+      scene.remove(t); t.geometry.dispose(); scene.add(g); trees[i] = g;
+    });
+    if (DEBUG) console.log('tree GLB 적용:', trees.filter(t => t.userData.model).length);
+  })();
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
   const bushes = [[-4.8, 44.2], [2.2, 43.6], [-8.2, 35.2], [4.4, 30.4], [-7.4, 28.6], [10.6, 24.2], [-8.4, 13.0], [2.4, 12.2], [-10.8, 10.9], [6.0, 6.8], [-3.4, -2.2], [3.2, -2.2]];
   bushes.forEach(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); });
@@ -3208,7 +3237,7 @@ function step(dt) {
   }
   // 나무는 바람에 살짝
   const tw = performance.now() * 0.0012;
-  for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
+  for (const t of trees) (t.userData.model || t).rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
   // 비행정은 살짝 떠다니고, 폭포는 흐르고, 별 빛기둥은 일렁인다
   {
     const nowS = performance.now() * 0.001;
