@@ -1579,9 +1579,9 @@ function tryMove(dir, dist) {
 function tryJump() {
   if (player.dead) return false;   // 사망 중엔 조작 없음
   // (2026-10-01) 물에서도 점프 — 수면에서 땅과 같은 힘으로 뛰어오르고, 공중에서 2단 점프도 된다. 다시 수면에 닿으면 헤엄으로 돌아간다
-  if (player.swimming) { player.vz = JUMP_V; player.swimming = false; player.grounded = false; player.coyoteT = 0; player.jumps = 1; swimRipple(); return true; }
-  if (player.grounded || player.coyoteT > 0) { player.vz = JUMP_V; player.grounded = false; player.coyoteT = 0; player.jumps = 1; return true; }
-  if (player.jumps < 2) { player.vz = JUMP2_V; player.jumps = 2; puff(); return true; }
+  if (player.swimming) { player.vz = JUMP_V; player.swimming = false; player.grounded = false; player.coyoteT = 0; player.jumps = 1; swimRipple(); sfxJump(1); return true; }
+  if (player.grounded || player.coyoteT > 0) { player.vz = JUMP_V; player.grounded = false; player.coyoteT = 0; player.jumps = 1; sfxJump(1); return true; }
+  if (player.jumps < 2) { player.vz = JUMP2_V; player.jumps = 2; puff(); sfxJump(2); return true; }
   player.jumpBufT = JUMP_BUF;
   return false;
 }
@@ -4280,6 +4280,43 @@ function uiWatch() {
   requestAnimationFrame(uiWatch);
 }
 requestAnimationFrame(uiWatch);
+// ── 점프 효과음 — 1단: 땅을 '툭' 차고 '휙' 오름. 2단: 같은 소리를 살짝 높게 + '후-' 스치는 바람. 파일 없이 합성
+function jmpLp(o, sr, f, passes) { const k = 1 - Math.exp(-6.283 * f / sr); for (let p = 0; p < passes; p++) { let l = 0; for (let i = 0; i < o.length; i++) { l += k * (o[i] - l); o[i] = l; } } return o; }
+function jmpRms(a) { let s = 0; for (const v of a) s += v * v; return Math.sqrt(s / a.length) || 1; }
+function jmpNrm(a) { const r = jmpRms(a); return a.map((v) => v / r); }
+function jmpWhoosh(sr, len, seed, f0, f1, att, dec, q, lp, curve) {   // 노이즈 띠 중심이 f0→f1로 쓸림
+  const r = uiRng(seed), n = Math.floor(sr * len), o = new Float32Array(n), F = uiSvf();
+  for (let i = 0; i < n; i++) { const t = i / sr, u = Math.pow(t / len, curve); o[i] = F(r() * 2 - 1, f0 * Math.pow(f1 / f0, u), sr, q).bp * lump(t, 0, 1, att, dec); }
+  return jmpLp(o, sr, lp, 2);
+}
+function jmpPush(sr, seed, f) {   // 발 구름 '툭'
+  const r = uiRng(seed), n = Math.floor(sr * 0.07), o = new Float32Array(n), F = uiSvf();
+  for (let i = 0; i < n; i++) { const t = i / sr; o[i] = (F(r() * 2 - 1, f, sr, 0.8).bp * 0.8 + Math.sin(2 * Math.PI * 110 * t) * 0.5) * lump(t, 0, 1, 0.003, 0.018); }
+  return jmpLp(o, sr, 2500, 1);
+}
+function jmpMix(len, sr, parts) { const o = new Float32Array(Math.floor(sr * len)); for (const [a, g, at] of parts) { const s = Math.floor((at || 0) * sr); for (let i = 0; i < a.length && s + i < o.length; i++) o[s + i] += a[i] * g; } return o; }
+function jmpOne(sr, m) { return jmpMix(0.3, sr, [[jmpNrm(jmpPush(sr, 9, 500 * m)), 1], [jmpNrm(jmpWhoosh(sr, 0.2, 6, 400 * m, 1200 * m, 0.025, 0.05, 1.1, 3000, 0.7)), 0.7, 0.02]]); }
+function jmpBreeze(sr, len, seed, fc, lp) {   // 한 번 '후-' 스치는 공기(감돌지 않음), 좌우 살짝 넓게
+  const r = uiRng(seed), n = Math.floor(sr * len), L = new Float32Array(n), R = new Float32Array(n), F = uiSvf(), G = uiSvf();
+  for (let i = 0; i < n; i++) { const t = i / sr, u = t / len, f = fc * (1 + 0.25 * u), e = Math.sin(Math.PI * Math.min(1, u * 1.6)) ** 2 * (1 - u);
+    L[i] = F(r() * 2 - 1, f, sr, 1.4).bp * e; R[i] = G(r() * 2 - 1, f, sr, 1.4).bp * e; }
+  return [jmpLp(L, sr, lp, 2), jmpLp(R, sr, lp, 2)];
+}
+function jmpDouble(sr) {
+  const j = jmpOne(sr, 1.12), [L, R] = jmpBreeze(sr, 0.38, 31, 1000, 2800), g = jmpRms(L), jr = jmpRms(j), n = Math.max(j.length, L.length);
+  const oL = new Float32Array(n), oR = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const a = i < j.length ? j[i] : 0; oL[i] = a + (i < L.length ? L[i] / g * jr * 0.5 : 0); oR[i] = a + (i < R.length ? R[i] / g * jr * 0.5 : 0); }
+  return [oL, oR];
+}
+const jumpSnd = { bufs: null, vol: 0.0302 };
+function sfxJump(n) {   // n: 1 = 1단, 2 = 2단
+  if (!sfxReady()) return;
+  if (!jumpSnd.bufs) { const sr = sfx.ctx.sampleRate, one = jmpOne(sr, 1), [L, R] = jmpDouble(sr), b1 = sfx.ctx.createBuffer(1, one.length, sr), b2 = sfx.ctx.createBuffer(2, L.length, sr);
+    b1.copyToChannel(one, 0); b2.copyToChannel(L, 0); b2.copyToChannel(R, 1); jumpSnd.bufs = [b1, b2]; }
+  const src = sfx.ctx.createBufferSource(), g = sfx.ctx.createGain();
+  src.buffer = jumpSnd.bufs[n === 2 ? 1 : 0]; src.playbackRate.value = 0.97 + Math.random() * 0.06; g.gain.value = jumpSnd.vol;
+  src.connect(g); g.connect(sfx.master); src.start();
+}
 // 설정값을 화면·게임에 반영 — S2: 키 안내 글(상단 줄·키 안내 팝업·스킬 슬롯 글자·대화/컷신 안내·창 아래 줄)
 const hintEl = document.getElementById('hint'), keyGuideRowsEl = document.querySelector('#keyGuide .rows'), keyGuideFootEl = document.querySelector('#keyGuide .foot');
 function updateKeyTexts() {
