@@ -1270,29 +1270,33 @@ vRock = rock; vBare = bare; vTuft = tuft; vCliff = cliff;
   vec3 nt = normal - rad * dot( normal, rad ); vec3 ea = normalize( cross( vec3( 0.0, 1.0, 0.0 ), rad ) ); vec3 no = cross( rad, ea );
   vWall = vec2( abs( dot( nt, ea ) ), abs( dot( nt, no ) ) ); }`);
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D dirtMap; uniform sampler2D cliffSteep; uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
+    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D dirtMap; uniform sampler2D cliffSteep;\nfloat epH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }\nfloat epN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f ); return mix( mix( epH( i ), epH( i + vec2( 1.0, 0.0 ) ), f.x ), mix( epH( i + vec2( 0.0, 1.0 ) ), epH( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); } uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
     .replace('#include <opaque_fragment>', `
       outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );
-      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.95 ), smoothstep( 0.55, 0.95, vBare ) * 0.7 );   // 2026-10-03: 흙길도 그늘에 칙칙해지지 않게(그림 색에 가깝게)   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.95 ), vDk * 0.7 );   // 2026-10-03: 흙길도 그늘에 칙칙해지지 않게(그림 색에 가깝게)   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
       #include <opaque_fragment>
     `)
     .replace('#include <map_fragment>', `
-      vec4 grassC = texture2D( map, vMapUv );
+      vec4 grassC = texture2D( map, vMapUv ); float vDk = 0.0;
       // 절벽 타일 2차(2026-10-02): 가파른 곳은 벽을 따라 × 높이로(한 장 ≈ 5유닛, 세로로 길쭉한 돌판), 완만한 경사면은 바닥 좌표로(판석). 돌계단은 옛 돌 무늬.
       vec2 wwt = vWall / max( vWall.x + vWall.y, 1e-4 ); float hv = vH * 0.2;
       vec4 stC = texture2D( cliffSteep, vec2( vMapUv.y * 0.8, hv ) ) * wwt.x + texture2D( cliffSteep, vec2( vMapUv.x * 0.8, hv ) ) * wwt.y;
       vec4 geC = texture2D( cliffGentle, vMapUv * 1.1 );
       vec4 sC = mix( texture2D( rockMap, vMapUv * vec2(1.4, 2.6) ), vec4( 1.0 ), 0.6 );
       vec4 rockC = mix( mix( geC, stC, vCliff.x ), sC, vCliff.z );
-      grassC = mix( grassC, vec4( 1.0 ), vBare );   // 길 위·길가: 풀 그림을 지워 맨땅처럼 (2026-10-02)
-      grassC = mix( grassC, texture2D( dirtMap, vMapUv * 0.6 ), smoothstep( 0.55, 0.95, vBare ) );   // 2026-10-03: 길 위는 흙길 그림(tile_dirt)
+      // 2026-10-03 길 테두리: 흙과 풀이 들쭉날쭉 겹치며 이어지게 — 잔 잡음(약 0.5·1유닛 두 겹)으로 경계를 흔들고 전환 폭을 넓힘.
+      // 길가에선 풀 그림을 덜 지우고(0.35), 흙 위 가장자리엔 풀 그림·풀포기가 남아 겹쳐 보인다.
+      float en = epN( vMapUv * 7.0 ) * 0.6 + epN( vMapUv * 17.0 + 3.1 ) * 0.4;
+      vDk = smoothstep( 0.32, 0.88, vBare + ( en - 0.5 ) * 0.55 );
+      grassC = mix( grassC, vec4( 1.0 ), vBare * 0.35 );
+      grassC = mix( grassC, texture2D( dirtMap, vMapUv * 0.6 ), vDk );   // 길 위는 흙길 그림(tile_dirt)
       diffuseColor *= mix( grassC, rockC, vRock );
       // 진한 풀포기 (2026-10-02): 배율·각도가 다른 두 겹(약 7유닛·5유닛 주기)
       vec2 tu = vMapUv * 0.55, tv = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.78 + vec2(0.37, 0.61);
-      float tf = max( texture2D( tuftMap, tu ).a, texture2D( tuftMap, tv ).a * 0.85 ) * vTuft * ( 1.0 - vBare ) * ( 1.0 - vRock );
+      float tf = max( texture2D( tuftMap, tu ).a, texture2D( tuftMap, tv ).a * 0.85 ) * vTuft * ( 1.0 - vDk ) * ( 1.0 - vRock );
       // 중간색 풀포기 (2026-10-02): 기본색과 진한 풀포기 사이 색 — 진한 것과 같은 빈도로, 배율·각도·자리를 달리한 두 겹(겹치면 진한 쪽이 위)
       vec2 tw = mat2(0.6, 0.8, -0.8, 0.6) * vMapUv * 0.62 + vec2(0.19, 0.83), tx = mat2(0.94, 0.34, -0.34, 0.94) * vMapUv * 0.71 + vec2(0.71, 0.29);
-      float tm = max( texture2D( tuftMap, tw ).a, texture2D( tuftMap, tx ).a * 0.85 ) * vTuft * ( 1.0 - vBare ) * ( 1.0 - vRock );
+      float tm = max( texture2D( tuftMap, tw ).a, texture2D( tuftMap, tx ).a * 0.85 ) * vTuft * ( 1.0 - vDk ) * ( 1.0 - vRock );
       diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.78, 0.85, 0.75 ), tm );
       diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.56, 0.7, 0.5 ) / mix( vec3( 1.0 ), vec3( 0.78, 0.85, 0.75 ), tm ), tf );
     `);
