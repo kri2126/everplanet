@@ -687,6 +687,44 @@ const cliffSteepTex = makeTex(512, (g, S) => stoneTile(g, S, {
 const cliffGentleTex = makeTex(512, (g, S) => stoneTile(g, S, {
   seed: 909, gx: 5, gy: 5, stretch: 0.9, base0: [232, 214, 142], base1: [243, 229, 166], hi: [252, 244, 200], lo: [204, 182, 106],
   bevel: 0.6, bevW: 22, grain: 5, ao: 0.18, aoW: 14, seam0: 0.8, seam1: 6, seamC: [176, 156, 80] }), 1, 'tile_cliff_gentle');
+// 2026-10-03 흙길 타일(tile_dirt): 사진처럼 따뜻한 주황 모래흙 — 넓고 부드러운 밝은 얼룩 + 옅은 어두운 얼룩 + 붓결 같은 가는 결 + 드문 잔돌.
+// 이음매 없이 반복되게 주기 잡음(격자를 감싸 계산)으로 그린다. 색은 그림이 직접 갖는다(길 정점 색은 흰색에 가깝게).
+function dirtTile(g, S) {
+  let sd = 9157; const rn = () => (sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const mkGrid = (n) => { const a = new Float32Array(n * n); for (let i = 0; i < n * n; i++) a[i] = rn(); return a; };
+  const octs = [[2, 0.45], [4, 0.3], [8, 0.15], [16, 0.1]].map(([n, w]) => ({ n, w, g: mkGrid(n) }));
+  const sm = (t) => t * t * (3 - 2 * t);
+  const noise = (x, y, o) => { const fx = x / S * o.n, fy = y / S * o.n, ix = Math.floor(fx), iy = Math.floor(fy), tx = sm(fx - ix), ty = sm(fy - iy);
+    const at = (i, j) => o.g[((j % o.n + o.n) % o.n) * o.n + ((i % o.n + o.n) % o.n)];
+    const a = at(ix, iy), b = at(ix + 1, iy), c = at(ix, iy + 1), d = at(ix + 1, iy + 1); return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty; };
+  const img = g.createImageData(S, S), D = img.data;
+  const base = [226, 174, 102], light = [242, 204, 138], dark = [206, 150, 84];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let n = 0; for (const o of octs) n += noise(x, y, o) * o.w; n /= 1.0;              // 0~1 근처
+    const v = (n - 0.5) * 2.4;                                                           // -1~1
+    let c = base.slice();
+    if (v > 0) for (let k = 0; k < 3; k++) c[k] += (light[k] - c[k]) * Math.min(1, v * 1.1);
+    else for (let k = 0; k < 3; k++) c[k] += (dark[k] - c[k]) * Math.min(1, -v * 0.9);
+    const p = (y * S + x) * 4; D[p] = c[0]; D[p + 1] = c[1]; D[p + 2] = c[2]; D[p + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  // 붓결: 옅고 긴 곡선(밝은 결 · 어두운 결), 가장자리 감싸 그림
+  g.lineCap = 'round';
+  for (let i = 0; i < 22; i++) {
+    const x = rn() * S, y = rn() * S, l = 30 + rn() * 70, a = (rn() - 0.5) * 0.9, bend = (rn() - 0.5) * 18, lightStroke = rn() < 0.6;
+    g.strokeStyle = lightStroke ? `rgba(250,220,160,${0.14 + rn() * 0.14})` : `rgba(190,130,70,${0.10 + rn() * 0.12})`; g.lineWidth = 2 + rn() * 3;
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) { g.beginPath(); g.moveTo(x + ox, y + oy); g.quadraticCurveTo(x + ox + Math.cos(a) * l / 2, y + oy + Math.sin(a) * l / 2 + bend, x + ox + Math.cos(a) * l, y + oy + Math.sin(a) * l); g.stroke(); }
+  }
+  // 드문 잔돌
+  for (let i = 0; i < 22; i++) {
+    const x = rn() * S, y = rn() * S, r = 2 + rn() * 3.5;
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+      g.fillStyle = 'rgba(178,120,64,0.45)'; g.beginPath(); g.ellipse(x + ox, y + oy + r * 0.3, r, r * 0.7, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(248,214,150,0.7)'; g.beginPath(); g.ellipse(x + ox - r * 0.2, y + oy - r * 0.15, r * 0.7, r * 0.5, 0, 0, Math.PI * 2); g.fill();
+    }
+  }
+}
+const dirtTex = makeTex(512, (g, S) => dirtTile(g, S), 1, 'tile_dirt');
 
 // ── 값 노이즈 (지면 얼룩용) ──────────────────────────────────────────────────
 function hash3(x, y, z) {
@@ -1014,8 +1052,8 @@ function terrainH(p) {
 
 // 모래길 마스크 0~1 — 2026-10-02: 폭이 일정한 직선 길이 부자연스럽다는 지적으로 폭 배율 0.6~1.45배(좁았다 넓었다),
 // 중심선도 좌우로 ±0.3° 굽이치게. 같은 값(pathShape)을 말뚝·셰브론 배치에도 써서 길 가장자리를 따라간다.
-function pathShape(p) {
-  return { w: 0.6 + 0.85 * vnoise(p.x * 22 + 5, p.y * 22, p.z * 22), wig: 0.6 * (vnoise(p.x * 13, p.y * 13 + 9, p.z * 13) - 0.5) };
+function pathShape(p) {   // 2026-10-03: 길 폭 2배(w ×2)
+  return { w: 2 * (0.6 + 0.85 * vnoise(p.x * 22 + 5, p.y * 22, p.z * 22)), wig: 0.6 * (vnoise(p.x * 13, p.y * 13 + 9, p.z * 13) - 0.5) };
 }
 function pathMask(p) {
   let m = 0;
@@ -1124,6 +1162,7 @@ function buildGrid(lon0, lon1, lat0, lat1, nLon, nLat, radiusOf, skip) {
 const COL = {
   grass: new THREE.Color(C.grass), grassLight: new THREE.Color(C.grassLight), grassShade: new THREE.Color(C.grassShade),
   grassDeep: new THREE.Color(0x6fc23e), grassPale: new THREE.Color(0xd4f0a2),   // 2026-10-02: 진한 풀 덩어리 · 길가의 연한 풀
+  dirtBase: new THREE.Color(0xffffff), dirtEdge: new THREE.Color(0xf4ead8),
   sand: new THREE.Color(0xe6d3a0), sandEdge: new THREE.Color(0xcdb47a),
   rock: new THREE.Color(0xfff8ee), rockDark: new THREE.Color(0xf6ead8), rockLight: new THREE.Color(0xffffff), moss: new THREE.Color(0x6fbf46),   // 2026-10-02 절벽 타일 2차: 색은 타일 그림이 갖고 정점 바위색은 거의 흰색(옛 0xf3c088·0xe6aa6c·0xfadcae)   // 2026-10-02: 경사면이 칙칙하다는 지적 → 원작 지도 같은 밝고 부드러운 살구빛(옛 0xd9b26f/0xa9803f/0xecd39a)
   bed: new THREE.Color(0xc9b07a), bedDeep: new THREE.Color(0x7fb9a8),
@@ -1174,7 +1213,7 @@ function paintTerrain(geo, withPaths) {
     // 모래길
     if (withPaths) {
       const m = pathMask(d);
-      if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.sand : COL.sandEdge, m); bare = Math.max(bare, ss(0.05, 0.55, m)); }
+      if (m > 0) { const edge = vnoise(d.x * 60, d.y * 60, d.z * 60); tmp.lerp(edge > 0.5 ? COL.dirtBase : COL.dirtEdge, m); bare = Math.max(bare, ss(0.05, 0.55, m)); }   // 2026-10-03: 흙길 — 색은 tile_dirt 그림이, 정점 색은 거의 흰색
       // 돌계단은 돌색
       const dS = Math.min(T.stairs.dist(d, _o) + (_o.inside ? 0 : 9), T.landStairs.dist(d, _o) + (_o.inside ? 0 : 9));
       if (dS < 1.0) { tmp.copy(vnoise(d.x * 80, d.y * 80, d.z * 80) > 0.5 ? COL.stone : COL.stoneDark); rockK = 1; }
@@ -1221,7 +1260,7 @@ const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors
 // 정점 속성 rock(0=풀, 1=바위)으로 풀 질감과 바위 줄무늬 질감을 섞는다
 terrainMat.onBeforeCompile = (sh) => {
   sh.uniforms.rockMap = { value: rockTex }; sh.uniforms.tuftMap = { value: tuftTex };
-  sh.uniforms.cliffSteep = { value: cliffSteepTex }; sh.uniforms.cliffGentle = { value: cliffGentleTex }; sh.uniforms.planetR = { value: R };
+  sh.uniforms.dirtMap = { value: dirtTex }; sh.uniforms.cliffSteep = { value: cliffSteepTex }; sh.uniforms.cliffGentle = { value: cliffGentleTex }; sh.uniforms.planetR = { value: R };
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float rock; varying float vRock; attribute float bare; varying float vBare; attribute float tuft; varying float vTuft;\nattribute vec3 cliff; varying vec3 vCliff; varying float vH; varying vec2 vWall; uniform float planetR;')
     .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1231,9 +1270,10 @@ vRock = rock; vBare = bare; vTuft = tuft; vCliff = cliff;
   vec3 nt = normal - rad * dot( normal, rad ); vec3 ea = normalize( cross( vec3( 0.0, 1.0, 0.0 ), rad ) ); vec3 no = cross( rad, ea );
   vWall = vec2( abs( dot( nt, ea ) ), abs( dot( nt, no ) ) ); }`);
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D cliffSteep; uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
+    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D dirtMap; uniform sampler2D cliffSteep; uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
     .replace('#include <opaque_fragment>', `
-      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.95 ), smoothstep( 0.55, 0.95, vBare ) * 0.7 );   // 2026-10-03: 흙길도 그늘에 칙칙해지지 않게(그림 색에 가깝게)   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
       #include <opaque_fragment>
     `)
     .replace('#include <map_fragment>', `
@@ -1245,6 +1285,7 @@ vRock = rock; vBare = bare; vTuft = tuft; vCliff = cliff;
       vec4 sC = mix( texture2D( rockMap, vMapUv * vec2(1.4, 2.6) ), vec4( 1.0 ), 0.6 );
       vec4 rockC = mix( mix( geC, stC, vCliff.x ), sC, vCliff.z );
       grassC = mix( grassC, vec4( 1.0 ), vBare );   // 길 위·길가: 풀 그림을 지워 맨땅처럼 (2026-10-02)
+      grassC = mix( grassC, texture2D( dirtMap, vMapUv * 0.6 ), smoothstep( 0.55, 0.95, vBare ) );   // 2026-10-03: 길 위는 흙길 그림(tile_dirt)
       diffuseColor *= mix( grassC, rockC, vRock );
       // 진한 풀포기 (2026-10-02): 배율·각도가 다른 두 겹(약 7유닛·5유닛 주기)
       vec2 tu = vMapUv * 0.55, tv = mat2(0.8, -0.6, 0.6, 0.8) * vMapUv * 0.78 + vec2(0.37, 0.61);
@@ -1872,16 +1913,17 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 2026-10-02 재배치: 물에 걸쳐 떠 보이던 나무·길가에 몰린 나무를 없애고 자동으로 다시 심었다 — 잎 아래(반경 2) 전부 마른 평지, 다리·계단·데크·크레이터·별 받침대·소품 자리는 비움.
   // 같은 날 다시: 길가와 먼 곳 차이가 너무 크다는 지적으로 차이를 줄였다 — 모래길 중심에서 3.0유닛 안엔 안 심고(길은 막지 않게), 간격은 길가 약 8.7 → 먼 곳 약 5.5유닛, 숲 덩어리 잡음으로 군데군데 모이게.
   // 2026-10-02: 착륙 데크를 남쪽 들판 가운데 언덕으로 옮기며 언덕 꼭대기·새 길·비행정·미르 자리에 걸린 나무 5·돌 2·꽃 1·덤불 2·버섯 1을 옛 착륙 들판 쪽 빈 땅으로 옮김(2차: 언덕을 넓히며 나무 4·돌 2·꽃 1·덤불 1을 언덕 둘레 밖으로 한 번 더, 3차: 넓이 +50%로 나무 7·돌 2·꽃 2·덤불 1 더)
+  // 2026-10-03: 흙길 폭 2배로 길에 걸린 나무 6·돌 2·꽃 4·덤불 2·버섯 1을 바로 옆 길 밖으로(야영지 가마솥·상자·도토·표지판·미르도)
   const spots = [
     [10.86, 31.19], [10.27, -1.84], [10.3, 0.48], [8.26, -3.77], [11.43, 17.99], [7.79, 39.16], [8.15, -7.33], [12.15, 3.72], [-10.41, 13.69], [-13.05, 2.58],
     [12.37, -3.09], [-1.85, 45.73], [-12.36, 45.09], [-7.86, 3.57], [12.84, 20.03], [-9.25, 43.31], [10.61, 15.84], [6.2, 9.69], [9.24, 35.84], [1.87, -9.77],
     [-11.87, -1.05], [1.33, 31.12], [-8.11, -1.37], [9.22, 27.64], [9.23, 14], [2.32, 3.94], [12.89, 13.9], [-3.81, 9.22], [-4.84, 41.51], [7.51, 11.52],
     [8.41, 33.15], [8.21, -1.08], [-7.17, -10.02], [-9.85, 0.02], [7.94, 6.23], [-12.85, 36.61], [11.26, 10.09], [5.1, -9.25], [10.57, -9.53], [11.81, 27.58],
-    [-12.22, 29.47], [-10.05, 5.93], [4.34, 5.97], [12.47, 34.36], [-3.39, 3.84], [7.92, 1.1], [11.46, 45.61], [0.42, 43.42], [3.35, 34.08], [5.65, 43.32],
-    [-3.01, -9.24], [-8.02, 45.97], [-9.04, 1.83], [-11.53, -9.58], [10.31, -4.84], [8.68, 21.7], [6.45, 2.66], [0.09, 16.4], [5.49, 15.87], [-7.91, 9.03],
+    [-12.22, 29.47], [-10.05, 5.93], [4.34, 5.97], [12.47, 34.36], [-3.67, 3.94], [7.92, 1.1], [11.46, 45.61], [0.42, 43.42], [3.35, 34.08], [5.65, 43.32],
+    [-3.01, -9.24], [-8.02, 45.97], [-9.04, 1.83], [-11.53, -9.58], [10.31, -4.84], [8.68, 21.7], [6.45, 2.66], [0.39, 16.4], [5.49, 15.87], [-8, 8.74],
     [13.37, 7.7], [12.8, -6.61], [6.4, 31.01], [11.07, 22.83], [-13.63, 6.69], [6.04, 36], [9.03, 8.81], [-5.92, 2.31], [-4.12, 36.18], [13.12, 24.73],
-    [-12.39, 42.1], [11.97, 38.56], [-5.93, 12.88], [7.84, 18.17], [-8.02, -7.65], [4.62, 28.99], [-9.94, 40.56], [9.27, 24.73], [12.79, 1.1], [-12.39, 39.14],
-    [10.6, 6.41], [0.78, 37.88], [-12.2, -5.14], [0.83, 8.33], [-13.51, 11.25], [-9.85, -3.65], [9.14, 3.24], [-6.36, 33.36], [13.47, 30.56],
+    [-12.39, 42.1], [11.97, 38.56], [-5.72, 13.1], [7.84, 18.17], [-8.02, -7.65], [4.62, 28.99], [-9.94, 40.56], [9.27, 24.73], [12.79, 1.1], [-12.39, 39.14],
+    [10.6, 6.41], [1.33, 37.88], [-12.2, -5.14], [0.86, 8.03], [-13.51, 11.25], [-9.85, -3.65], [9.14, 3.24], [-6.36, 33.36], [13.47, 30.56],
   ];
   spots.forEach(([lon, lat], i) => {
     const sc = treeScale(i);
@@ -1967,7 +2009,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
   // 덤불·꽃·버섯 — 지도의 흰 반짝·붉은 점 자리 위주
   // 2026-10-02: 덤불은 풀 위에만 — 물(샘물 이동 후 물에 잠긴 1포기)·모래길·가파른 바위 위나 그 가장자리에 걸치던 6포기를
   // 가장 가까운 풀밭으로 옮겼다(포기 중심과 반경 0.8·1.6 둘레 24곳이 모두 풀, 나무·텐트 등 소품과 3.0, 덤불끼리 3.0 이상 떨어지게).
-  const bushes = [[-5.8, 43.2], [2.2, 43.6], [-7.0, 35.2], [4.4, 30.4], [-10.2, 30.2], [10.6, 24.2], [-8.4, 13.0], [1.7, 9.5], [-10.0, 11.7], [6.2, 6.8], [-9, -5.6], [-5.61, 4.25]];
+  const bushes = [[-5.8, 43.2], [2.2, 43.6], [-7.0, 35.2], [4.4, 30.4], [-10.47, 30.07], [10.6, 24.2], [-8.4, 13.0], [1.7, 9.5], [-9.8, 12.21], [6.2, 6.8], [-9, -5.6], [-5.61, 4.25]];
   const bushSprites = bushes.map(([lon, lat]) => { const b = placeSprite(makeBillboard(bushTex, 2.2, 1.6), lon, lat); scene.add(b); decor.push(b); return b; });
   // 로드맵 9 (2026-10-02): 덤불을 그림 판 → 3D 모델(assets/models/bush.glb, 사용자 제작)로 교체. 못 읽으면 그림 판 유지.
   // 나무처럼 조각을 '줄기(텍스처 없음)'·'잎(텍스처 있음)' 두 덩어리로 합치고(재질 색 → 정점 색) 12포기를 InstancedMesh 2개로 그린다.
@@ -2010,10 +2052,10 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     for (const im of ims) im.instanceMatrix.needsUpdate = true;
     if (DEBUG) console.log('bush GLB 적용:', bushSprites.length);
   }).catch((e) => { if (DEBUG) console.warn('bush GLB 로드 실패 — 그림 판 유지', e); }));
-  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.0, 40.6, 'yellow'], [-6.8, 30.4, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.0, 10.0, 'white'], [5.6, 8.0, 'yellow'], [1.28, 5.22, 'white'], [-11.4, -2.54, 'yellow'], [2.6, 22.8, 'white'],
+  const flowers = [[-2.4, 42.8, 'yellow'], [1.4, 42.2, 'white'], [-5.4, 38.6, 'yellow'], [3.28, 40.72, 'yellow'], [-6.69, 30.68, 'white'], [-2.2, 29.2, 'yellow'], [9.2, 20.4, 'white'], [-3.6, 13.2, 'yellow'], [0.4, 10.6, 'white'], [-11.4, 8.76, 'white'], [5.6, 8.0, 'yellow'], [1.28, 5.22, 'white'], [-11.4, -2.54, 'yellow'], [2.6, 22.8, 'white'],
     // 2026-10-02 추가 29송이: 빈도를 늘리고 2~4송이씩 붙어 핀 무리(0.6~1.0유닛 간격, 가끔 흰·노랑 섞임) + 홀로 핀 꽃. 길 중심 2.2유닛·물·비탈·나무·소품은 피함
     [4.53, 44.55, 'yellow'], [4.65, 44.28, 'yellow'], [4.83, 44.66, 'yellow'], [1.78, 16.08, 'yellow'], [0.18, 34, 'yellow'], [0.29, 34.26, 'yellow'], [0.42, 33.79, 'yellow'], [0.36, 33.41, 'yellow'],
-    [-5.26, 10.22, 'yellow'], [5.26, 2.43, 'yellow'], [5.48, 2.13, 'white'], [7.67, 3.71, 'white'], [6.41, 38.55, 'yellow'], [6.5, 38.86, 'white'], [-7.19, 7.63, 'white'], [-6.99, 7.44, 'white'],
+    [-5.46, 9.99, 'yellow'], [5.26, 2.43, 'yellow'], [5.48, 2.13, 'white'], [7.67, 3.71, 'white'], [6.41, 38.55, 'yellow'], [6.5, 38.86, 'white'], [-7.19, 7.63, 'white'], [-6.99, 7.44, 'white'],
     [-7.13, 7.95, 'white'], [-3.93, 33.79, 'white'], [-3.62, 33.77, 'white'], [5.16, 34.23, 'yellow'], [5.21, 33.8, 'yellow'], [4.99, 33.96, 'white'], [4.67, 34.16, 'yellow'], [12.35, -4.95, 'yellow'],
     [6.02, -7.78, 'yellow'], [6.12, -8.09, 'yellow'], [6.19, -8.36, 'yellow'], [-9.87, 39.43, 'white'], [-10.28, 39.42, 'white'],
   ];
@@ -2071,7 +2113,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
       if (DEBUG) console.log('flower GLB 적용:', flowerNodes.length);
     }).catch((e) => { if (DEBUG) console.warn('flower GLB 로드 실패 — 그림 판 유지', e); }));
   }
-  const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-9.77, -8.59, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
+  const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.87, 9.27, 'red'], [-9.8, 3.2, 'red'], [-9.77, -8.59, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
   const mushNodes = mush.map(([lon, lat, c], i) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
     const node = { mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }; forageNodes.push(node);   // 버섯은 전부 채집 대상
     return { m, c, node, cluster: i % 3 === 1 }; });
@@ -2164,7 +2206,7 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     }).catch((e) => { if (DEBUG) console.warn('reed GLB 로드 실패 — 그림 판 유지', e); }));
   }
   // 돌덩이·유적 조각 — 선착장 자리(다리 남단 서쪽) 3개 + 곳곳. 점프로 윗면(0.7)에 올라설 수 있다
-  const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-2.6, 32.6], [3.0, 23.6], [-7.2, 12.0], [4.6, 7.4], [-6.98, -5.92], [10.2, 21.8],
+  const stones = [[-11.3, 17.7], [-10.6, 17.1], [-11.9, 16.8], [4.0, 43.0], [-4.65, 32.48], [3.0, 23.6], [-7, 12.51], [4.6, 7.4], [-6.98, -5.92], [10.2, 21.8],
     // 2026-10-02 추가 16개: 빈도를 늘리고 가끔은 2~3개가 맞닿은 무리로(세 번째 값 = 크기 배율, 곁돌은 0.6~0.85배). 길 중심 2.8유닛·물·비탈·나무·소품은 피함
     [-6.28, 7.83], [2.75, 29.24], [2.45, 28.61, 0.73], [-11.27, -7.89], [-11.02, -7.29, 0.66], [-11.83, -8.28, 0.69], [2.11, 35.93], [-5.76, -8.62], [4.83, 3.79, 0.7], [12.15, -8.2], [12.42, -8.7, 0.64], [-3.03, 39.64], [12.64, 28.8], [12.93, 28.32, 0.82], [0.46, 4.39], [6.89, 14.27]];
   const stoneSprites = [];
@@ -2564,7 +2606,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
 }
 addProp(signTex, 1.3, 1.75, -0.7, 4.8);         // 들판 길 초입(크레이터 방향 안내) — 2026-10-02 착륙 언덕 계단 아래
 addProp(lanternTex, 1.1, 1.5, -3.3, -3.4);       // 데크 경사로 입구 — 2026-10-02 데크와 함께 이동
-addProp(signTex, 1.3, 1.75, 1.8, 39.0);         // 관측소 초원 갈림길(출구 지선 안내)
+addProp(signTex, 1.3, 1.75, 1.43, 38.35);         // 관측소 초원 갈림길(출구 지선 안내)
 // 관측소 둥근 터: 선돌 3기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6). 추기 #3: 고리 한가운데가 별 받침대
 const standingStones = [addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)];
 standingStones.forEach(m => { addClimb(m.userData.dir, 0.5, 1.6); m.userData.climb = climbProps[climbProps.length - 1]; });
@@ -2600,8 +2642,8 @@ standingStones.forEach(m => { addClimb(m.userData.dir, 0.5, 1.6); m.userData.cli
 }
 // 야영지(다리 북쪽 갈림길): 텐트·가마솥·상자 — 상자는 점프 한 번으로 올라설 수 있다(0.9)
 const tentProp = addProp(tentTex, 4.4, 4.4, -5.8, 31.4);   // 작업 D: 텐트 앞 F로 휴식(기력 회복)
-addProp(cauldronTex, 1.2, 1.2, -4.0, 30.7);
-const campCrates = [addProp(crateTex, 1.0, 1.0, -6.9, 30.8), addProp(crateTex, 0.9, 0.9, -7.5, 30.1), addProp(crateTex, 0.9, 0.9, -2.4, 31.5)];   // 추기 #5: 크레이터 지선을 비켜 텐트 서쪽으로   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
+addProp(cauldronTex, 1.2, 1.2, -3.14, 29.66);   // 2026-10-03: 넓어진 흙길에서 비켜 옮김
+const campCrates = [addProp(crateTex, 1.0, 1.0, -6.9, 30.8), addProp(crateTex, 0.9, 0.9, -7.9, 31.8), addProp(crateTex, 0.9, 0.9, -1.92, 30.92)];   // 추기 #5: 크레이터 지선을 비켜 텐트 서쪽으로   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
 campCrates.forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
 addProp(lanternTex, 1.1, 1.5, -3.0, 28.7);        // 다리 북단
 // 소·밭 — 야영지 동쪽. 근접 판정 반경(각 1.6)이 겹치지 않게 띄운다
@@ -2611,8 +2653,8 @@ let farmStage = 0, farmTimer = 0;   // 0=빈 밭, 1=자라는 중, 2=수확 가�
 // 다리 남단 돌 아치 (가운데가 비어 캐릭터가 지나간다)
 addProp(archTex, 5.6, 4.9, -3.9, 16.0);
 // 크레이터 지선 초입 표지판·서쪽 지선 끝 표지판
-addProp(signTex, 1.3, 1.75, -8.2, 28.9);
-addProp(signTex, 1.3, 1.75, -12.2, 10.2);
+addProp(signTex, 1.3, 1.75, -8.87, 28.57);
+addProp(signTex, 1.3, 1.75, -12.12, 11.35);
 // 떨어진 별 조각 3개(크레이터 동쪽·서쪽 지선 끝·호수 남쪽 길가)와 관측소 선돌 고리 한가운데 별 받침대 (추기 #3)
 addProp(starTex, 1.9, 1.9, -11.2, 32.4);   // 추기 #5: 크레이터 안
 addProp(starTex, 1.9, 1.9, -8.2, 36.4);    // 크레이터 북동쪽 언덕
@@ -2744,7 +2786,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
       if (T.landStairs.dist(dir, _o) < 1.6 && _o.inside) continue;
       const sh = pathShape(dir), sgn = Math.sign(right.dot(seg.n)) || 1;   // 2026-10-02: 길 폭·굽이(pathShape)를 따라 가장자리에
       for (const side of [-1, 1]) {
-        const p = dir.clone().addScaledVector(right, (side * (0.72 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();
+        const p = dir.clone().addScaledVector(right, (side * (0.84 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();   // 2026-10-03: 넓어진 흙길 가장자리(0.72 → 0.84)
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
         slots.push({ p, h });
       }
@@ -2914,9 +2956,9 @@ function log(text, cls = '') {
 
 // NPC 3 — 좌표 직접 배치 (§8). 대사는 buildDialog()가 행성/일반 퀘스트 상태에 따라 고른다(작업 E)
 const NPCS = [
-  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -3.4, lat: -0.9, lift: 0.78,   // 2026-10-02: 데크와 함께 언덕 꼭대기(평평한 곳)로 이동(옛 -10.6, -5.4)
+  { id: 'sailor', name: '항해사 미르', kind: 'sailor', lon: -4.44, lat: -0.41, lift: 0.78,   // 2026-10-02: 데크와 함께 언덕 꼭대기(평평한 곳)로 이동(옛 -10.6, -5.4)
     idle: '비행정 정비 중이야. 다음 섬은 준비되면 알려줄게.' },
-  { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -4.5, lat: 29.8, lift: 0,
+  { id: 'keeper', name: '야영지 지기 도토', kind: 'keeper', lon: -5.41, lat: 28.19, lift: 0,
     idle: '오늘 국엔 슬라임 젤리를 넣어볼까 해.' },
   { id: 'knight', name: '수문장 벨라', kind: 'knight', lon: 5.2, lat: 14.65, lift: 0,   // 샘물과 함께 이동(추기 #3), 물가에서 한 발 물러섬(추기 #12)
     idle: '이 근방 슬라임들, 방심하면 안 돼.' },
