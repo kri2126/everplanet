@@ -2699,6 +2699,28 @@ const deck = (() => {
   { const [dl, dla] = designLonLat(T.deck); place(g, dl, dla, Math.PI); } scene.add(g);   // 추기 #4: T.deck 자리, 경사로가 서쪽을 보게 180° 돌림
   return g;
 })();
+// 2026-10-03: 착륙 데크를 3D 모델(assets/models/landing_deck.glb, 사용자 제작)로 교체 — 밝은 나무 팔각 단 + 난간(비행선 쪽 북동 두 변만 트임) + 서쪽 6단 계단.
+// 모델은 위 데크 그룹과 같은 로컬 좌표(원점 = 데크 가운데 땅, 윗면 1.2, 반경 3.53, 계단 = +X 쪽 길이 3.46·폭 2.2 = 경사로 자리)로 만들어 그룹에 그대로 넣는다.
+// 걷는 판정(DECK_TOP·T.ramp)은 그대로 — 계단은 경사로처럼 오르내린다. 못 읽으면 기존 데크 유지.
+trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then((gl) => {
+  const m = gl.scene;
+  const olT = { value: 0.025 }, ols = new Map();
+  const olMat = (hex) => { if (ols.has(hex)) return ols.get(hex);
+    const om = new THREE.MeshBasicMaterial({ color: hex, side: THREE.BackSide, fog: true });
+    om.onBeforeCompile = (sh) => { sh.uniforms.olT = olT; sh.vertexShader = 'uniform float olT;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed += normalize(normal) * olT;'); };
+    om.customProgramCacheKey = () => 'deckOutline'; ols.set(hex, om); return om; };
+  const outlined = [];
+  m.traverse((o) => { if (!o.isMesh) return;
+    const c = o.material.color ? o.material.color.clone() : new THREE.Color(1, 1, 1);
+    o.material = toon(c, { emissive: c.clone().multiplyScalar(0.35) }); o.castShadow = true; o.receiveShadow = true;   // 살짝 자체 발광: 땅빛(초록)에 물들지 않고 밝은 나무색 유지
+    o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox, sz = b.getSize(new THREE.Vector3());
+    if (Math.min(sz.x, sz.y, sz.z) > 0.06 || sz.y > 0.5) outlined.push([o, c]);   // 얇은 널 줄·못·널빤지 틈은 외곽선 없음
+  });
+  for (const [o, c] of outlined) { const ol = new THREE.Mesh(o.geometry, olMat(darken(c.getHex(), 0.45))); ol.castShadow = false; o.add(ol); }
+  for (const ch of deck.children.slice()) deck.remove(ch);   // 옛 팔각 몸통·판자 줄·난간 기둥·경사로
+  deck.add(m);
+  if (DEBUG) console.log('landing_deck GLB 적용');
+}).catch((e) => { if (DEBUG) console.warn('landing_deck GLB 로드 실패 — 기존 데크 유지', e); }));
 
 // 길가 말뚝 울타리(인스턴싱) + 바닥 셰브론
 {
