@@ -2072,8 +2072,42 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     }).catch((e) => { if (DEBUG) console.warn('flower GLB 로드 실패 — 그림 판 유지', e); }));
   }
   const mush = [[-11.2, 37.6, 'red'], [-10.4, 38.4, 'red'], [-13.4, 31.6, 'red'], [-11.6, 11.6, 'red'], [-12.6, 9.4, 'red'], [-9.8, 3.2, 'red'], [-9.77, -8.59, 'red'], [10.4, -3.4, 'red'], [-4.2, 43.8, 'blue'], [1.0, 44.6, 'blue'], [7.8, 44.0, 'blue']];
-  mush.forEach(([lon, lat, c]) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
-    forageNodes.push({ mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }); });   // 버섯은 전부 채집 대상
+  const mushNodes = mush.map(([lon, lat, c], i) => { const m = placeSprite(makeBillboard(mushTex[c], 0.8, 0.9, { shadow: false }), lon, lat); scene.add(m); decor.push(m);
+    const node = { mesh: m, dir: m.userData.dir, kind: 'mush', avail: true, cd: 0 }; forageNodes.push(node);   // 버섯은 전부 채집 대상
+    return { m, c, node, cluster: i % 3 === 1 }; });
+  // 로드맵 9 (2026-10-03): 버섯을 그림 판 → 3D 모델(assets/models/mushroom_red·blue(.glb), 무리는 *_cluster.glb, 사용자 제작)로. 못 읽으면 그림 판 유지.
+  // 세 자리 중 한 곳(i % 3 === 1)은 2~3송이 무리 모델. 조각은 재질 색 → 정점 색으로 한 덩어리로 합쳐 버섯 하나 = 그리기 1번.
+  // 키 약 0.95(그림 판 0.9와 비슷), 방향은 자리마다 다르게. 채집 노드의 mesh를 3D 버섯으로 바꿔 끼운다(채집하면 숨고 120초 뒤 다시 보임).
+  {
+    const loader = new GLTFLoader(), names = ['mushroom_red', 'mushroom_blue', 'mushroom_red_cluster', 'mushroom_blue_cluster'];
+    const build = (gl) => {
+      const root = gl.scene; root.updateMatrixWorld(true); const geos = [];
+      root.traverse((o) => { if (!o.isMesh) return;
+        const g = o.geometry.clone().applyMatrix4(o.matrixWorld), n = g.getAttribute('position').count, col = new Float32Array(n * 3), cc = o.material.color || new THREE.Color(1, 1, 1);
+        for (let j = 0; j < n; j++) { col[j * 3] = cc.r; col[j * 3 + 1] = cc.g; col[j * 3 + 2] = cc.b; }
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+        if (!g.getAttribute('normal')) g.computeVertexNormals();
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3)); geos.push(g); });
+      const list = geos.every((g) => g.index) ? geos : geos.map((g) => (g.index ? g.toNonIndexed() : g));
+      const geo = mergeGeometries(list, false); geo.computeBoundingBox();
+      const bb = geo.boundingBox, ctr = bb.getCenter(new THREE.Vector3()); geo.translate(-ctr.x, -bb.min.y, -ctr.z);
+      return { geo, h: bb.max.y - bb.min.y };
+    };
+    Promise.all(names.map((n) => loader.loadAsync(ASSET_DIR + 'models/' + n + '.glb'))).then((gls) => {
+      const types = {}; names.forEach((n, i) => { types[n] = build(gls[i]); });
+      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, fog: true }), _y = new THREE.Vector3(0, 1, 0);
+      mushNodes.forEach(({ m, c, node, cluster }, i) => {
+        const tp = types['mushroom_' + c + (cluster ? '_cluster' : '')], k = 0.95 / tp.h * (0.9 + 0.2 * ((i * 7) % 5) / 4);
+        const me = new THREE.Mesh(tp.geo, mat); me.scale.setScalar(k); me.castShadow = true; me.receiveShadow = false;
+        me.position.copy(m.userData.dir).multiplyScalar(R + terrainH(m.userData.dir) - 0.02);
+        me.quaternion.setFromUnitVectors(_y, m.userData.dir).multiply(new THREE.Quaternion().setFromAxisAngle(_y, (i * 2.399) % (Math.PI * 2)));
+        me.userData.dir = m.userData.dir; me.visible = m.visible; scene.add(me);
+        node.mesh = me;
+        scene.remove(m); const di = decor.indexOf(m); if (di >= 0) decor.splice(di, 1);
+      });
+      if (DEBUG) console.log('mushroom GLB 적용:', mushNodes.length);
+    }).catch((e) => { if (DEBUG) console.warn('mushroom GLB 로드 실패 — 그림 판 유지', e); });
+  }
   // 갈대 — 호수 양안·샘물 둘레·섬 물가
   // 2026-10-02: 갈대는 물가에만 — 호수·섬·샘물 둘레의 마른 물가(수면보다 0~0.9 높고 0.5° 안에 물이 있는 자리)만 훑어,
   // 모래길·다리·계단·폭포 앞을 피하고 나무·소품과 떨어지게 고른 자리(다른 구역엔 없음).
