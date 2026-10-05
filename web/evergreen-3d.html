@@ -2789,8 +2789,16 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
       if (T.stairs.dist(dir, _o) < 1.6 && _o.inside) continue;
       if (T.landStairs.dist(dir, _o) < 1.6 && _o.inside) continue;
       const sh = pathShape(dir), sgn = Math.sign(right.dot(seg.n)) || 1;   // 2026-10-02: 길 폭·굽이(pathShape)를 따라 가장자리에
+      // 2026-10-06: 길과 안 맞는 울타리 수정 — 폭·굽이를 길 중심 한 점이 아니라 말뚝 자리마다 다시 재서(흙길 그림과 같은 식)
+      // 흙이 끝나는 선(0.9w) 바로 바깥 풀 쪽에 세우고, 다른 길(갈림길·지선)의 흙 위에 놓이는 말뚝은 빼서 갈림길 입구를 터 준다.
       for (const side of [-1, 1]) {
-        const p = dir.clone().addScaledVector(right, (side * (0.84 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();   // 2026-10-03: 넓어진 흙길 가장자리(0.72 → 0.84)
+        let p = null;
+        for (let x = 0.3; x < 4.5; x += 0.04) {
+          const q = dir.clone().addScaledVector(right, side * x * sgn * DEG).normalize(), qs = pathShape(q);
+          const d = Math.abs(Math.asin(Math.max(-1, Math.min(1, q.dot(seg.n)))) / DEG + qs.wig);
+          if (d >= 0.9 * qs.w + 0.12) { p = q; break; }
+        }
+        if (!p || pathMask(p) > 0.02) continue;
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
         slots.push({ p, h, key: mainPaths.indexOf(seg) + ':' + side, i });
       }
