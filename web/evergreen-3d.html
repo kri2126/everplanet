@@ -425,7 +425,7 @@ const BGM_SCALE = 0.18;   // 배경음악 실제 크기 = 설정값/100 × 0.18 
 function settingsDefaults() {
   const binds = {}; for (const a of ACTIONS) binds[a.id] = a.def.slice();
   return { v: 1, binds,
-    audio: { master: 80, bgm: 50, sfx: 80, mute: false, bgmOn: true, bgmV4: true },   // 2026-10-02: 배경음악 기본 50 — 실제 크기는 BGM_SCALE로 줄여, 50에서 예전 9와 같은 소리(효과음에 비해 너무 컸음)
+    audio: { master: 80, bgm: 50, sfx: 80, mute: false, bgmOn: true, bgmV4: true, battle: true, duck: true },   // 작업 C-1(2026-10-05): 전투 음악, 지도·창 열면 줄이기   // 2026-10-02: 배경음악 기본 50 — 실제 크기는 BGM_SCALE로 줄여, 50에서 예전 9와 같은 소리(효과음에 비해 너무 컸음)
     display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day' },
     map: { mini: true, zoom: 1, fog: false, labels: true },
     cheat: { speed: 1 } };   // 2026-10-02 치트(테스트용): 이동 속도 배율 1.0~5.0
@@ -440,7 +440,7 @@ function settingsMigrate(o) {
   }
   const num = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, Math.round(v))) : def;
   const bool = (v, def) => typeof v === 'boolean' ? v : def;
-  if (o.audio) { d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
+  if (o.audio) { d.audio.battle = bool(o.audio.battle, true); d.audio.duck = bool(o.audio.duck, true); d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
   if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; }
   if (o.audio && !o.audio.bgmV4 && ((!o.audio.bgmV2 && !o.audio.bgmV3 && d.audio.bgm === 60) || (o.audio.bgmV2 && d.audio.bgm === 30) || (o.audio.bgmV3 && d.audio.bgm === 9))) d.audio.bgm = 50;   // 예전 기본값(60·30·9) 그대로 저장된 설정은 새 기본값(50)으로 — 직접 바꾼 값은 그대로
   if (o.cheat && typeof o.cheat.speed === 'number' && isFinite(o.cheat.speed)) d.cheat.speed = Math.max(1, Math.min(5, Math.round(o.cheat.speed * 10) / 10));
@@ -3685,6 +3685,7 @@ const slash = makeBillboard(slashTex, 1.6, 1.2, { shadow: false }); slash.visibl
 let attackT = 0, slashT = 0;
 const dmgPops = [];
 function dealDamage(s, dmg, kind = 'basic') {
+  bgm.hitT = 2;   // 작업 C-1: 때리면 전투 음악
   s.hp -= dmg; s.hopT = Math.PI * 0.5; s.flashT = 0.14;
   const el = makeLabel('dmg' + (kind === 'skill' ? ' skill' : ''), String(dmg)); dmgPops.push({ el, pos: s.mesh.position.clone(), dir: s.dir.clone(), t: 0 });   // 작업 H: 기본 노랑 / 스킬 주황 1.3배
   _sd.copy(s.dir).sub(_up); tangentize(_sd, _up);   // 넉백
@@ -4205,6 +4206,7 @@ const hpNumEl = document.getElementById('hpNum'), mpNumEl = document.getElementB
 const vignetteEl = document.getElementById('vignette'), deathFadeEl = document.getElementById('deathFade');
 function updateHUD() { hpNumEl.textContent = Math.round(player.hp); mpNumEl.textContent = Math.round(player.mp); }
 function hitPlayer(dmg, fromDir) {
+  bgm.hitT = 2;   // 작업 C-1: 맞으면 전투 음악
   if (player.dead || portalTransit.on) return;   // 작업 G: 포탈 이동 중 무적
   player.hp = Math.max(0, player.hp - dmg); player.hurtT = 0;
   if (player.hp > 0) heroOnce('hit', 1.2);   // 3D 주인공 피격 모션
@@ -4344,7 +4346,69 @@ function sfxPreview() {
 
 // ── 브금(BGM) — web/audio/bgm_main.mp3 을 반복 재생. 브라우저 자동재생 규칙 때문에 첫 키 입력/클릭 때 시작한다.
 // B 키(또는 오른쪽 아래 ♪ 단추)로 켜고 끄며 localStorage('ep_bgm')에 기억. 탭을 내리면 멈췄다가 돌아오면 이어서. ?nobgm 으로 끔.
-const bgm = { el: null, on: true, started: false, vol: 1, fadeT: 0, fade: 0 };   // 작업 S3: fade는 0~1(켜고 끌 때 서서히), 실제 크기는 bgmGain·master가 정한다
+const bgm = { el: null, on: true, started: false, vol: 1, fadeT: 0, fade: 0, mode: 'field', battleT: 0, duck: 1, trackFade: 0 };   // 작업 S3: fade는 0~1(켜고 끌 때 서서히), 실제 크기는 bgmGain·master가 정한다
+// ── 작업 C-1(2026-10-05): 곡 사이 교차 전환 + 전투 음악 + 지도·창 열면 줄이기(§3·§14-2 소리 체계)
+// 곡 두 줄기: field(web/audio/bgm_main.mp3, 들판) · battle(web/audio/bgm_battle.mp3 — 파일이 없으면 §11-2의 둘째 안대로 같은 곡 위에 합성 타악기 층만 올린다).
+// 전투 = 살아 있는 몬스터가 4.5 안에 있거나 최근 2초 안에 때리거나 맞음 → 1.2초 교차 페이드로 전투 쪽, 몬스터가 7 밖으로 벗어나고 4초 지나면 들판으로 돌아온다.
+// 지도·설정·가방·스킬·퀘스트·기록 창이 열려 있으면 BGM을 절반으로(0.6초).
+const BGM_X = 1.2;   // 교차 전환 시간(초)
+const bgmBattle = { el: null, file: null, src: null, gain: null, drums: null, drumGain: null, next: 0, timer: 0 };   // file: null(모름) / true / false
+function bgmBattleEl() {
+  if (bgmBattle.el || bgmBattle.file === false) return bgmBattle.el;
+  const a = new Audio('audio/bgm_battle.mp3'); a.loop = true; a.preload = 'auto'; a.volume = 0;
+  a.addEventListener('error', () => { bgmBattle.file = false; bgmBattle.el = null; if (DEBUG) console.log('bgm_battle.mp3 없음 — 타악기 층으로'); if (bgm.mode === 'battle' && bgm.on && bgm.started) drumsOn(true); }, { once: true });
+  a.addEventListener('canplay', () => { bgmBattle.file = true; if (bgm.mode === 'battle' && bgm.on && bgm.started && bgmBattle.gain) { const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); bgmBattle.gain.gain.setTargetAtTime(1, audio.ctx.currentTime, 0.4); drumsOn(false); } }, { once: true });
+  const c = audioCtx();
+  if (c) { try { bgmBattle.src = c.createMediaElementSource(a); bgmBattle.gain = c.createGain(); bgmBattle.gain.gain.value = 0; bgmBattle.src.connect(bgmBattle.gain); bgmBattle.gain.connect(audio.bgm); } catch (e) { bgmBattle.src = null; } }
+  bgmBattle.el = a; return a;
+}
+// 합성 타악기 층(파일이 없을 때): 북(저음)·스네어(잡음)·하이햇(짧은 잡음)을 112BPM 8분음표 격자로 미리 예약(0.25초 앞)
+function drumsTick() {
+  const c = audio.ctx; if (!c || !bgmBattle.drums) return;
+  const spb = 60 / 112 / 2;   // 8분음표 길이
+  while (bgmBattle.next < c.currentTime + 0.3) {
+    const t = bgmBattle.next, i = bgmBattle.timer % 8; bgmBattle.timer++; bgmBattle.next += spb;
+    if (i % 4 === 0) { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.12); g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22); o.connect(g); g.connect(bgmBattle.drumGain); o.start(t); o.stop(t + 0.24); }
+    if (i === 2 || i === 6 || (i === 7 && bgmBattle.timer % 32 > 24)) { const n = c.createBufferSource(); n.buffer = bgmBattle.noise; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.7; const g = c.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.16); n.connect(f); f.connect(g); g.connect(bgmBattle.drumGain); n.start(t); n.stop(t + 0.18); }
+    { const n = c.createBufferSource(); n.buffer = bgmBattle.noise; const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000; const g = c.createGain(); g.gain.setValueAtTime(i % 2 ? 0.12 : 0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05); n.connect(f); f.connect(g); g.connect(bgmBattle.drumGain); n.start(t); n.stop(t + 0.06); }
+  }
+}
+function drumsOn(on) {
+  const c = audio.ctx; if (!c) return;
+  if (!bgmBattle.drumGain) {
+    bgmBattle.drumGain = c.createGain(); bgmBattle.drumGain.gain.value = 0; bgmBattle.drumGain.connect(audio.bgm);
+    const len = Math.floor(c.sampleRate * 0.25), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; bgmBattle.noise = buf;
+  }
+  const g = bgmBattle.drumGain.gain, t = c.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(on ? 0.55 : 0, t + BGM_X);
+  if (on && !bgmBattle.drums) { bgmBattle.next = c.currentTime + 0.05; bgmBattle.timer = 0; bgmBattle.drums = setInterval(drumsTick, 100); drumsTick(); }
+  if (!on && bgmBattle.drums) { const id = bgmBattle.drums; setTimeout(() => { if (bgmBattle.drums === id) { clearInterval(id); bgmBattle.drums = null; } }, BGM_X * 1000 + 100); }
+}
+function bgmSetMode(mode) {   // 'field' | 'battle' — 들판 곡은 늘 재생(전투 파일이 있으면 교차, 없으면 그 위에 타악기)
+  if (bgm.mode === mode) return; bgm.mode = mode;
+  if (!bgm.on || !bgm.started) return;
+  const toBattle = mode === 'battle';
+  if (bgmBattle.file !== false) { const b = bgmBattleEl(); if (b && toBattle) { const pr = b.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+  if (bgmBattle.file === null) { drumsOn(toBattle); return; }   // 파일이 있는지 아직 모르면 우선 타악기(파일이 오면 canplay가 바꾼다)
+  if (bgmBattle.file === true && bgmBattle.gain) {   // 파일 교차 전환: 전투 줄기 gain ↔ 들판 요소(fade는 bgmApplyVolume에서 trackFade로)
+    const c = audio.ctx, g = bgmBattle.gain.gain, t = c.currentTime; g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(toBattle ? 1 : 0, t + BGM_X);
+    if (!toBattle) setTimeout(() => { if (bgm.mode === 'field' && bgmBattle.el) bgmBattle.el.pause(); }, BGM_X * 1000 + 100);
+  } else drumsOn(toBattle);
+}
+function bgmUpdate(dt) {   // 매 프레임: 전투 판정 + 줄이기 + 들판 곡의 교차 페이드 값
+  if (!settings.audio.battle) { bgm.battleT = 0; if (bgm.mode !== 'field') bgmSetMode('field'); }
+  else {
+    let near = false;
+    if (!player.dead && !cut.on && !gate.on) for (const m of allMonsters()) { if (!m.alive) continue; const d = angDeg(m.dir, _up) * DEG * R; if (d < 4.5 || (bgm.mode === 'battle' && d < 7)) { near = true; break; } }
+    if (near || bgm.hitT > 0) bgm.battleT = 4; else bgm.battleT = Math.max(0, bgm.battleT - dt);
+    bgm.hitT = Math.max(0, (bgm.hitT || 0) - dt);
+    bgmSetMode(bgm.battleT > 0 ? 'battle' : 'field');
+  }
+  const duckTo = settings.audio.duck && (mapView || settingsOpen || invOpen || skillWinOpen || questWinOpen || charWinOpen) ? 0.5 : 1;
+  bgm.duck += (duckTo - bgm.duck) * Math.min(1, dt / 0.6 * 3);
+  const tf = bgm.mode === 'battle' && bgmBattle.file === true ? 0 : 1;   // 들판 곡: 전투 파일로 넘어가면 0으로
+  bgm.trackFade += (tf - bgm.trackFade) * Math.min(1, dt / BGM_X * 2);
+  if (bgm.el) bgmApplyVolume();
+}
 try { const old = localStorage.getItem('ep_bgm'); if (old !== null) { settings.audio.bgmOn = old !== '0'; localStorage.removeItem('ep_bgm'); saveSettings(); } } catch (e) {}   // 옛 낱개 키를 설정으로 옮김
 bgm.on = settings.audio.bgmOn;
 if (QP.has('nobgm')) bgm.on = false;
@@ -4361,14 +4425,16 @@ function bgmEl() {
 function bgmApplyVolume() {
   if (!bgm.el) return;
   const A = settings.audio, direct = audio.bgmSrc ? 1 : (A.mute ? 0 : (A.master / 100) * (A.bgm / 100) * BGM_SCALE);
-  bgm.el.volume = Math.max(0, Math.min(1, bgm.fade * direct));
+  bgm.el.volume = Math.max(0, Math.min(1, bgm.fade * direct * bgm.duck * (0.15 + 0.85 * bgm.trackFade)));   // 작업 C-1: 줄이기·교차 페이드(들판 곡은 전투 파일 밑에 15% 남김)
+  if (bgmBattle.el) bgmBattle.el.volume = Math.max(0, Math.min(1, bgm.fade * direct * bgm.duck));
 }
 function bgmFadeTo(target, sec) {
   bgmEl(); const from = bgm.fade, t0 = performance.now(), id = ++bgm.fadeT;
   const step = () => { if (id !== bgm.fadeT) return; const k = Math.min(1, (performance.now() - t0) / (sec * 1000)); bgm.fade = from + (target - from) * k; bgmApplyVolume(); if (k < 1) requestAnimationFrame(step); else if (target === 0) bgm.el.pause(); };
   step();
 }
-function bgmPlay() { if (!bgm.on || document.hidden) return; const a = bgmEl(); const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); bgm.started = true; bgmFadeTo(bgm.vol, 1.5); }
+function bgmPlay() { if (!bgm.on || document.hidden) return; const a = bgmEl(); const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); bgm.started = true; bgmFadeTo(bgm.vol, 1.5); bgmBattleEl();   // 작업 C-1: 전투 곡 파일도 미리 받아 둔다(있는지도 이때 안다)
+  if (bgm.mode === 'battle') { const m = bgm.mode; bgm.mode = 'field'; bgmSetMode(m); } }
 function bgmUpdateBtn() { bgmBtn.classList.toggle('off', !bgm.on); bgmBtn.classList.toggle('muted', !!settings.audio.mute); bgmBtn.textContent = settings.audio.mute ? '♪ 음소거' : '♪ BGM'; }
 function toggleBgm() {
   bgm.on = !bgm.on; settings.audio.bgmOn = bgm.on; saveSettings();   // 작업 S3: 설정(ep.settings.v1)에 기억
@@ -4802,6 +4868,8 @@ SET_PANES.sound = (pane) => {
   pane.appendChild(setRow('효과음', '발소리 등', setSlider(() => A.sfx, ch('sfx'))));
   pane.appendChild(setRow(`음소거 (${keyLabel('mute')})`, '음량 값은 그대로 두고 소리만 끔', setToggle(A.mute, () => { toggleMute(); renderSettings(); }, '음소거', '끔')));
   pane.appendChild(setRow(`배경 음악 켜기/끄기 (${keyLabel('bgm')})`, '', setToggle(bgm.on, () => { toggleBgm(); renderSettings(); })));
+  pane.appendChild(setRow('전투 음악', '몬스터가 가까이 오거나 싸우면 전투 곡으로 바뀜(곡 파일이 없으면 타악기만 더해짐)', setToggle(settings.audio.battle, () => { settings.audio.battle = !settings.audio.battle; saveSettings(); renderSettings(); })));   // 작업 C-1
+  pane.appendChild(setRow('지도·창을 열면 음악 줄이기', '지도·설정·가방·스킬·퀘스트·기록 창이 열린 동안 절반으로', setToggle(settings.audio.duck, () => { settings.audio.duck = !settings.audio.duck; saveSettings(); renderSettings(); })));
   pane.appendChild(setRow('효과음 미리 듣기', '지금 음량으로 짧게', setButton('▶ 듣기', () => { sfxPreview(); setTimeout(renderSettings, 120); }, 'ghost')));
   const n = document.createElement('div'); n.className = 'note'; n.textContent = '음량은 이 브라우저에 기억돼요. 효과음은 지금 풀 밟는 발소리 하나뿐 — 나머지는 로드맵 9 작업 C에서 늘어납니다.'; pane.appendChild(n);
 };
@@ -5236,6 +5304,7 @@ function step(dt) {
   // 헤엄 물소리: 물속에서 움직일 때만. 깊이에 따라 크기 — 헤엄칠 만큼 깊으면 100%, 얕은 물은 발목 15% → 헤엄 직전 85%
   { const depth = wl - th, sh = Math.min(1, Math.max(0, (depth + 0.25) / 1.45));
     const wading = !onStructure && depth > -0.25 && player.z < wl + 0.6;   // 얕은 물: 발이 물에 잠겨 있고 점프로 높이 뜨지 않았을 때(땅에 닿았는지는 안 봄 — 비탈을 내려갈 때 끊기지 않게)
+    bgmUpdate(dt);   // 작업 C-1: 전투 음악·줄이기
     swimSoundUpdate((player.swimming || wading) && player.moving && !player.dead, player.swimming ? 1 : 0.15 + 0.7 * Math.pow(sh, 1.3)); }
   // 캐릭터 스프라이트: 진행 방향에 따라 뒤/앞/옆 그림, 걷는 동안 2프레임 교대
   player.mesh.position.copy(player.pos);
@@ -6040,7 +6109,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
-    terrainH, walkH, padTopAt, plantSway, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, bgmBattle, bgmSetMode, bgmUpdate, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
