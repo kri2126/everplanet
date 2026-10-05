@@ -2792,7 +2792,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
       for (const side of [-1, 1]) {
         const p = dir.clone().addScaledVector(right, (side * (0.84 * sh.w + 0.04) - sh.wig) * sgn * DEG).normalize();   // 2026-10-03: 넓어진 흙길 가장자리(0.72 → 0.84)
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
-        slots.push({ p, h });
+        slots.push({ p, h, key: mainPaths.indexOf(seg) + ':' + side, i });
       }
       if (i % 3 === 0) {
         const cdir = dir.clone().addScaledVector(right, -sh.wig * sgn * DEG).normalize();   // 굽이친 중심선 위에
@@ -2809,6 +2809,54 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
     fences.setMatrixAt(i, o.matrix);
   });
   fences.instanceMatrix.needsUpdate = true; scene.add(fences);
+  // 2026-10-06: 그림 판 말뚝 → 3D 길 울타리(assets/models/fence/fence_post.glb · fence_segment.glb, 사용자 제작). 자리(slots)는 그대로,
+  // 말뚝은 키(0.6~0.85)·방향·기울기를 조금씩 다르게, 같은 길·같은 쪽에서 바로 이웃한 말뚝끼리 가로대(fence_segment의 가로대 조각)로 잇는다.
+  // 조각은 정점 색으로 합쳐 InstancedMesh(+ 외곽선)로 그린다(그리기 4번). 못 읽으면 그림 판 말뚝 유지.
+  trackLoad(Promise.all(['fence_post', 'fence_segment'].map((n) => new GLTFLoader().loadAsync(ASSET_DIR + 'models/fence/' + n + '.glb').catch(() => new GLTFLoader().loadAsync(n + '.glb')))).then(([postGl, segGl]) => {
+    const mergeOf = (root, pick) => { root.updateMatrixWorld(true); const list = [];
+      root.traverse((o) => { if (!o.isMesh || !pick(o)) return;
+        const gg = o.geometry.clone().applyMatrix4(o.matrixWorld); for (const k of Object.keys(gg.attributes)) if (!['position', 'normal'].includes(k)) gg.deleteAttribute(k);
+        const ng = gg.index ? gg.toNonIndexed() : gg, n = ng.getAttribute('position').count, col = new Float32Array(n * 3);
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (let i = 0; i < n; i++) { const gi = (ng.groups || []).find((G) => i >= G.start && i < G.start + G.count); const c = (mats[gi ? gi.materialIndex : 0] || mats[0]).color || new THREE.Color(1, 1, 1); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+        ng.clearGroups(); ng.setAttribute('color', new THREE.BufferAttribute(col, 3)); list.push(ng); });
+      return mergeGeometries(list, false); };
+    const postGeo = mergeOf(postGl.scene, () => true);
+    let railGeo = null; segGl.scene.traverse((o) => { if (o.isMesh && o.name.startsWith('fence_rail') && !railGeo) railGeo = o; });
+    railGeo = mergeOf(railGeo.parent, (o) => o.name.startsWith('fence_rail'));
+    railGeo.computeBoundingBox(); const rb = railGeo.boundingBox, L0 = rb.max.x - rb.min.x, rc = rb.getCenter(new THREE.Vector3());
+    railGeo.translate(-rc.x, -rc.y, -rc.z);   // 가로대 조각: 가운데 원점, 길이 L0 → 인스턴스마다 x로 늘림
+    const mat = toon(0xffffff, { vertexColors: true, emissive: new THREE.Color(0x3a2a1a) });
+    const olM = new THREE.MeshBasicMaterial({ color: 0x4a2e14, side: THREE.BackSide, fog: true });
+    olM.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed += normalize(normal) * 0.025;'); };
+    olM.customProgramCacheKey = () => 'fenceOutline';
+    const hash = (k) => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5; return x - Math.floor(x); };
+    const o = new THREE.Object3D(), _u = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3(), _m = new THREE.Matrix4(), tops = [], postMats = [];
+    postGeo.computeBoundingBox(); const PH = postGeo.boundingBox.max.y;   // 모델 말뚝 키(0.75)
+    slots.forEach(({ p, h }, i) => {
+      const ph = 0.6 + hash(i) * 0.25;
+      _u.copy(p); _f.set(0, 1, 0); tangentize(_f, _u); _r.crossVectors(_u, _f).normalize();   // 오른손 좌표(x = 위×앞)
+      o.position.copy(p).multiplyScalar(R + h - 0.05); o.quaternion.setFromRotationMatrix(_m.makeBasis(_r, _u, _f)); o.scale.set(1, 1, 1);
+      o.rotateY((hash(i + 50) - 0.5) * 0.6); o.rotateX((hash(i + 90) - 0.5) * 0.1); o.rotateZ((hash(i + 130) - 0.5) * 0.1);   // 살짝 삐뚤게
+      o.scale.set(1, ph / PH, 1); o.updateMatrix(); postMats.push(o.matrix.clone()); tops[i] = ph;
+    });
+    const pairs = [];
+    for (let k = 1; k < slots.length; k++) for (let j = k - 1; j >= Math.max(0, k - 3); j--) if (slots[j].key === slots[k].key && slots[k].i - slots[j].i === 1) { pairs.push([j, k]); break; }
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), mid = new THREE.Vector3(), dx = new THREE.Vector3(), upv = new THREE.Vector3(), railMats = [];
+    pairs.forEach(([j, k], n) => {
+      const y = Math.min(tops[j], tops[k]) * 0.5;
+      a.copy(slots[j].p).multiplyScalar(R + slots[j].h - 0.05 + y); b.copy(slots[k].p).multiplyScalar(R + slots[k].h - 0.05 + y);
+      mid.copy(a).add(b).multiplyScalar(0.5); dx.subVectors(b, a); const L = dx.length(); dx.normalize();
+      _u.copy(mid).normalize(); _f.crossVectors(dx, _u).normalize(); upv.crossVectors(_f, dx).normalize();
+      o.position.copy(mid); o.quaternion.setFromRotationMatrix(_m.makeBasis(dx, upv, _f)); o.scale.set(1, 1, 1);
+      o.rotateX((hash(n + 300) - 0.5) * 0.12); o.scale.set((L + 0.1) / L0, 1, 1); o.updateMatrix(); railMats.push(o.matrix.clone());
+    });
+    for (const [geo, mats] of [[postGeo, postMats], [railGeo, railMats]]) for (const mm of [mat, olM]) {
+      const im = new THREE.InstancedMesh(geo, mm, mats.length); mats.forEach((x, i) => im.setMatrixAt(i, x)); im.instanceMatrix.needsUpdate = true;
+      im.castShadow = mm === mat; im.frustumCulled = false; scene.add(im); }
+    scene.remove(fences);
+    if (DEBUG) console.log('fence GLB 적용', postMats.length, railMats.length);
+  }).catch((e) => { if (DEBUG) console.warn('fence GLB 로드 실패 — 그림 판 말뚝 유지', e); }));
   const chevMesh = new THREE.InstancedMesh(chevGeo, chevMat, chevs.length);
   chevs.forEach(({ p, q }, i) => { tmpM.compose(p, q, new THREE.Vector3(1, 1, 1)); chevMesh.setMatrixAt(i, tmpM); });
   chevMesh.instanceMatrix.needsUpdate = true; chevMesh.renderOrder = 1; scene.add(chevMesh);
@@ -2857,6 +2905,41 @@ const bridge = (() => {
   scene.add(g);
   return g;
 })();
+// 2026-10-03: 다리 부품을 3D 모델(assets/models/bridge/bridge_plank_A·B, bridge_post, bridge_end.glb, 사용자 제작)로 교체 — 지금 다리를 그대로 이어받아
+// 판자(나뭇결·못·받침보 토막)·기둥(뾰족 캡·밧줄 감김)·끝 디딤돌(둥근 돌판·조약돌)만 바꾼다. 자리·아치·간격은 위에서 만든 그대로(옛 상자의 변환을 그대로 씀).
+// 부품마다 조각을 한 덩어리로 합치고(재질 색 → 정점 색) 같은 부품끼리 InstancedMesh(+ 외곽선)로 그린다. 밧줄은 그대로 두고 외곽선만 더함. 못 읽으면 옛 다리 유지.
+trackLoad(Promise.all(['bridge_plank_A', 'bridge_plank_B', 'bridge_post', 'bridge_end'].map((n) => new GLTFLoader().loadAsync(ASSET_DIR + 'models/bridge/' + n + '.glb').catch(() => new GLTFLoader().loadAsync(n + '.glb')))).then((gls) => {
+  const merged = gls.map((gl) => {
+    const m = gl.scene; m.updateMatrixWorld(true); const list = [];
+    m.traverse((o) => { if (!o.isMesh) return;
+      const gg = o.geometry.clone().applyMatrix4(o.matrixWorld); for (const k of Object.keys(gg.attributes)) if (!['position', 'normal'].includes(k)) gg.deleteAttribute(k);
+      const ng = gg.index ? gg.toNonIndexed() : gg, n = ng.getAttribute('position').count, col = new Float32Array(n * 3), c = o.material.color || new THREE.Color(1, 1, 1);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      ng.setAttribute('color', new THREE.BufferAttribute(col, 3)); list.push(ng); });
+    return mergeGeometries(list, false);
+  });
+  const mat = toon(0xffffff, { vertexColors: true });
+  const olM = new THREE.MeshBasicMaterial({ color: 0x5a3a16, side: THREE.BackSide, fog: true });
+  olM.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed += normalize(normal) * 0.022;'); };
+  olM.customProgramCacheKey = () => 'bridgeOutline';
+  const buckets = [[], [], [], []], keep = [];
+  let plankIdx = 0;
+  bridge.updateMatrixWorld(true);
+  for (const o of bridge.children.slice()) {
+    const pr = o.geometry && o.geometry.parameters;
+    if (o.geometry && o.geometry.type === 'TubeGeometry') { keep.push(o); continue; }
+    if (!pr) continue;
+    const kind = pr.width === 2.6 ? (plankIdx++ % 2 ? 0 : 1) : pr.width === 0.22 ? 2 : pr.width === 3.2 ? 3 : -1;   // 옛 다리: 홀짝으로 밝은/진한 판자 교대
+    if (kind < 0) continue;
+    o.updateMatrix(); const mx = o.matrix.clone(); if (mx.determinant() < 0) mx.multiply(new THREE.Matrix4().makeScale(-1, 1, 1));   // 옛 다리 틀(동·위·북)은 왼손 좌표라 뒤집힘 — InstancedMesh는 자동 보정이 없어 좌우를 한 번 뒤집어 오른손으로
+    buckets[kind].push(mx); bridge.remove(o);
+  }
+  buckets.forEach((mats, k) => { if (!mats.length) return;
+    for (const mm of [mat, olM]) { const im = new THREE.InstancedMesh(merged[k], mm, mats.length); mats.forEach((x, i) => im.setMatrixAt(i, x)); im.instanceMatrix.needsUpdate = true;
+      im.castShadow = mm === mat; im.receiveShadow = mm === mat; im.frustumCulled = false; bridge.add(im); } });
+  for (const r of keep) { const ol = new THREE.Mesh(r.geometry, olM); r.add(ol); }   // 밧줄 외곽선
+  if (DEBUG) console.log('bridge GLB 적용', buckets.map((b) => b.length).join('/'));
+}).catch((e) => { if (DEBUG) console.warn('bridge GLB 로드 실패 — 옛 다리 유지', e); }));
 
 // ── 작업 E·F·G: HUD · NPC · 슬라임 · 퀘스트 · 연출 ─────────────────────────────
 // NPC는 앞(남)을 보고 서 있는 그림 판 하나. kind: sailor(파란 모자) | keeper(앞치마) | knight(갑옷)
