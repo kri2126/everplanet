@@ -23,13 +23,13 @@
   }
   #zoneName small { display: block; text-align: center; font-size: 14px; letter-spacing: .2em; opacity: .85; }
   /* 원형 미니맵(오른쪽 위) — 실제 지형을 위에서 본 렌더를 scissor로 그리고, 그 위에 원형 틀만 덮는다 */
-  #mini { position: fixed; right: 14px; top: 14px; width: 150px; height: 150px; pointer-events: none; }
-  #mini .ring { position: absolute; inset: 0; border-radius: 50%;
-    box-shadow: 0 0 0 5px #c99354, 0 0 0 7px #7a5230, 0 4px 14px rgba(0,0,0,.35), inset 0 0 18px rgba(0,0,0,.35); }
-  #mini canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+  /* 작업 B-2(2026-10-05): 금색 고리 → 헤진 둥근 종이 + 나무 테(캔버스에 그림, miniFrame). 캔버스가 테까지 담도록 170px로 키우고 자리를 10px 당긴다 */
+  #mini { position: fixed; right: 4px; top: 4px; width: 170px; height: 170px; pointer-events: none; }
+  #mini .ring { position: absolute; inset: 10px; border-radius: 50%; box-shadow: 0 6px 16px rgba(0,0,0,.4); }
+  #mini canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   #zonemap .disc canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-  #mini .n { position: absolute; left: 50%; top: -22px; transform: translateX(-50%); font: 700 11px monospace; color: #fdf4de; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
-  #mini .cap { position: absolute; left: 50%; top: 100%; margin-top: 12px; transform: translateX(-50%); white-space: nowrap;
+  #mini .n { display: none; }   /* 작업 B-2: N 글자 → 테 위의 작은 나침반 바늘(캔버스) */
+  #mini .cap { position: absolute; left: 50%; top: 100%; margin-top: 2px; transform: translateX(-50%); white-space: nowrap;
     font-size: 11px; color: #fdf4de; background: rgba(60,40,20,.6); padding: 2px 8px; border-radius: 4px; }
   .pmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%,-50%);
     border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 13px solid #ff8aa0;
@@ -3996,6 +3996,7 @@ function buildSave() {
     farm: { stage: farmStage, timer: Math.round(farmTimer) },
     dew: dewNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))), forage: forageNodes.map(n => n.avail ? 0 : Math.max(1, Math.round(n.cd))),
     tracked: trackedQuest, portalOpen,
+    seen: seenToSave(),   // 작업 B-2: 안 가 본 곳 안개용 방문 칸
     map: 5,   // 로드맵 8: 지도 판. 1(없음)=로드맵 7 배치, 2=원작 지도 배치(북쪽 시작), 3=추기 #3 남→북 진행, 4=추기 #4 확대·남서 시작(저장 좌표가 설계 좌표), 5=추기 #5 크레이터 북서·퀘스트 순서
   };
 }
@@ -4034,6 +4035,7 @@ function applySave(o) {
   (o.dew || []).forEach((cd, i) => { const n = dewNodes[i]; if (!n) return; n.avail = cd <= 0; n.cd = cd; n.mesh.visible = n.avail; });
   (o.forage || []).forEach((cd, i) => { const n = forageNodes[i]; if (!n) return; n.avail = cd <= 0; n.cd = cd; n.mesh.visible = n.avail; });
   trackedQuest = o.tracked && (o.tracked === 'main' || SIDE_QUESTS.some(s => s.id === o.tracked)) ? o.tracked : 'main';
+  seenFromSave(o.seen);   // 작업 B-2
   if (mq.done || o.portalOpen) { pedestalBeam.scale.setScalar(1.6); openPortal(true); }
   // 자리: 저장된 위치의 바닥에 세운다(물속·공중이었으면 안전 지점으로). 로드맵 7 지도의 저장(map 없음)은 위치만 시작 지점으로
   const oldMap = !o.map || o.map < 5;
@@ -4825,7 +4827,8 @@ SET_PANES.map = (pane) => {
   pane.appendChild(setRow(`미니맵 확대 (${keyLabel('miniOut')} ${keyLabel('miniIn')} · 마우스 휠)`, `보이는 범위: 멀리 ±13° · 보통 ±8.5° · 가까이 ±5°`,
     setSeg(MINI_ZOOM.map((z, i) => [i, z.name]), settings.map.zoom, (z) => { setMiniZoom(z, true); renderSettings(); })));   // 작업 B(2026-10-05)
   pane.appendChild(setRow(`지도 이름표 (${keyLabel('map')} 지도)`, '착륙 들판·샘물·나무다리… 이름', setToggle(settings.map.labels, () => { settings.map.labels = !settings.map.labels; saveSettings(); applySettings(); renderSettings(); })));
-  const n = document.createElement('div'); n.className = 'note'; n.textContent = '"안 가 본 곳 가리기"는 지도 마무리(로드맵 9 작업 B)의 다음 단계에서 이 탭에 더해집니다.'; pane.appendChild(n);
+  pane.appendChild(setRow('안 가 본 곳 가리기', `${keyLabel('map')} 지도에서 아직 가까이 가지 않은 곳을 안개로 덮고, 지나간 곳부터 걷힘 (저장 파일에 기억)`, setToggle(settings.map.fog, () => { settings.map.fog = !settings.map.fog; saveSettings(); renderSettings(); })));   // 작업 B-2(2026-10-05)
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '추적 중인 퀘스트 목표는 미니맵·지도에 노란 깃발로, 포탈이 열리면 지도에 초록 점선 길로 보입니다.'; pane.appendChild(n);
 };
 // 2026-10-02 6번 치트 탭(테스트용): 이동 속도 배율 1.0(기본)~5.0 — 땅·얕은 물·수영 모두에 곱한다(물속은 그 85% 그대로). 걷는 그림·발소리도 같은 비율로 빨라진다.
 SET_PANES.cheat = (pane) => {
@@ -5511,13 +5514,80 @@ function agePaper(g) {
   // 제목 두루마리(북쪽 여백): 지역 이름
   { g.fillStyle = 'rgba(92,62,32,.85)'; g.font = `700 ${Math.round(ATLAS.ppd * 0.95)}px 'Gowun Dodum', serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('✦ 별내림 천문대 ✦', W / 2, ATLAS.ppd * 2.7); }
 }
+// ── 작업 B-2(2026-10-05): 안 가 본 곳 안개 — 설계 좌표 2° 격자(경도 -16~16, 위도 -12~50)로 "가까이 간" 칸을 기억(저장 파일 seen). 반경 4° 안 칸을 지날 때마다 표시
+const FOG = { step: 2, lon0: -16, lat0: -12, nx: 16, ny: 31 };
+let seenCells = new Uint8Array(FOG.nx * FOG.ny), seenDirty = true;
+const fogCv = document.createElement('canvas'); fogCv.width = FOG.nx; fogCv.height = FOG.ny;
+function fogCell(lon, lat) { const i = Math.floor((lon - FOG.lon0) / FOG.step), j = Math.floor((lat - FOG.lat0) / FOG.step); return (i < 0 || j < 0 || i >= FOG.nx || j >= FOG.ny) ? -1 : j * FOG.nx + i; }
+function markSeen(lon, lat) {   // 플레이어 둘레 ±4° 칸을 본 것으로
+  for (let dl = -4; dl <= 4; dl += 2) for (let dt = -4; dt <= 4; dt += 2) { if (dl * dl + dt * dt > 20) continue; const k = fogCell(lon + dl, lat + dt); if (k >= 0 && !seenCells[k]) { seenCells[k] = 1; seenDirty = true; } }
+}
+function seenToSave() { let s = ''; for (let i = 0; i < seenCells.length; i++) s += seenCells[i] ? '1' : '0'; return s; }
+function seenFromSave(str) { seenCells = new Uint8Array(FOG.nx * FOG.ny); if (typeof str === 'string') for (let i = 0; i < Math.min(str.length, seenCells.length); i++) seenCells[i] = str[i] === '1' ? 1 : 0; seenDirty = true; }
+function fogImage() {   // 칸마다 안개 농도(안 본 칸 1, 본 칸 0)를 작은 그림으로 — 그릴 때 부드럽게 키워 가장자리가 번진다
+  if (!seenDirty) return fogCv; seenDirty = false;
+  const g = fogCv.getContext('2d'), img = g.createImageData(FOG.nx, FOG.ny), d = img.data;
+  for (let j = 0; j < FOG.ny; j++) for (let i = 0; i < FOG.nx; i++) { const k = (FOG.ny - 1 - j) * FOG.nx + i, o = (j * FOG.nx + i) * 4; d[o] = 214; d[o + 1] = 198; d[o + 2] = 160; d[o + 3] = seenCells[k] ? 0 : 230; }   // 위가 북쪽
+  g.putImageData(img, 0, 0); return fogCv;
+}
+// 추적 중인 퀘스트의 목표 자리(설계 좌표) — NPC와 이야기하기 단계면 그 NPC, 사냥 단계면 별 크레이터, 봉헌 단계면 별 받침대. 없으면 null
+function questTargetLonLat() {
+  let npcId = null;
+  if (trackedQuest === 'main') {
+    if (mq.done) return null;
+    if (!mq.accepted) npcId = 'sailor';
+    else { const st = MAIN_QUEST.stages[mq.stage]; if (st.npc) npcId = st.npc; else if (st.deliver) return designLonLat(pedestalDir); else if (st.kills != null) return designLonLat(T.starCrater); }
+  } else {
+    const def = SIDE_QUESTS.find(s => s.id === trackedQuest); if (!def) return null;
+    const state = sideState(trackedQuest); if (state === 'offer' || state === 'ready') npcId = def.npc; else return null;
+  }
+  const n = npcId && NPCS.find(x => x.id === npcId); return n ? [n.lon, n.lat] : null;
+}
+function drawFlag(g, x, y, s) {   // 노란 깃발: 깃대 + 펄럭이는 삼각 기
+  g.strokeStyle = '#5a3a1c'; g.lineWidth = Math.max(1, s * 0.5); g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - s * 4.2); g.stroke();
+  g.fillStyle = '#ffd34a'; g.strokeStyle = '#8a5a10'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y - s * 4.2); g.lineTo(x + s * 3.2, y - s * 3.3); g.lineTo(x, y - s * 2.2); g.closePath(); g.fill(); g.stroke();
+  g.fillStyle = 'rgba(90,60,30,.45)'; g.beginPath(); g.ellipse(x, y + s * 0.2, s * 1.1, s * 0.5, 0, 0, Math.PI * 2); g.fill();
+}
 // 동적 아이콘: 몬스터(빨간 점 — 2026-10-02: 슬라임·가시 슬라임 모두 빨강으로 통일)·NPC(파란 마름모)·별 조각(흰 반짝)·포탈(열리면 초록 점)
+// 작업 B-2: 추적 퀘스트 목표에 노란 깃발, 포탈이 열리면 플레이어 → 포탈 초록 점선(clip 바깥은 자른다)
 function drawMapIcons(g, toXY, scale) {
   const r = 3.2 * scale;
   for (const s of [...slimes, ...spikeSlimes]) { if (!s.alive) continue; const [lo, la] = designLonLat(s.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = '#e8302a'; g.strokeStyle = 'rgba(90,10,0,.75)'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); }
   for (const st of STARS) { if (st.found) continue; const [lo, la] = designLonLat(st.dir); const [x, y] = toXY(lo, la); if (x == null) continue; g.fillStyle = '#fff8d8'; g.strokeStyle = '#d8a930'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, rr = i % 2 ? r * 0.7 : r * 1.9; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }
   for (const n of NPCS) { const [x, y] = toXY(n.lon, n.lat); if (x == null) continue; const mk = npcMarker(n.id); g.fillStyle = mk === 'give' ? '#ffd166' : '#4aa3ff'; g.strokeStyle = '#1b3e78'; g.lineWidth = 1.2; const d = r * 1.9; g.beginPath(); g.moveTo(x, y - d); g.lineTo(x + d, y); g.lineTo(x, y + d); g.lineTo(x - d, y); g.closePath(); g.fill(); g.stroke(); }
-  if (portalOpen) { const P = PORTALS[0]; const [x, y] = toXY(P.lon, P.lat); if (x != null) { g.fillStyle = 'rgba(90,240,140,.9)'; g.beginPath(); g.arc(x, y, r * 1.6, 0, Math.PI * 2); g.fill(); } }
+  if (portalOpen) { const P = PORTALS[0]; const [x, y] = toXY(P.lon, P.lat); if (x != null) { g.fillStyle = 'rgba(90,240,140,.9)'; g.beginPath(); g.arc(x, y, r * 1.6, 0, Math.PI * 2); g.fill(); }
+    const [plo, pla] = designLonLat(_up), a = toXY.raw ? toXY.raw(plo, pla) : toXY(plo, pla), b = toXY.raw ? toXY.raw(P.lon, P.lat) : [x, y];
+    if (a[0] != null && b[0] != null) { g.save(); g.setLineDash([r * 1.2, r * 1.2]); g.strokeStyle = 'rgba(40,150,70,.85)'; g.lineWidth = Math.max(1.2, r * 0.45); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); g.restore(); } }
+  { const q = questTargetLonLat(); if (q) { const [x, y] = toXY(q[0], q[1]); if (x != null) drawFlag(g, x, y, r * 0.75); } }
+}
+// 작업 B-2: 미니맵 틀(한 번 그려 두고 매 프레임 덮음) — 헤진 둥근 종이 가장자리 + 나무 테 + 북쪽 나침반 바늘. size = 캔버스 한 변(px), 지도 원은 가운데 R=size*150/170
+let miniFrameCv = null;
+function miniFrame(size) {
+  if (miniFrameCv && miniFrameCv.width === size) return miniFrameCv;
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const g = cv.getContext('2d'), c = size / 2, Rm = size * 75 / 170, Rw = size * 84 / 170;
+  // 종이 바깥을 지우는 헤진 가장자리: 지도 원 둘레를 따라 들쭉날쭉(destination-out은 drawMiniMap 쪽에서 — 여기선 테만)
+  // 나무 테: 고리(바깥 Rw, 안 Rm-2)에 결 무늬
+  const ring = g.createRadialGradient(c, c, Rm - 2, c, c, Rw); ring.addColorStop(0, '#5a3a1c'); ring.addColorStop(0.25, '#9a6a3a'); ring.addColorStop(0.6, '#b88450'); ring.addColorStop(0.85, '#8a5a30'); ring.addColorStop(1, '#4a2e14');
+  g.fillStyle = ring; g.beginPath(); g.arc(c, c, Rw, 0, Math.PI * 2); g.arc(c, c, Rm - 2, 0, Math.PI * 2, true); g.fill('evenodd');
+  g.save(); g.beginPath(); g.arc(c, c, Rw, 0, Math.PI * 2); g.arc(c, c, Rm - 2, 0, Math.PI * 2, true); g.clip('evenodd');
+  g.strokeStyle = 'rgba(60,35,12,.35)'; g.lineWidth = 1;
+  for (let i = 0; i < 28; i++) { const a0 = i * 0.2244 + wob(i) * 0.2, rr = Rm + 1 + wob(i * 3 + 1) * (Rw - Rm - 2); g.beginPath(); g.arc(c, c, rr, a0, a0 + 0.35 + wob(i * 5) * 0.5); g.stroke(); }
+  g.strokeStyle = 'rgba(255,230,180,.22)'; for (let i = 0; i < 14; i++) { const a0 = i * 0.45 + wob(i * 7) * 0.3, rr = Rm + 2 + wob(i * 11 + 2) * (Rw - Rm - 4); g.beginPath(); g.arc(c, c, rr, a0, a0 + 0.25); g.stroke(); }
+  g.restore();
+  // 테 안쪽 그을림(지도 종이가 테 밑으로 들어간 느낌)
+  const burn = g.createRadialGradient(c, c, Rm - size * 0.07, c, c, Rm); burn.addColorStop(0, 'rgba(70,40,15,0)'); burn.addColorStop(1, 'rgba(70,40,15,.55)');
+  g.fillStyle = burn; g.beginPath(); g.arc(c, c, Rm, 0, Math.PI * 2); g.fill();
+  // 헤진 종이 가장자리 선(테 바로 안쪽, 들쭉날쭉한 짙은 선)
+  g.strokeStyle = 'rgba(60,35,12,.6)'; g.lineWidth = Math.max(1, size / 150); g.beginPath();
+  for (let i = 0; i <= 120; i++) { const a = i / 120 * Math.PI * 2, rr = Rm - 1.5 - (0.5 + vnoise(Math.cos(a) * 3 + 5, Math.sin(a) * 3, 4) * 2.2 + (vnoise(Math.cos(a) * 9, Math.sin(a) * 9 + 2, 8) > 0.72 ? 2 : 0)) * size / 150; i ? g.lineTo(c + Math.cos(a) * rr, c + Math.sin(a) * rr) : g.moveTo(c + Math.cos(a) * rr, c + Math.sin(a) * rr); }
+  g.closePath(); g.stroke();
+  // 북쪽 나침반 바늘(테 위 12시): 작은 원판 + 빨간 바늘 + N
+  { const nx = c, ny = c - Rw + size * 0.02, rn = size * 0.062;
+    g.fillStyle = '#e4d3ac'; g.strokeStyle = '#4a2e14'; g.lineWidth = Math.max(1, size / 120); g.beginPath(); g.arc(nx, ny, rn, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#b8452e'; g.beginPath(); g.moveTo(nx, ny - rn * 0.85); g.lineTo(nx + rn * 0.3, ny); g.lineTo(nx - rn * 0.3, ny); g.closePath(); g.fill();
+    g.fillStyle = '#4a2e14'; g.beginPath(); g.moveTo(nx, ny + rn * 0.85); g.lineTo(nx + rn * 0.3, ny); g.lineTo(nx - rn * 0.3, ny); g.closePath(); g.fill();
+    g.fillStyle = '#fdf4de'; g.font = `700 ${Math.round(size * 0.05)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', nx, ny - rn - size * 0.035); }
+  miniFrameCv = cv; return cv;
 }
 // 미니맵: 플레이어 둘레 설계 ±MINI_DEG°를 원 안에 (북쪽 위)
 // 작업 B(2026-10-05) 확대 3단계: 설정 map.zoom 0 멀리(±13°) · 1 보통(±8.5°, 기본) · 2 가까이(±5°). [ ] 키·마우스 휠로 바꾸고 설정에 기억
@@ -5531,23 +5601,25 @@ function setMiniZoom(z, quiet) {
 let mapFrame = 0;
 function drawMiniMap() {
   if (mapFrame++ % QUALITY[quality].mapEvery !== 0) return;
-  const size = 150 * Math.min(devicePixelRatio, 2);
-  if (miniCv.width !== size) { miniCv.width = miniCv.height = size; }
+  const dprM = Math.min(devicePixelRatio, 2), full = Math.round(170 * dprM), size = 150 * dprM, c = full / 2;   // 작업 B-2: 캔버스 170(테 포함), 지도 원 지름 150
+  if (miniCv.width !== full) { miniCv.width = miniCv.height = full; }
   const g = miniCv.getContext('2d');
   const [plon, plat] = designLonLat(_up);
   const sc = size / (miniDeg() * 2 * ATLAS.ppd);   // atlas px → mini px
-  const toXY = (lon, lat) => { const dx = (lon - plon) * ATLAS.ppd * sc, dy = (plat - lat) * ATLAS.ppd * sc; return Math.hypot(dx, dy) < size / 2 - 4 ? [size / 2 + dx, size / 2 + dy] : [null, null]; };
-  g.clearRect(0, 0, size, size);
-  g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.clip();
-  g.fillStyle = PASTEL.paper; g.fillRect(0, 0, size, size);
+  const toXY = (lon, lat) => { const dx = (lon - plon) * ATLAS.ppd * sc, dy = (plat - lat) * ATLAS.ppd * sc; return Math.hypot(dx, dy) < size / 2 - 4 ? [c + dx, c + dy] : [null, null]; };
+  toXY.raw = (lon, lat) => [c + (lon - plon) * ATLAS.ppd * sc, c + (plat - lat) * ATLAS.ppd * sc];   // 점선용(원 밖이어도 좌표를 줌 — clip이 자른다)
+  g.clearRect(0, 0, full, full);
+  g.save(); g.beginPath(); g.arc(c, c, size / 2, 0, Math.PI * 2); g.clip();
+  g.fillStyle = PASTEL.paper; g.fillRect(0, 0, full, full);
   const [ax, ay] = atlasPx(plon, plat);
   g.imageSmoothingEnabled = true;
-  g.drawImage(atlas, ax - size / 2 / sc, ay - size / 2 / sc, size / sc, size / sc, 0, 0, size, size);
+  g.drawImage(atlas, ax - c / sc, ay - c / sc, full / sc, full / sc, 0, 0, full, full);
   drawMapIcons(g, toXY, size / 150);
   // 가장자리 어둡게
-  const grad = g.createRadialGradient(size / 2, size / 2, size * 0.36, size / 2, size / 2, size / 2); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(60,40,20,.35)');
-  g.fillStyle = grad; g.fillRect(0, 0, size, size);
+  const grad = g.createRadialGradient(c, c, size * 0.36, c, c, size / 2); grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(60,40,20,.35)');
+  g.fillStyle = grad; g.fillRect(0, 0, full, full);
   g.restore();
+  g.drawImage(miniFrame(full), 0, 0);   // 작업 B-2: 헤진 종이 가장자리 + 나무 테 + 나침반
 }
 // M 지도: 지도 전체를 세로 양피지 액자에
 let zoneLayout = null;
@@ -5563,6 +5635,13 @@ function drawZoneMap(W, H) {
   g.drawImage(atlas, 0, 0, ATLAS.w, ATLAS.h, 0, 0, pw, ph);
   const sc = pw / ATLAS.w;
   const toXY = (lon, lat) => { const [ax, ay] = atlasPx(lon, lat); return [ax * sc, ay * sc]; };
+  if (settings.map.fog) {   // 작업 B-2: 안 가 본 곳 안개 — 격자 그림을 부드럽게 키워 종이 위에 덮고(종이 바깥은 atlas 알파로 자름), 가장자리가 번지게
+    g.save(); g.globalCompositeOperation = 'source-atop'; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    const fx = (FOG.lon0 - ATLAS.lon0) * ATLAS.ppd * sc, fy = (ATLAS.lat1 - (FOG.lat0 + FOG.ny * FOG.step)) * ATLAS.ppd * sc, fw = FOG.nx * FOG.step * ATLAS.ppd * sc, fh = FOG.ny * FOG.step * ATLAS.ppd * sc;
+    try { g.filter = `blur(${Math.max(4, pw / 90)}px)`; } catch (e) {}
+    g.drawImage(fogImage(), fx, fy, fw, fh); try { g.filter = 'none'; } catch (e) {}
+    g.restore();
+  }
   drawMapIcons(g, toXY, Math.max(1, pw / 480));
   zoneLayout = { x, y, w, h };
   const toScreen = (lon, lat) => { const [ax, ay] = atlasPx(lon, lat); return [x + ax / ATLAS.w * w, y + ay / ATLAS.h * h]; };
@@ -5584,6 +5663,7 @@ function drawMaps(t) {
   zoneEl.style.display = mapView === 1 ? 'block' : 'none';
   ui2d.style.display = mapView === 2 ? 'block' : 'none';
   if (mapView === 0) {
+    if (!cut.on && !gate.on && (frameNo & 15) === 0) { const [lo, la] = designLonLat(_up); markSeen(lo, la); }   // 작업 B-2: 16프레임마다 지나간 칸 기록
     if (miniOn) drawMiniMap();
     miniMark.style.transform = `translate(-50%,-50%) rotate(${headingDeg()}deg)`;
   } else if (mapView === 1) {
@@ -5960,7 +6040,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
-    terrainH, walkH, padTopAt, plantSway, miniDeg, setMiniZoom, MINI_ZOOM, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
