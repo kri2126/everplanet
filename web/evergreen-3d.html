@@ -2805,6 +2805,10 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
         if (!p || pathMask(p) > 0.02) continue;
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
         if (slots.some((sl) => sl.p.angleTo(p) * R < 0.8)) continue;
+        // 2026-10-06 3차: 너무 많다는 지적 — 길을 따라 1차원 잡음(약 4.5유닛 마디)으로 울타리를 몇 칸씩 이어 세우고 중간중간 끊는다(양쪽은 따로).
+        { const sk = fencePaths.indexOf(seg) * 74.7 + side * 311.7, h1 = (k) => { const x = Math.sin(k * 127.1 + sk) * 43758.5; return x - Math.floor(x); };
+          const t = i * len / n / 4.5, f = t - Math.floor(t), u = f * f * (3 - 2 * f);
+          if (h1(Math.floor(t)) * (1 - u) + h1(Math.floor(t) + 1) * u < 0.36) continue; }
         slots.push({ p, h, key: fencePaths.indexOf(seg) + ':' + side, i });
       }
       if (isMain && i > 0 && i < n && i % 4 === 0) {
