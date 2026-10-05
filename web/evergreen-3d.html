@@ -426,7 +426,7 @@ function settingsDefaults() {
   const binds = {}; for (const a of ACTIONS) binds[a.id] = a.def.slice();
   return { v: 1, binds,
     audio: { master: 80, bgm: 50, sfx: 80, mute: false, bgmOn: true, bgmV4: true, battle: true, duck: true },   // 작업 C-1(2026-10-05): 전투 음악, 지도·창 열면 줄이기   // 2026-10-02: 배경음악 기본 50 — 실제 크기는 BGM_SCALE로 줄여, 50에서 예전 9와 같은 소리(효과음에 비해 너무 컸음)
-    display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day' },
+    display: { quality: 'auto', dmgNum: true, shake: true, fps: false, time: 'day', cloudShadow: true },   // 2026-10-05 작업 F: time(day/dusk)·cloudShadow 실제 적용
     map: { mini: true, zoom: 1, fog: false, labels: true },
     cheat: { speed: 1 } };   // 2026-10-02 치트(테스트용): 이동 속도 배율 1.0~5.0
 }
@@ -441,7 +441,7 @@ function settingsMigrate(o) {
   const num = (v, lo, hi, def) => (typeof v === 'number' && isFinite(v)) ? Math.max(lo, Math.min(hi, Math.round(v))) : def;
   const bool = (v, def) => typeof v === 'boolean' ? v : def;
   if (o.audio) { d.audio.battle = bool(o.audio.battle, true); d.audio.duck = bool(o.audio.duck, true); d.audio.master = num(o.audio.master, 0, 100, d.audio.master); d.audio.bgm = num(o.audio.bgm, 0, 100, d.audio.bgm); d.audio.sfx = num(o.audio.sfx, 0, 100, d.audio.sfx); d.audio.mute = bool(o.audio.mute, false); d.audio.bgmOn = bool(o.audio.bgmOn, true); }
-  if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; }
+  if (o.display) { if (['auto', 'high', 'mid', 'low', 'min'].includes(o.display.quality)) d.display.quality = o.display.quality; d.display.dmgNum = bool(o.display.dmgNum, true); d.display.shake = bool(o.display.shake, true); d.display.fps = bool(o.display.fps, false); if (['day', 'dusk'].includes(o.display.time)) d.display.time = o.display.time; d.display.cloudShadow = bool(o.display.cloudShadow, true); }
   if (o.audio && !o.audio.bgmV4 && ((!o.audio.bgmV2 && !o.audio.bgmV3 && d.audio.bgm === 60) || (o.audio.bgmV2 && d.audio.bgm === 30) || (o.audio.bgmV3 && d.audio.bgm === 9))) d.audio.bgm = 50;   // 예전 기본값(60·30·9) 그대로 저장된 설정은 새 기본값(50)으로 — 직접 바꾼 값은 그대로
   if (o.cheat && typeof o.cheat.speed === 'number' && isFinite(o.cheat.speed)) d.cheat.speed = Math.max(1, Math.min(5, Math.round(o.cheat.speed * 10) / 10));
   if (o.map) { d.map.mini = bool(o.map.mini, true); d.map.zoom = num(o.map.zoom, 0, 2, 1); d.map.fog = bool(o.map.fog, false); d.map.labels = bool(o.map.labels, true); }
@@ -1262,6 +1262,7 @@ const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors
 terrainMat.onBeforeCompile = (sh) => {
   sh.uniforms.rockMap = { value: rockTex }; sh.uniforms.tuftMap = { value: tuftTex };
   sh.uniforms.dirtMap = { value: dirtTex }; sh.uniforms.cliffSteep = { value: cliffSteepTex }; sh.uniforms.cliffGentle = { value: cliffGentleTex }; sh.uniforms.planetR = { value: R };
+  sh.uniforms.uCloud = { value: 0.0 }; sh.uniforms.uCloudT = { value: 0.0 }; sh.uniforms.uLift = { value: 1.0 }; terrainMat.userData.shader = sh;   // 2026-10-05 작업 F: 구름 그림자 세기·시각, 그늘 밝기 보정(저녁엔 낮춤)
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', '#include <common>\nattribute float rock; varying float vRock; attribute float bare; varying float vBare; attribute float tuft; varying float vTuft;\nattribute vec3 cliff; varying vec3 vCliff; varying float vH; varying vec2 vWall; uniform float planetR;')
     .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1271,10 +1272,14 @@ vRock = rock; vBare = bare; vTuft = tuft; vCliff = cliff;
   vec3 nt = normal - rad * dot( normal, rad ); vec3 ea = normalize( cross( vec3( 0.0, 1.0, 0.0 ), rad ) ); vec3 no = cross( rad, ea );
   vWall = vec2( abs( dot( nt, ea ) ), abs( dot( nt, no ) ) ); }`);
   sh.fragmentShader = sh.fragmentShader
-    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D dirtMap; uniform sampler2D cliffSteep;\nfloat epH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }\nfloat epN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f ); return mix( mix( epH( i ), epH( i + vec2( 1.0, 0.0 ) ), f.x ), mix( epH( i + vec2( 0.0, 1.0 ) ), epH( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); } uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
+    .replace('#include <common>', '#include <common>\nuniform sampler2D rockMap; uniform sampler2D tuftMap; varying float vRock; varying float vBare; varying float vTuft;\nuniform sampler2D dirtMap; uniform sampler2D cliffSteep; uniform float uCloud, uCloudT, uLift;\nfloat epH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }\nfloat epN( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f ); return mix( mix( epH( i ), epH( i + vec2( 1.0, 0.0 ) ), f.x ), mix( epH( i + vec2( 0.0, 1.0 ) ), epH( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); } uniform sampler2D cliffGentle; varying vec3 vCliff; varying float vH; varying vec2 vWall;')
+    // 2026-10-05 작업 F 구름 그림자 층(아래 cloud shadow): 지도 좌표(vMapUv, 1 = 약 4유닛)에 두 겹 잡음(약 60·30유닛 덩어리)을 천천히 흘려 밝기를 곱한다 — 구름 판과 따로 노는 '층'이라 위 구름과 자리가 맞진 않는다. 셰이더 주석엔 특수문자(—·따옴표)를 넣지 않는다(컴파일 오류)
     .replace('#include <opaque_fragment>', `
-      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 ), vRock * 0.65 );
-      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.95 ), vDk * 0.7 );   // 2026-10-03: 흙길도 그늘에 칙칙해지지 않게(그림 색에 가깝게)   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.85 * uLift ), vRock * 0.65 );
+      outgoingLight = mix( outgoingLight, max( outgoingLight, diffuseColor.rgb * 0.95 * uLift ), vDk * 0.7 );   // 2026-10-03: 흙길도 그늘에 칙칙해지지 않게(그림 색에 가깝게)   // 2026-10-02: 해를 등진 경사면도 칙칙하게 꺼지지 않게(바위만 밝게 받쳐 줌)
+      // 2026-10-05 F cloud shadow: two noise layers on map uv (1 = about 4 units), drifting slowly
+      { vec2 cu = vMapUv * 0.065 + vec2( uCloudT * 0.011, uCloudT * 0.004 ); float cn = epN( cu ) * 0.62 + epN( cu * 2.3 + vec2( 7.3, 1.9 ) - uCloudT * vec2( 0.006, 0.009 ) ) * 0.38;
+        outgoingLight *= 1.0 - uCloud * smoothstep( 0.50, 0.74, cn ); }
       #include <opaque_fragment>
     `)
     .replace('#include <map_fragment>', `
@@ -1417,6 +1422,7 @@ const sky = (() => {
       uUp: { value: new THREE.Vector3(0, 0, 1) },
       uTop: { value: new THREE.Color(C.skyTop) },
       uHorizon: { value: new THREE.Color(C.skyHorizon) },
+      uGlow: { value: new THREE.Color(0x000000) }, uSun: { value: SUN_DIR },   // 2026-10-05 작업 F: 저녁 노을 — 해 쪽 지평선 붉은 빛(낮엔 0)
     },
     vertexShader: `
       varying vec3 vDir;
@@ -1425,12 +1431,16 @@ const sky = (() => {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: `
-      uniform vec3 uUp, uTop, uHorizon;
+      uniform vec3 uUp, uTop, uHorizon, uGlow, uSun;
       varying vec3 vDir;
       void main() {
-        float t = dot(normalize(vDir), uUp);
+        vec3 nd = normalize(vDir);
+        float t = dot(nd, uUp);
         float k = smoothstep(-0.02, 0.55, t);
-        gl_FragColor = vec4(mix(uHorizon, uTop, k), 1.0);
+        vec3 col = mix(uHorizon, uTop, k);
+        float g = max(dot(nd, uSun), 0.0);
+        col += uGlow * pow(g, 5.0) * (1.0 - k) * 1.4 + uGlow * pow(g, 2.0) * 0.18;   // 노을: 해 둘레 붉은 번짐 + 그쪽 하늘 전체가 살짝 따뜻하게
+        gl_FragColor = vec4(col, 1.0);
       }`,
   });
   const m = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), mat);
@@ -1487,6 +1497,40 @@ sun.shadow.bias = -0.0008;
 sun.shadow.normalBias = 0.03;
 sun.shadow.radius = 3;
 scene.add(sun); scene.add(sun.target);
+
+// ── 시간대(낮 / 저녁 노을) + 구름 그림자 (2026-10-05 작업 F, §2 '시간대'·'구름' — 설정 › 화면 탭) ─────────────────
+// 자동 시간 흐름은 없다(지도 그림이 낮 기준). 저녁: 보라빛 하늘 + 해 쪽 주황 번짐, 안개 색 주황, 반구광·햇빛을 따뜻하고 어둡게, 해를 낮춰(SUN_DIR) 그림자 길게,
+// 구름 판·그림 판(MeshBasic, 빛을 안 받음)은 색을 곱해 맞추고, 물 색을 어둡게, 지형 그늘 밝기 보정(uLift)을 낮추고, 등불에 빛 무리를 켠다.
+const TOD = {
+  day:  { skyTop: C.skyTop, skyHorizon: C.skyHorizon, glow: 0x000000, fog: C.skyHorizon, hemiSky: 0xf2fbff, hemiGround: 0x9fd06a, hemiI: 2.0, sunColor: 0xfff4d6, sunI: 0.9, sunDir: [0.35, 0.25, 0.9], cloud: 0xffffff, basic: 0xffffff, lift: 1.0, waterDeep: 0x3fb6f0, waterShallow: 0x7fd8f7, lantern: false },
+  dusk: { skyTop: 0x3d3c86, skyHorizon: 0xffa66a, glow: 0xff6a30, fog: 0xf0a878, hemiSky: 0xffc9a0, hemiGround: 0x6a5a7a, hemiI: 1.45, sunColor: 0xffa060, sunI: 1.3, sunDir: [0.85, 0.15, 0.5], cloud: 0xffc0a4, basic: 0xe8c0a4, lift: 0.72, waterDeep: 0x2f5f99, waterShallow: 0xd99a78, lantern: true },
+};
+const TOD_BASIC = new THREE.Color(0xffffff);   // 그림 판(MeshBasic) 공유 색 — makeBillboard가 재질에 그대로 넣어 함께 바뀐다
+const lanterns = [], lanternGlows = [];
+let todCur = null, todCloud = 0.24, todLift = 1.0;   // 지형 셰이더 uniform은 셰이더가 첫 그리기 때 생기므로 frame()에서 매 프레임 넣는다
+function applyTimeOfDay() {
+  const name = TOD[settings.display.time] ? settings.display.time : 'day', P = TOD[name];
+  todCloud = settings.display.cloudShadow ? (name === 'dusk' ? 0.18 : 0.24) : 0; todLift = P.lift;
+  if (todCur === name) return;
+  todCur = name;
+  sky.material.uniforms.uTop.value.set(P.skyTop); sky.material.uniforms.uHorizon.value.set(P.skyHorizon); sky.material.uniforms.uGlow.value.set(P.glow);
+  scene.fog.color.set(P.fog);
+  hemi.color.set(P.hemiSky); hemi.groundColor.set(P.hemiGround); hemi.intensity = P.hemiI;
+  sun.color.set(P.sunColor); sun.intensity = P.sunI; SUN_DIR.set(P.sunDir[0], P.sunDir[1], P.sunDir[2]).normalize();
+  if (clouds.length) clouds[0].material.color.set(P.cloud);
+  TOD_BASIC.set(P.basic);
+  water.material.uniforms.uDeep.value.set(P.waterDeep); water.material.uniforms.uShallow.value.set(P.waterShallow);
+  if (P.lantern && !lanternGlows.length) {   // 등불 빛 무리: 더하기 혼합 스프라이트(처음 켤 때 만든다)
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
+    const rg = g.createRadialGradient(32, 32, 2, 32, 32, 32); rg.addColorStop(0, 'rgba(255,214,140,0.95)'); rg.addColorStop(0.35, 'rgba(255,170,80,0.45)'); rg.addColorStop(1, 'rgba(255,140,60,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    for (const l of lanterns) { const sp = new THREE.Sprite(mat); sp.scale.set(3.2, 3.2, 1); sp.position.copy(l.position).addScaledVector(l.userData.dir, 1.15); sp.layers.set(1); scene.add(sp); lanternGlows.push(sp); }
+  }
+  for (const sp of lanternGlows) sp.visible = P.lantern;
+  if (typeof log === 'function' && DEBUG) log(`시간대 ${name === 'dusk' ? '저녁 노을' : '낮'}`, 'sys');
+}
 
 // ── 빌보드 스프라이트 — "2D 그림을 3D에서" ─────────────────────────────────
 // 캐릭터·나무·덤불·꽃·버섯(이후 NPC·소품)은 캔버스에 손으로 그린 2D 그림을 판에 붙여 세운다.
@@ -1644,7 +1688,7 @@ const mushTex = { red: spriteTex(64, 72, (g, W, H) => drawMushroomSprite(g, W, H
 // 판 하나: 밑변이 발 자리. 그림자도 그림 모양대로 떨어지게 depth 재질에 alphaTest.
 function makeBillboard(tex, w, h, opts = {}) {
   const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2, 0);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, fog: true });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, fog: true, color: TOD_BASIC });   // 2026-10-05: 그림 판은 빛을 안 받으니 시간대 색을 곱한다(TOD_BASIC 공유)
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = opts.shadow !== false; m.receiveShadow = false;
   m.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: tex, alphaTest: 0.5 });
@@ -2547,7 +2591,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
   // 2026-10-02 카툰화(사용자 확정값, 테스트 파일 airship_cartoon_test.html): 램버트는 부드러운 그라데이션 + 주변광(땅의 초록빛)에 묻혀 3D처럼 보였다.
   // 해 방향(SUN_DIR)으로 부품마다 밝은 면·중간·그늘 3단을 직접 칠하고, 작은 흰 하이라이트·빛 쪽 가장자리 빛 테를 더하고,
   // 색은 화면 색 기준으로 채도 0.9·파스텔 0.06(나무·풀 에셋 톤), 갑판 윗면엔 널빤지 줄(뱃머리↔꼬리), 외곽선은 제 색을 어둡게(흰 테두리는 갈색) 0.03.
-  const SHIP_CEL = { uLight: { value: SUN_DIR.clone() }, uShade: { value: 0.7 }, uLit: { value: 0.18 }, uHi: { value: 1 }, uRim: { value: 1 }, uSat: { value: 0.9 }, uLift: { value: 0.06 } };
+  const SHIP_CEL = { uLight: { value: SUN_DIR }, uShade: { value: 0.7 }, uLit: { value: 0.18 }, uHi: { value: 1 }, uRim: { value: 1 }, uSat: { value: 0.9 }, uLift: { value: 0.06 } };
   const shipCel = (color, map, side, plank) => {
     const mat = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uColor: { value: new THREE.Color(color) }, uMap: { value: map || null }, uHasMap: { value: map ? 1 : 0 }, uPlank: { value: plank ? 1 : 0 }, uPlankScale: { value: new THREE.Vector2(plank ? plank.x : 1, plank ? plank.z : 1) } }]),
@@ -2666,7 +2710,7 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/airship.glb').then((gl)
   player.pos.copy(d).multiplyScalar(R + z0); player.z = z0; player.safe.copy(d); player.safeNext.copy(d);
 }
 addProp(signTex, 1.3, 1.75, -0.7, 4.8);         // 들판 길 초입(크레이터 방향 안내) — 2026-10-02 착륙 언덕 계단 아래
-addProp(lanternTex, 1.1, 1.5, -3.3, -3.4);       // 데크 경사로 입구 — 2026-10-02 데크와 함께 이동
+lanterns.push(addProp(lanternTex, 1.1, 1.5, -3.3, -3.4));       // 데크 경사로 입구 — 2026-10-02 데크와 함께 이동
 addProp(signTex, 1.3, 1.75, 1.43, 38.35);         // 관측소 초원 갈림길(출구 지선 안내)
 // 관측소 둥근 터: 선돌 3기 — 2단 점프(2.1)로만 윗면에 올라설 수 있다(1.6). 추기 #3: 고리 한가운데가 별 받침대
 const standingStones = [addProp(stoneTallTex, 1.3, 2.2, -6.4, 39.4), addProp(stoneTallTex, 1.2, 2.0, -4.9, 38.2), addProp(stoneTallTex, 1.2, 2.1, -6.6, 38.4)];
@@ -2706,7 +2750,7 @@ const tentProp = addProp(tentTex, 4.4, 4.4, -5.8, 31.4);   // 작업 D: 텐트 �
 addProp(cauldronTex, 1.2, 1.2, -3.14, 29.66);   // 2026-10-03: 넓어진 흙길에서 비켜 옮김
 const campCrates = [addProp(crateTex, 1.0, 1.0, -6.9, 30.8), addProp(crateTex, 0.9, 0.9, -7.9, 31.8), addProp(crateTex, 0.9, 0.9, -1.92, 30.92)];   // 추기 #5: 크레이터 지선을 비켜 텐트 서쪽으로   // 작업 E: 미르의 "비행정 부품 점검" 조사 대상 겸용
 campCrates.forEach(m => addClimb(m.userData.dir, 0.45, 0.9));
-addProp(lanternTex, 1.1, 1.5, -3.0, 28.7);        // 다리 북단
+lanterns.push(addProp(lanternTex, 1.1, 1.5, -3.0, 28.7));        // 다리 북단
 // 소·밭 — 야영지 동쪽. 근접 판정 반경(각 1.6)이 겹치지 않게 띄운다
 const cowProp = addProp(cowTex, 2.4, 1.7, -1.0, 30.8);
 const farmProp = addProp(farmTex[0], 2.6, 1.5, 0.8, 29.6, { shadow: false });
@@ -4942,7 +4986,10 @@ SET_PANES.display = (pane) => {
     setSeg([[-1, '자동'], [3, '높음'], [2, '중간'], [1, '낮음'], [0, '최소']], qualityMode, (m) => { setQualityMode(m, '설정'); renderSettings(); })));
   pane.appendChild(setRow('피해 숫자 표시', '공격·피격·회복 숫자', setToggle(settings.display.dmgNum, () => { settings.display.dmgNum = !settings.display.dmgNum; saveSettings(); applySettings(); renderSettings(); })));
   pane.appendChild(setRow('FPS 표시', '왼쪽 위 성능 줄(주소에 ?fps 를 붙인 것과 같음)', setToggle(settings.display.fps, () => { settings.display.fps = !settings.display.fps; saveSettings(); applySettings(); renderSettings(); })));
-  const n = document.createElement('div'); n.className = 'note'; n.textContent = '화면 흔들림·시간대(낮/저녁)는 그 효과가 생기는 작업(로드맵 9 F 등)에서 이 탭에 더해집니다.'; pane.appendChild(n);
+  // 2026-10-05 작업 F: 시간대·구름 그림자
+  pane.appendChild(setRow('시간대', '낮(기본) 또는 저녁 노을 — 하늘·빛·그림자 길이·등불이 바뀜. 자동으로 흐르진 않음', setSeg([['day', '낮'], ['dusk', '저녁 노을']], settings.display.time, (v) => { settings.display.time = v; saveSettings(); applySettings(); renderSettings(); })));
+  pane.appendChild(setRow('구름 그림자', '땅 위를 천천히 지나가는 구름 그늘', setToggle(settings.display.cloudShadow, () => { settings.display.cloudShadow = !settings.display.cloudShadow; saveSettings(); applySettings(); renderSettings(); })));
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '화면 흔들림은 그 효과가 생기는 작업에서 이 탭에 더해집니다.'; pane.appendChild(n);
 };
 // 작업 S4: 지도 탭 — 미니맵 표시, 지도 이름표
 SET_PANES.map = (pane) => {
@@ -5159,6 +5206,7 @@ function applySettings() {
   labelsEl.classList.toggle('nodmg', !settings.display.dmgNum);   // 작업 S4
   applyFpsSetting();
   const zl = document.getElementById('zoneLabels'); if (zl) zl.classList.toggle('off', !settings.map.labels);
+  applyTimeOfDay();   // 2026-10-05 작업 F
 }
 function resetSettings() { const wasOn = bgm.on, wasQ = qualityMode; settings = settingsDefaults(); rebuildBindIndex(); saveSettings(); if (wasOn !== settings.audio.bgmOn) toggleBgm(); if (wasQ !== QMODE[settings.display.quality]) setQualityMode(QMODE[settings.display.quality], '기본값'); applySettings(); }
 setResetBtn.addEventListener('click', () => { if (!settingsResetArm) { settingsResetArm = true; renderSettings(); return; } settingsResetArm = false; resetSettings(); renderSettings(); setMsg(setPaneEl, '모든 설정을 기본값으로 되돌렸어요.'); });
@@ -5446,6 +5494,7 @@ function step(dt) {
   sky.position.copy(camera.position);
   sky.material.uniforms.uUp.value.copy(_up);
   water.material.uniforms.uTime.value = performance.now() * 0.001;
+  { const sh = terrainMat.userData.shader; if (sh) { sh.uniforms.uCloudT.value = performance.now() * 0.001; sh.uniforms.uCloud.value = todCloud; sh.uniforms.uLift.value = todLift; } }   // 2026-10-05 작업 F: 구름 그림자 흐름·세기, 그늘 보정
   // 구름은 제자리에서 살짝 떠다님
   const t = performance.now() * 0.0004;
   for (const c of clouds) {
@@ -6231,7 +6280,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
-    terrainH, walkH, padTopAt, plantSway, props, decor, surfaceAt, LAND_R, get grassTufts() { return grassTufts; }, GRASS_COUNT, bgmBattle, bgmSetMode, bgmUpdate, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, props, decor, surfaceAt, LAND_R, get grassTufts() { return grassTufts; }, GRASS_COUNT, TOD, applyTimeOfDay, get todCur() { return todCur; }, lanternGlows, sky, hemi, sun, SUN_DIR, terrainMat, applySettings, bgmBattle, bgmSetMode, bgmUpdate, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
