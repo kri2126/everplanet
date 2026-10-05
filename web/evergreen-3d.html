@@ -417,6 +417,7 @@ const ACTIONS = [
   { id: 'quality', name: '화질 순환', def: ['KeyQ', null] },
   { id: 'mute', name: '음소거', def: ['KeyN', null] },
   { id: 'bgm', name: '배경 음악 켜기/끄기', def: ['KeyB', null] },
+  { id: 'miniOut', name: '미니맵 축소(멀리)', def: ['BracketLeft', null] }, { id: 'miniIn', name: '미니맵 확대(가까이)', def: ['BracketRight', null] },   // 작업 B(2026-10-05)
   { id: 'settings', name: '설정 열기/닫기', def: ['Escape', null], fixed: true },
 ];
 const SETTINGS_KEY = 'ep.settings.v1';
@@ -4817,8 +4818,10 @@ SET_PANES.display = (pane) => {
 SET_PANES.map = (pane) => {
   const h = document.createElement('h4'); h.textContent = '지도'; pane.appendChild(h);
   pane.appendChild(setRow('미니맵 표시', '오른쪽 위 둥근 지도(끄면 그리는 비용도 아낌)', setToggle(settings.map.mini, () => { settings.map.mini = !settings.map.mini; saveSettings(); applySettings(); renderSettings(); })));
+  pane.appendChild(setRow(`미니맵 확대 (${keyLabel('miniOut')} ${keyLabel('miniIn')} · 마우스 휠)`, `보이는 범위: 멀리 ±13° · 보통 ±8.5° · 가까이 ±5°`,
+    setSeg(MINI_ZOOM.map((z, i) => [i, z.name]), settings.map.zoom, (z) => { setMiniZoom(z, true); renderSettings(); })));   // 작업 B(2026-10-05)
   pane.appendChild(setRow(`지도 이름표 (${keyLabel('map')} 지도)`, '착륙 들판·샘물·나무다리… 이름', setToggle(settings.map.labels, () => { settings.map.labels = !settings.map.labels; saveSettings(); applySettings(); renderSettings(); })));
-  const n = document.createElement('div'); n.className = 'note'; n.textContent = '미니맵 확대 3단계와 "안 가 본 곳 가리기"는 지도 마무리(로드맵 9 작업 B)에서 이 탭에 더해집니다.'; pane.appendChild(n);
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = '"안 가 본 곳 가리기"는 지도 마무리(로드맵 9 작업 B)의 다음 단계에서 이 탭에 더해집니다.'; pane.appendChild(n);
 };
 // 2026-10-02 6번 치트 탭(테스트용): 이동 속도 배율 1.0(기본)~5.0 — 땅·얕은 물·수영 모두에 곱한다(물속은 그 85% 그대로). 걷는 그림·발소리도 같은 비율로 빨라진다.
 SET_PANES.cheat = (pane) => {
@@ -5009,7 +5012,8 @@ function updateKeyTexts() {
     `<div class="r">${kb('map')}<span class="d">지도 → 한 번 더 전경도</span></div>` +
     `<div class="r">${kb('chat', 1)}<span class="d">채팅 입력</span></div>` +
     `<div class="r"><kbd class="w">Esc</kbd><span class="d">설정 (열린 창·지도·대화가 있으면 그것만 닫기)</span></div>` +
-    `<div class="r">${kb('quality')}${kb('bgm')}<span class="d">화질 단계 · 배경 음악 켜기/끄기</span></div>`;
+    `<div class="r">${kb('quality')}${kb('bgm')}<span class="d">화질 단계 · 배경 음악 켜기/끄기</span></div>` +
+    `<div class="r">${kb('miniOut')}${kb('miniIn')}<span class="d">미니맵 멀리/가까이 (마우스 휠도 됨)</span></div>`;
   keyGuideFootEl.textContent = `${L('keyGuide')} 또는 Esc → 설정 › 조작에서 키를 바꿀 수 있어요 · 아무 키나 누르면 닫힘`;
   for (const k of SKILL_KEYS) skillEls[k].dataset.k = L(SLOT_ACTION[k]);
   const jl = L('jump') === 'Space' ? 'Space Bar' : L('jump');
@@ -5077,6 +5081,8 @@ addEventListener('keydown', (e) => {
   if (has('quality')) { cycleQuality(); return; }
   if (has('bgm')) { toggleBgm(); return; }   // 브금 켜기/끄기
   if (has('mute')) { toggleMute(); return; }   // 작업 S3: 음소거(N)
+  if (has('miniOut')) { setMiniZoom(settings.map.zoom - 1); return; }   // 작업 B: 미니맵 확대 단계
+  if (has('miniIn')) { setMiniZoom(settings.map.zoom + 1); return; }
   if (dialog.open) {
     if (dialog.choicesShown) { const m = /^(?:Digit|Numpad)([1-9])$/.exec(code); if (m) pickChoice(+m[1] - 1); return; }   // 선택지 번호는 숫자 고정
     if (has('jump')) { e.preventDefault(); advanceDialog(); }
@@ -5127,6 +5133,11 @@ canvas.addEventListener('pointerdown', (e) => {
   attack();   // 클릭도 기본 공격
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+// 작업 B(2026-10-05): 마우스 휠로 미니맵 확대 단계 — 지도·창·설정이 열려 있지 않을 때, 휠 위 = 가까이, 아래 = 멀리
+canvas.addEventListener('wheel', (e) => {
+  if (mapView || settingsOpen || invOpen || skillWinOpen || questWinOpen || charWinOpen || chatOpen || gate.on || cut.on || !settings.map.mini) return;
+  e.preventDefault(); setMiniZoom(settings.map.zoom + (e.deltaY < 0 ? 1 : -1));
+}, { passive: false });
 
 // ── 프레임 ───────────────────────────────────────────────────────────────────
 const _up = new THREE.Vector3(), _right = new THREE.Vector3(), _dir = new THREE.Vector3();
@@ -5505,7 +5516,14 @@ function drawMapIcons(g, toXY, scale) {
   if (portalOpen) { const P = PORTALS[0]; const [x, y] = toXY(P.lon, P.lat); if (x != null) { g.fillStyle = 'rgba(90,240,140,.9)'; g.beginPath(); g.arc(x, y, r * 1.6, 0, Math.PI * 2); g.fill(); } }
 }
 // 미니맵: 플레이어 둘레 설계 ±MINI_DEG°를 원 안에 (북쪽 위)
-const MINI_DEG = 8.5;
+// 작업 B(2026-10-05) 확대 3단계: 설정 map.zoom 0 멀리(±13°) · 1 보통(±8.5°, 기본) · 2 가까이(±5°). [ ] 키·마우스 휠로 바꾸고 설정에 기억
+const MINI_ZOOM = [{ deg: 13, name: '멀리' }, { deg: 8.5, name: '보통' }, { deg: 5, name: '가까이' }];
+function miniDeg() { return (MINI_ZOOM[settings.map.zoom] || MINI_ZOOM[1]).deg; }
+function setMiniZoom(z, quiet) {
+  z = Math.max(0, Math.min(2, z | 0)); if (z === settings.map.zoom) return;
+  settings.map.zoom = z; saveSettings(); mapFrame = 0;   // 다음 프레임에 바로 다시 그림
+  if (!quiet) log(`미니맵 ${MINI_ZOOM[z].name} (±${MINI_ZOOM[z].deg}°)`, 'sys');
+}
 let mapFrame = 0;
 function drawMiniMap() {
   if (mapFrame++ % QUALITY[quality].mapEvery !== 0) return;
@@ -5513,7 +5531,7 @@ function drawMiniMap() {
   if (miniCv.width !== size) { miniCv.width = miniCv.height = size; }
   const g = miniCv.getContext('2d');
   const [plon, plat] = designLonLat(_up);
-  const sc = size / (MINI_DEG * 2 * ATLAS.ppd);   // atlas px → mini px
+  const sc = size / (miniDeg() * 2 * ATLAS.ppd);   // atlas px → mini px
   const toXY = (lon, lat) => { const dx = (lon - plon) * ATLAS.ppd * sc, dy = (plat - lat) * ATLAS.ppd * sc; return Math.hypot(dx, dy) < size / 2 - 4 ? [size / 2 + dx, size / 2 + dy] : [null, null]; };
   g.clearRect(0, 0, size, size);
   g.save(); g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.clip();
@@ -5938,7 +5956,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
-    terrainH, walkH, padTopAt, plantSway, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, miniDeg, setMiniZoom, MINI_ZOOM, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
