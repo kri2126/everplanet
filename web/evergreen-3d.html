@@ -2778,10 +2778,13 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
   const chevs = [];
   const mainPaths = [0, 1, 2, 3, 4, 5, 6, 7].map(i => T.paths[i]);   // 로드맵 8: 간선에만 (추기 #5: 들판→비탈→샘물→다리→야영지→계단→관측소)
   const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpP = new THREE.Vector3(), up = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3(), basis = new THREE.Matrix4();
-  for (const seg of mainPaths) {
+  // 2026-10-06 2차: 서쪽 샛길(11·12)에도 울타리, 말뚝 간격 1.7 → 1.3유닛, 길 이음매(구간 끝)에도 세워 빈 곳을 메움(0.8유닛 안에 겹치면 하나만).
+  // 바닥 셰브론은 지금처럼 간선(0~7)에만.
+  const fencePaths = [0, 1, 2, 3, 4, 5, 6, 7, 11, 12].map(i => T.paths[i]);
+  for (const seg of fencePaths) {
     const len = seg.arc * DEG * R;
-    const n = Math.floor(len / 1.7);
-    for (let i = 1; i < n; i++) {
+    const n = Math.max(1, Math.round(len / 1.3)), isMain = mainPaths.includes(seg);
+    for (let i = 0; i <= n; i++) {
       const t = i / n;
       const dir = seg.A.clone().lerp(seg.B, t).normalize();
       up.copy(dir); fwd.copy(seg.B).sub(seg.A); tangentize(fwd, up); right.crossVectors(fwd, up).normalize();
@@ -2800,9 +2803,10 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
         }
         if (!p || pathMask(p) > 0.02) continue;
         const h = terrainH(p); if (h < waterAt(p) + 0.5) continue;
-        slots.push({ p, h, key: mainPaths.indexOf(seg) + ':' + side, i });
+        if (slots.some((sl) => sl.p.angleTo(p) * R < 0.8)) continue;
+        slots.push({ p, h, key: fencePaths.indexOf(seg) + ':' + side, i });
       }
-      if (i % 3 === 0) {
+      if (isMain && i > 0 && i < n && i % 4 === 0) {
         const cdir = dir.clone().addScaledVector(right, -sh.wig * sgn * DEG).normalize();   // 굽이친 중심선 위에
         const h = terrainH(cdir);
         tmpP.copy(cdir).multiplyScalar(R + h + 0.06);
@@ -2849,7 +2853,13 @@ trackLoad(new GLTFLoader().loadAsync(ASSET_DIR + 'models/landing_deck.glb').then
       o.scale.set(1, ph / PH, 1); o.updateMatrix(); postMats.push(o.matrix.clone()); tops[i] = ph;
     });
     const pairs = [];
-    for (let k = 1; k < slots.length; k++) for (let j = k - 1; j >= Math.max(0, k - 3); j--) if (slots[j].key === slots[k].key && slots[k].i - slots[j].i === 1) { pairs.push([j, k]); break; }
+    // 2026-10-06 2차: 가로대는 가까운 말뚝끼리(0.5~2.0유닛) 잇는다 — 구간 이음매도 이어지게. 가로대 가운데가 흙길·물 위면(갈림길 입구·길 건너편) 잇지 않고, 말뚝마다 가로대 2개까지.
+    { const deg = new Array(slots.length).fill(0), cand = [], mp = new THREE.Vector3();
+      for (let k = 0; k < slots.length; k++) for (let j = 0; j < k; j++) { const L = slots[j].p.angleTo(slots[k].p) * R; if (L > 0.5 && L < 2.0) cand.push([L, j, k]); }
+      cand.sort((x, y) => x[0] - y[0]);
+      for (const [, j, k] of cand) { if (deg[j] >= 2 || deg[k] >= 2) continue;
+        mp.copy(slots[j].p).add(slots[k].p).normalize(); if (pathMask(mp) > 0.05 || terrainH(mp) < waterAt(mp) + 0.5) continue;
+        pairs.push([j, k]); deg[j]++; deg[k]++; } }
     const a = new THREE.Vector3(), b = new THREE.Vector3(), mid = new THREE.Vector3(), dx = new THREE.Vector3(), upv = new THREE.Vector3(), railMats = [];
     pairs.forEach(([j, k], n) => {
       const y = Math.min(tops[j], tops[k]) * 0.5;
