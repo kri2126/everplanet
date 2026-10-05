@@ -292,6 +292,53 @@
   @keyframes kbWait { 50% { background: #fff6d8; } }
   @keyframes kbFlash { 50% { background: #ffd166; border-color: #d9781c; } }
   @media (max-width: 560px) { #settings .tabs { width: 84px; } #settings .tabs button { font-size: 12px; padding: 0 6px; } #settings .bot .hint { display: none; } }
+  /* ── 로드맵 9 작업 G (2026-10-05): 화면 구성 통일 — 창 7개(가방·스킬·퀘스트·기록·시작 화면·키 안내·대화)는 설정 화면과 같은 '양피지 + 나무 테',
+     HUD 조각(퀘스트 추적·로그·목표 줄·별씨앗·BGM·저장 알림·채팅·채집 바·말풍선·미니맵 설명)은 스킬 바와 같은 '어두운 나무 + 금테' 한 세트.
+     위의 옛 규칙은 그대로 두고 여기서 덮어쓴다(추기 규칙: 과거 줄은 지우지 않음). 색은 설정 화면 것 그대로: 종이 #f8ecd0→#e2c793, 나무 테 #9a6a3a/#4a2f14, 글 #4a3018, 제목 #5c3a1a, 강조 #9a4a12, 보조 #8a6a44 */
+  #inv, #skillWin, #questWin, #charWin, #startScreen .box, #keyGuide, #dialog { color: #4a3018;
+    background: radial-gradient(ellipse at 50% 40%, #f8ecd0 0%, #efdcb4 70%, #e2c793 100%); border: 5px solid #9a6a3a; outline: 3px solid #4a2f14; border-radius: 12px;
+    box-shadow: inset 0 0 24px rgba(120,80,30,.35), 0 12px 50px rgba(0,0,0,.6); }
+  #inv h3, #skillWin h3, #questWin h3, #charWin h3, #keyGuide h3, #startScreen h2 { color: #5c3a1a; border-bottom: 2px solid rgba(120,80,40,.35); padding-bottom: 6px; margin-bottom: 10px; }
+  #inv .foot, #skillWin .foot, #questWin .foot, #charWin .foot, #keyGuide .foot, #startScreen .foot { color: #8a6a44; opacity: 1; }
+  /* 줄(행)은 설정 탭 단추와 같은 크림색 카드 */
+  #skillWin .row, #questWin .row, #charWin .row, #startScreen .sv { background: rgba(255,250,235,.55); border: 1px solid rgba(120,80,40,.35); color: #4a3018; }
+  #skillWin .row.sel, #questWin .row.sel, #charWin .row.sel { outline: 2px solid #c9762a; background: #fff8e6; }
+  #skillWin .row .info, #questWin .row .info, #charWin .row .info, #startScreen .sv { color: #4a3018; }
+  #skillWin .row .info b, #questWin .row .info b, #charWin .row .info b { color: #9a4a12; }
+  #skillWin .row .ic { background: #8a5f34; border: 1px solid #c99354; color: #fdf4de; }
+  #skillWin .row .slot { background: rgba(120,80,40,.18); border: 1px solid rgba(120,80,40,.35); color: #7a3f12; }
+  /* 가방 칸: 크림 칸, 든 칸은 더 밝게 */
+  #inv .grid i { background: rgba(255,250,235,.5); border: 1px solid rgba(120,80,40,.4); box-shadow: inset 0 1px 0 rgba(255,255,255,.5); }
+  #inv .grid i.has { background: #fff8e6; }
+  #inv .grid i .ic { color: #5c3a1a; }
+  #inv .grid i .ct { color: #9a4a12; }
+  /* 시작 화면: 제목·단추 */
+  #startScreen small { color: #9a4a12; opacity: 1; }
+  #startScreen h2 { padding-bottom: 8px; }
+  #startScreen button b, #dialog .next b, #dialog .choices .c b { background: linear-gradient(#fffaf0, #eadbbd); color: #3a2410; border: 1px solid #9a7a50; border-bottom-width: 2px; }
+  /* 키 안내 팝업: 설정 조작 탭과 같은 키 모양 */
+  #keyGuide .r { color: #4a3018; }
+  #keyGuide kbd { background: linear-gradient(#fffaf0, #eadbbd); color: #3a2410; border: 1px solid #9a7a50; border-bottom-width: 3px; box-shadow: none; }
+  /* 대화 상자: 양피지 말판 — 이름은 강조색, 선택지는 크림 카드 */
+  #dialog { border-radius: 12px; }
+  #dialog .who { color: #9a4a12; }
+  #dialog .txt { color: #4a3018; }
+  #dialog .next { color: #8a6a44; opacity: 1; }
+  #dialog .choices .c { background: rgba(255,250,235,.55); border: 1px solid rgba(120,80,40,.35); color: #4a3018; }
+  #dialog .choices .c:hover { background: #fff8e6; }
+  /* HUD 조각: 어두운 나무 + 금테(스킬 바 #skills와 같은 값) */
+  #quest, #log, #objBar, #seedsHUD, #bgmBtn, #saveToast, #chat input, #forageBar, .lb.tip, #mini .cap { background: rgba(40,28,18,.72); border: 1px solid #c99354; box-shadow: 0 0 0 1px #5a3a1c, 0 3px 8px rgba(0,0,0,.35); color: #fdf4de; }
+  #quest { border-left: 3px solid #ffd166; border-radius: 6px; }
+  #log { border-radius: 8px; color: #fdf4de; }
+  #log div { color: #fdf4de; } #log .sys { color: #ffd166; } #log .npc { color: #9ad2ff; } #log .me { color: #fff; }
+  #objBar { border-radius: 8px; }
+  #chat input { color: #fdf4de; }
+  #chat input::placeholder { color: rgba(253,244,222,.5); }
+  #forageBar { border-radius: 7px; } #forageBar i { background: #ffd166; }
+  #stamina { background: rgba(40,28,18,.72); border: 1px solid #c99354; box-shadow: 0 0 0 1px #5a3a1c; }
+  #exp .bar { background: rgba(40,28,18,.72); box-shadow: 0 0 0 1px #5a3a1c; }
+  #setBtn { background: rgba(40,28,18,.78); box-shadow: 0 0 0 1px #5a3a1c, 0 3px 8px rgba(0,0,0,.35); }
+  #zoneName { color: #fdf4de; }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
