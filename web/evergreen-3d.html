@@ -1929,6 +1929,14 @@ const forageNodes = [];   // 작업 F: 채집 가능한 흰 꽃·버섯 (F 길�
     [13.37, 7.7], [12.8, -6.61], [6.4, 31.01], [11.07, 22.83], [-13.63, 6.69], [6.04, 36], [9.03, 8.81], [-5.92, 2.31], [-4.12, 36.18], [13.12, 24.73],
     [-12.39, 42.1], [11.97, 38.56], [-5.72, 13.1], [7.84, 18.17], [-8.02, -7.65], [4.62, 28.99], [-9.94, 40.56], [9.27, 24.73], [12.79, 1.1], [-12.39, 39.14],
     [10.6, 6.41], [1.33, 37.88], [-12.2, -5.14], [0.86, 8.03], [-13.51, 11.25], [-9.85, -3.65], [9.14, 3.24], [-6.36, 33.36], [13.47, 30.56],
+    // 2026-10-05 작업 D(§14-2 성능·밀도): 89 → 150그루. 61자리는 풀 위·평평한 곳(기울기 0.6 이하)·흙길 밖·물가 밖·소품/NPC/몬스터 집/비행정에서 떨어진 곳을 무작위로 뽑아 나무끼리 3.4 이상 띄움
+    [11.03, 29.42], [10.38, -7.78], [12.08, -0.43], [8.62, 16.12], [-7.4, 5.37], [-11.86, 4.58], [-11.96, 6.92], [4.84, 31.42], [4, 8.55], [10.3, 34.1],
+    [-5.41, 8.64], [-3.09, 7.89], [-6.94, 14.89], [9.34, 10.6], [11.39, 36.07], [9.64, 37.82], [11.48, 25.99], [10.38, 12.71], [-11.53, 0.5], [2.28, 45.11],
+    [2.9, 32.21], [9.25, 31.78], [-9.28, 4.61], [6.44, 34.25], [-1.96, 44.05], [-5.33, 6.96], [-2.53, 41.26], [11.02, 8.32], [9.91, 17.3], [-8.46, 14.31],
+    [6.02, 32.52], [-9.73, 37.07], [11.36, 32.92], [-6.77, 42.5], [12.54, 12.16], [8.69, 30.01], [-4.26, 45.06], [10.77, 2.11], [12.68, 5.77], [-12.17, 13.82],
+    [11.63, 40.07], [9.41, 4.95], [-11, 2.76], [-10.37, 42.02], [2.51, 7.33], [-10.06, 7.62], [2.74, 30.41], [10.98, 19.98], [7.83, 35.03], [-8.92, 38.45],
+    [12.5, 15.63], [12.77, 43.27], [12.83, 22.15], [0.19, 45.69], [-11.21, 43.58], [9.24, 40.41], [3.42, 37.05], [-12.36, -6.86], [7.71, 36.72], [-0.77, 41.86],
+    [-9.27, -9.64],
   ];
   spots.forEach(([lon, lat], i) => {
     const sc = treeScale(i);
@@ -5324,6 +5332,7 @@ function step(dt) {
   // 나무는 바람에 살짝
   const tw = performance.now() * 0.0012;
   if (treeSway) treeSway(tw); else for (const t of trees) t.rotation.z = Math.sin(tw + t.userData.sway) * 0.012;
+  grassWind.value = performance.now() * 0.001;   // 2026-10-05: 3D 풀 포기 바람(정점 셰이더 uniform)
   updatePlants(dt, performance.now() * 0.001);   // 2026-10-02: 덤불·꽃·갈대 — 바람에 살짝, 캐릭터가 닿으면 크게
   // 비행정은 살짝 떠다니고, 폭포는 흐르고, 별 빛기둥은 일렁인다
   {
@@ -5414,9 +5423,12 @@ addEventListener('resize', resize); resize();
 // 나무 잎 그림자: 잎 덩어리는 삼각형이 많아(그루당 1만~2만) 그림자 패스에서 비싸다 — 중간 이상에서만 드리우고, 몸통은 늘 드리운다
 function applyTreeShadow(q) { for (const im of treeInstMeshes) im.castShadow = !im.userData.leaf || q >= 2; }
 // 화질 단계 적용: 픽셀 배율·그림자 맵 크기 (그림자 맵은 버리면 다음 프레임에 새 크기로 다시 만들어진다)
+let grassTufts = null;   // 2026-10-05 작업 D: 3D 풀 포기 InstancedMesh(아래 buildGrassTufts)
+const GRASS_COUNT = { 3: 3600, 2: 2600, 1: 1400, 0: 600 };   // 화질별로 그리는 포기 수(자리 순서가 무작위라 앞에서 자르면 고르게 성겨짐)
+function applyGrassCount(q) { if (grassTufts) grassTufts.count = Math.min(grassTufts.userData.total, GRASS_COUNT[q]); }
 function applyQuality(q, why) {
   q = Math.max(0, Math.min(3, q));
-  const cfg = QUALITY[q]; quality = q; applyTreeShadow(q);
+  const cfg = QUALITY[q]; quality = q; applyTreeShadow(q); applyGrassCount(q);
   dpr = DPR_FIXED || cfg.dpr; renderer.setPixelRatio(dpr); resize();
   // 그림자 켜고 끄기: 재질이 그림자 코드 없이 다시 컴파일되도록 needsUpdate
   const shadowOn = cfg.shadow > 0;
@@ -5431,6 +5443,68 @@ function setQualityMode(mode, why) {   // 작업 S4: 설정 화면의 화질 선
   if (qualityMode >= 0) applyQuality(qualityMode, why); else { perfWin = []; perfGood = 0; log('화질 자동 — 프레임에 맞춰 조절합니다', 'sys'); }
 }
 function cycleQuality() { setQualityMode(qualityMode >= 3 ? -1 : qualityMode + 1, `${keyLabel('quality')} 키`); }   // 자동 → 최소 → 낮음 → 중간 → 높음 → 자동
+
+// ── 3D 풀 포기(2026-10-05 작업 D, §14-2 성능·밀도) ─────────────────────────────
+// 바닥 그림(tile_grass)만으론 들판이 평평해 보여, 풀 포기를 실제 3D로 깐다. 포기 하나 = 세로 판 3장(60°씩 교차, 삼각형 6개)에 캔버스 풀잎 그림(alphaTest).
+// 전부 InstancedMesh 하나(draw call 1번). 자리는 고정 씨앗 난수로 설계 좌표 안을 뽑아 풀 위(surfaceAt 'grass')·흙길 밖·구조물 위 아님(walkH ≈ terrainH)·
+// 나무 밑동/소품에서 떨어진 곳만 받는다 → 매번 같은 자리. 법선을 전부 위(0,1,0)로 두어 바닥과 같은 빛을 받고(세로 판 옆면이 어둡게 안 보임), 그림자는 받기만 한다.
+// 바람: 정점 셰이더에서 자리 해시로 위상을 달리해 끝부분(position.y²)만 살짝 흔든다. 화질별 수는 GRASS_COUNT(앞에서 자름).
+const grassWind = { value: 0 };
+function buildGrassTufts() {
+  const tex = makeTex(128, (g, S) => {
+    const blades = []; const rnd = (() => { let s = 7; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+    for (let b = 0; b < 11; b++) {   // 풀잎 11장: 밑동은 진하고 끝은 바닥보다 밝게(바닥 0x9ce655 위에서 보이도록 대비), 잎 폭은 넉넉히(멀리서 mip에 사라지지 않게)
+      const x0 = S * (0.5 + (rnd() - 0.5) * 0.55), w = S * (0.045 + rnd() * 0.035), lean = (rnd() - 0.5) * S * 1.0, h = S * (0.5 + rnd() * 0.47);
+      blades.push({ x0, w, tx: x0 + lean, ty: S - h, cx: x0 + lean * 0.25, cy: S - h * 0.55 });
+    }
+    const blade = (b, w) => { g.beginPath(); g.moveTo(b.x0 - w, S); g.quadraticCurveTo(b.cx - w * 0.35, b.cy, b.tx, b.ty); g.quadraticCurveTo(b.cx + w * 0.35, b.cy, b.x0 + w, S); g.closePath(); g.fill(); };
+    // 1) 잎 둘레에 옅은 초록 테(알파 0.1): 투명 픽셀은 검정이라 mip 축소·bilinear 때 가장자리가 어둡게 번지는데, 알파 낮은 초록을 깔아 두면 그 번짐이 초록이 된다(alphaTest엔 잘림)
+    g.fillStyle = 'rgba(120,200,80,0.1)'; for (const b of blades) blade(b, b.w + S * 0.045);
+    for (const b of blades) { const gr = g.createLinearGradient(0, S, 0, b.ty); gr.addColorStop(0, '#4f9a2c'); gr.addColorStop(0.5, '#86d446'); gr.addColorStop(1, '#dcff9c'); g.fillStyle = gr; blade(b, b.w); }
+  }, 1, 'grass_tuft');   // 에셋 이름 grass_tuft(PNG를 넣으면 교체 가능)
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  const quads = [];
+  for (let k = 0; k < 3; k++) { const q = new THREE.PlaneGeometry(1, 1); q.translate(0, 0.5, 0); q.rotateX(-0.42); q.rotateY(k * Math.PI * 2 / 3); quads.push(q); }   // 세 장이 밖으로 24° 기울어 위에서 봐도 포기 모양
+  const geo = mergeGeometries(quads, false); quads.forEach(q => q.dispose());
+  { const n = geo.getAttribute('normal'); for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); }
+  const mat = new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.3, side: THREE.DoubleSide, fog: true });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = grassWind;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+#ifdef USE_INSTANCING
+  { float ph = dot(instanceMatrix[3].xyz, vec3(0.37, 0.91, 0.53)); float k = position.y * position.y;
+    transformed.x += sin(uTime * 1.7 + ph) * 0.11 * k; transformed.z += sin(uTime * 1.15 + ph * 1.3) * 0.06 * k; }
+#endif`);
+  };
+  // 자리 뽑기 — 고정 씨앗(같은 자리 보장). 설계 좌표 상자 안 무작위 점 → 조건 검사
+  const rnd = (() => { let s = 20261005; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; })();
+  const MAXN = GRASS_COUNT[3], TRIES = 16000, cosTree = Math.cos(0.5 / R), cosProp = Math.cos(0.7 / R);
+  const near = (d, list, c) => { for (const o of list) { const od = o.userData && o.userData.dir; if (od && d.dot(od) > c) return true; } return false; };
+  const slots = [];
+  for (let t = 0; t < TRIES && slots.length < MAXN; t++) {
+    const lon = -15 + rnd() * 30, lat = -12 + rnd() * 61;
+    if (edgeIn(lon, lat) < 0.4) continue;
+    const d = dirFromLonLat(lon, lat);
+    if (surfaceAt(d) !== 'grass' || pathMask(d) > 0.05) continue;
+    const g = terrainH(d); if (walkH(d) > g + 0.3) continue;
+    if (near(d, trees, cosTree) || near(d, props, cosProp) || near(d, decor, cosProp)) continue;
+    slots.push({ d, g, yaw: rnd() * Math.PI * 2, s: 0.7 + rnd() * 0.6, tint: 0.86 + rnd() * 0.2 });
+  }
+  const im = new THREE.InstancedMesh(geo, mat, Math.max(1, slots.length));
+  const _y = new THREE.Vector3(0, 1, 0), m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), qy = new THREE.Quaternion(), sc = new THREE.Vector3(), col = new THREE.Color();
+  slots.forEach((o, i) => {
+    p.copy(o.d).multiplyScalar(R + o.g - 0.02);
+    q.setFromUnitVectors(_y, o.d).multiply(qy.setFromAxisAngle(_y, o.yaw));
+    sc.set(1.1 * o.s, 0.8 * o.s, 1.1 * o.s);   // 키 0.56~1.04(주인공 1.7의 1/3~2/3), 폭은 키보다 넓게
+    im.setMatrixAt(i, m.compose(p, q, sc)); im.setColorAt(i, col.setRGB(o.tint, 1, o.tint * 0.9));
+  });
+  im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+  im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; im.userData.total = slots.length; im.userData.isGrass = true;
+  scene.add(im); grassTufts = im; applyGrassCount(quality);
+  if (DEBUG) console.log('풀 포기:', slots.length, '/ 시도', TRIES);
+}
+buildGrassTufts();
 
 const fpsEl = document.getElementById('fps');
 function applyFpsSetting() { document.getElementById('fps').style.display = (DEBUG || QP.has('fps') || settings.display.fps) ? 'block' : 'none'; }   // 작업 S4: 설정의 FPS 표시 = ?fps 와 같은 줄
@@ -6109,7 +6183,7 @@ function drawWorldMap(viewW, viewH, t) {
 if (DEBUG) {
   window.__dbg = {
     THREE, scene, camera, renderer, player, cam, trees, R, WATER, waterAt, hero, heroOnce,
-    terrainH, walkH, padTopAt, plantSway, bgmBattle, bgmSetMode, bgmUpdate, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
+    terrainH, walkH, padTopAt, plantSway, props, decor, surfaceAt, LAND_R, get grassTufts() { return grassTufts; }, GRASS_COUNT, bgmBattle, bgmSetMode, bgmUpdate, miniDeg, setMiniZoom, MINI_ZOOM, questTargetLonLat, miniFrame, markSeen, seenToSave, seenFromSave, get seenCells() { return seenCells; }, FOG, miniCv, zoneCv, drawZoneMap, get shipCol() { return shipCol; }, airship, edgeIn, edgeInDir, EDGE_IN_MIN, pathMask, dirFromLonLat, angDeg, T, canStand, MEADOW_H, LAKE, lakeInside, pedestalDir, pedestalBeam, STEP_UP,
     setLonLat(lon, lat) {
       const d = dirFromLonLat(lon, lat);
       player.pos.copy(d).multiplyScalar(R + walkH(d)); player.z = walkH(d); player.vz = 0; player.grounded = true;
